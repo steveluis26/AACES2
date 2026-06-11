@@ -41,6 +41,9 @@ class ClienteUpdate(BaseSchema):
     ciudad_base: Optional[str] = Field(None, max_length=100)
     categoria: Optional[str] = Field(None, pattern='^(basico|premium|enterprise)$')
     estado: Optional[str] = Field(None, pattern='^(activo|suspendido|eliminado)$')
+    plan: Optional[str] = Field(None, pattern='^(trial|basico|premium|enterprise)$')
+    cursos_max: Optional[int] = Field(None, ge=1)
+    descuento_pct: Optional[int] = Field(None, ge=0, le=100)
 
 class ClienteResponse(ClienteBase):
     id: UUID
@@ -50,6 +53,10 @@ class ClienteResponse(ClienteBase):
     ultimo_acceso: Optional[datetime] = None
     vigencia_desde: Optional[date] = None
     vigencia_hasta: Optional[date] = None
+    plan: str = 'trial'
+    cursos_creados: int = 0
+    cursos_max: int = 10
+    descuento_pct: int = 0
 
 # Capacitador schemas
 class CapacitadorBase(BaseSchema):
@@ -82,6 +89,7 @@ class CursoBase(BaseSchema):
     descripcion: str = Field(..., min_length=1, max_length=1000)
     categoria: str = Field(..., min_length=1, max_length=100)
     duracion_horas: int = Field(..., ge=1)
+    duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses")
     costo: float = Field(..., ge=0)
     fecha_inicio: date
     fecha_fin: date
@@ -98,6 +106,7 @@ class CursoUpdate(BaseSchema):
     descripcion: Optional[str] = Field(None, min_length=1, max_length=1000)
     categoria: Optional[str] = Field(None, min_length=1, max_length=100)
     duracion_horas: Optional[int] = Field(None, ge=1)
+    duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses")
     costo: Optional[float] = Field(None, ge=0)
     fecha_inicio: Optional[date] = None
     fecha_fin: Optional[date] = None

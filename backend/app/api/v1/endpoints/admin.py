@@ -287,6 +287,71 @@ async def consolidar_esquema(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/clientes/{cliente_id}/usage")
+async def get_cliente_usage(
+    cliente_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_data: Dict[str, Any] = Depends(require_admin)
+):
+    """Obtener uso detallado de un cliente (cursos, participantes, almacenamiento)"""
+    try:
+        await db.execute(text("SET LOCAL search_path TO aaces"))
+        info = await db.execute(
+            text("SELECT id, nombre, correo, plan, cursos_max, descuento_pct FROM clientes WHERE id = :id"),
+            {"id": cliente_id}
+        )
+        row = info.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+        cursos_activos = await db.execute(
+            text("SELECT count(*) FROM cursos WHERE cliente_id = :cid AND estado = 'activo'"),
+            {"cid": cliente_id}
+        )
+        cursos_total = await db.execute(
+            text("SELECT count(*) FROM cursos WHERE cliente_id = :cid"),
+            {"cid": cliente_id}
+        )
+        participantes = await db.execute(
+            text("SELECT count(DISTINCT cp.participante_id) FROM curso_participante cp JOIN cursos c ON c.id = cp.curso_id WHERE c.cliente_id = :cid"),
+            {"cid": cliente_id}
+        )
+        cert_count_res = await db.execute(
+            text("SELECT count(*) FROM curso_participante cp JOIN cursos c ON c.id = cp.curso_id WHERE c.cliente_id = :cid AND cp.estado_acreditacion = true"),
+            {"cid": cliente_id}
+        )
+        cert_count = int(cert_count_res.scalar() or 0)
+        constancias = await db.execute(
+            text("SELECT count(*) FROM constancias_curso cc JOIN cursos c ON c.id = cc.curso_id WHERE c.cliente_id = :cid"),
+            {"cid": cliente_id}
+        )
+        ingresos = await db.execute(
+            text("SELECT coalesce(sum(p.monto), 0) FROM pagos p JOIN curso_participante cp ON cp.id = p.curso_participante_id JOIN cursos c ON c.id = cp.curso_id WHERE c.cliente_id = :cid AND p.estado_pago = 'completado'"),
+            {"cid": cliente_id}
+        )
+
+        return {
+            "cliente_id": row[0],
+            "nombre": row[1],
+            "correo": row[2],
+            "plan": row[3],
+            "cursos_max": int(row[4] or 10),
+            "descuento_pct": int(row[5] or 0),
+            "cursos_activos": int(cursos_activos.scalar() or 0),
+            "cursos_total": int(cursos_total.scalar() or 0),
+            "participantes_unicos": int(participantes.scalar() or 0),
+            "certificados_emitidos": cert_count,
+            "constancias_registradas": int(constancias.scalar() or 0),
+            "ingresos_totales": float(ingresos.scalar() or 0),
+            "almacenamiento_estimado_mb": round(cert_count * 0.2, 2)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo uso del cliente: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 @router.put("/clientes/{cliente_id}/password")
 async def admin_update_cliente_password(
     cliente_id: str,
@@ -585,7 +650,7 @@ async def update_admin_cliente(
     user_data: Dict[str, Any] = Depends(require_admin)
 ):
     try:
-        allowed = ["nombre", "correo", "categoria", "estado", "ciudad_base", "vigencia_desde", "vigencia_hasta"]
+        allowed = ["nombre", "correo", "categoria", "estado", "ciudad_base", "vigencia_desde", "vigencia_hasta", "plan", "cursos_max", "descuento_pct"]
         sets = []
         params = {"id": cliente_id}
         for k in allowed:

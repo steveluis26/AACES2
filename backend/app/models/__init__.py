@@ -28,6 +28,10 @@ class Cliente(Base):
     must_change_password = Column(Boolean, default=False)
     vigencia_desde = Column(Date)
     vigencia_hasta = Column(Date)
+    plan = Column(String(20), default='trial', nullable=False)
+    cursos_creados = Column(Integer, default=0, nullable=False)
+    cursos_max = Column(Integer, default=10, nullable=False)
+    descuento_pct = Column(Integer, default=0, nullable=False)
     
     # Relationships
     capacitadores = relationship("Capacitador", back_populates="cliente", foreign_keys="Capacitador.cliente_id")

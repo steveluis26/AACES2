@@ -804,6 +804,27 @@ async def crear_curso(
         if not (nombre and ciudad):
             raise HTTPException(status_code=400, detail="Nombre y ciudad son requeridos")
 
+        # Trial check: límite de cursos según plan
+        plan_res = await db.execute(
+            text("SELECT plan, cursos_max FROM clientes WHERE id = :cid"),
+            {"cid": cid}
+        )
+        plan_row = plan_res.fetchone()
+        if plan_row:
+            plan_name = plan_row[0]
+            cursos_max = int(plan_row[1] or 10)
+            if plan_name == 'trial':
+                cursos_count_res = await db.execute(
+                    text("SELECT count(*) FROM cursos WHERE cliente_id = :cid AND estado IN ('activo', 'en_espera', 'finalizado')"),
+                    {"cid": cid}
+                )
+                cursos_actuales = int(cursos_count_res.scalar() or 0)
+                if cursos_actuales >= cursos_max:
+                    raise HTTPException(
+                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                        detail=f"Has alcanzado el límite de {cursos_max} cursos del plan trial. Actualiza tu plan para crear más cursos."
+                    )
+
         # Parseo de fechas flexible
         def parse_date(val):
             if not val:

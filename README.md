@@ -42,6 +42,40 @@ make down         # Detener Docker
 make logs         # Logs de Docker
 ```
 
+## Deploy gratis
+
+El proyecto está listo para deploy en servicios gratuitos:
+
+- **Backend + BD**: Render (usa `render.yaml`)
+- **Frontend**: Vercel (configuración incluida) o Render
+- **Almacenamiento PDFs**: Cloudflare R2 (10GB gratis)
+
+### 1. Render (Backend + PostgreSQL)
+
+1. Crea cuenta en https://render.com (conecta con GitHub)
+2. Ve a "Blueprint" y selecciona tu repo (usa `render.yaml`)
+3. Render despliega automáticamente: PostgreSQL + Backend Docker
+
+### 2. Vercel (Frontend)
+
+1. Crea cuenta en https://vercel.com (conecta con GitHub)
+2. Importa el repo, configura:
+   - Root directory: `frontend`
+   - Framework: Next.js
+   - Build command: `npm run build`
+   - Env var: `NEXT_PUBLIC_API_URL=https://tu-backend.onrender.com`
+
+### 3. Cloudflare R2 (PDFs)
+
+1. Crea cuenta en https://cloudflare.com
+2. Ve a R2 → Crear bucket `aaces-certificados`
+3. Configura las credenciales en el backend
+
+## Planes y límites
+
+Por defecto los clientes se registran en **plan trial** (10 cursos máximo).
+Los administradores pueden cambiar el plan, límite de cursos y descuento desde el panel de admin.
+
 ## Estructura
 
 ```
