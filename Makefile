@@ -78,5 +78,25 @@ typecheck:
 test:
 	(cd $(FRONTEND_DIR) && npm test)
 
+test-backend:
+	@echo "Starting test database..."
+	$(DOCKER) compose -f docker-compose.test.yml up -d postgres-test
+	@sleep 3
+	@echo "Running backend tests..."
+	(cd $(BACKEND_DIR) && python -m pytest tests/ -v --timeout=60)
+	@echo "Stopping test database..."
+	$(DOCKER) compose -f docker-compose.test.yml down
+
+test-frontend:
+	(cd $(FRONTEND_DIR) && npm test)
+
+test-all: test-backend test-frontend
+
+docker-test-db:
+	$(DOCKER) compose -f docker-compose.test.yml up -d
+
+docker-test-db-down:
+	$(DOCKER) compose -f docker-compose.test.yml down
+
 clean:
 	rm -f $(FRONTEND_PID) $(BACKEND_PID) frontend.dev.log backend.dev.log

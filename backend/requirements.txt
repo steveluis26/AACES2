@@ -18,6 +18,7 @@ email-validator==2.1.0
 httpx==0.25.2
 pytest==7.4.3
 pytest-asyncio==0.21.1
+pytest-timeout==2.2.0
 factory-boy==3.3.0
 faker==20.1.0
 stripe==7.6.0
