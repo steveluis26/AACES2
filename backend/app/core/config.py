@@ -1,7 +1,8 @@
 import os
+import json
 from typing import List, Optional
 from pydantic_settings import BaseSettings
-from pydantic import validator
+from pydantic import field_validator
 from cryptography.fernet import Fernet
 
 class Settings(BaseSettings):
@@ -33,6 +34,19 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001"
     ]
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    pass
+            return [x.strip() for x in v.split(",") if x.strip()]
+        return v
     
     # Email settings
     SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -57,9 +71,6 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "60"))
     MAX_LOGIN_ATTEMPTS: int = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     LOGIN_LOCKOUT_MINUTES: int = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "30"))
-    # Validation settings
-    MAX_VALIDATION_ATTEMPTS: int = int(os.getenv("MAX_VALIDATION_ATTEMPTS", "5"))
-    VALIDATION_LOCKOUT_MINUTES: int = int(os.getenv("VALIDATION_LOCKOUT_MINUTES", "15"))
     
     # Audit settings
     AUDIT_RETENTION_DAYS: int = int(os.getenv("AUDIT_RETENTION_DAYS", "2555"))  # 7 years
@@ -78,13 +89,15 @@ class Settings(BaseSettings):
 
     
     
-    @validator("ENCRYPTION_KEY")
+    @field_validator("ENCRYPTION_KEY", mode="before")
+    @classmethod
     def validate_encryption_key(cls, v):
         if not v or len(v) < 32:
             return Fernet.generate_key().decode()
         return v
     
-    @validator("SECRET_KEY")
+    @field_validator("SECRET_KEY", mode="before")
+    @classmethod
     def validate_secret_key(cls, v):
         if v == "your-secret-key-change-in-production":
             import warnings
