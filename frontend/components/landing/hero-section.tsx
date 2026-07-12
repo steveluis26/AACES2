@@ -53,7 +53,7 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
               <div className="relative mx-auto mt-8 md:mt-24 max-w-lg">
                 <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-xl bg-white">
                   <Image
-                    src="/hero-preview.svg"
+                    src="/hero-preview.png"
                     alt="Panel de control AACES"
                     width={800}
                     height={640}
