@@ -98,12 +98,12 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
                   <p className="text-sm mt-2 text-[var(--destructive)]">Has excedido el número de intentos. Por favor, intenta más tarde.</p>
                 )}
               </div>
-              <div className="relative mx-auto mt-12 md:mt-24 max-w-2xl text-left h-[20rem] md:h-[28rem]">
+              <div className="hidden md:block relative mx-auto mt-24 max-w-2xl text-left h-[28rem]">
                 <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] mix-blend-overlay [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)] dark:opacity-5" />
-                <div className="hidden md:block absolute left-1/2 top-0 -translate-x-1/2 -translate-y-8 w-80 rounded-[2rem] border border-border/50 p-2">
+                <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-8 w-80 rounded-[2rem] border border-border/50 p-2">
                   <div className="relative h-96 overflow-hidden rounded-[1.5rem] border p-2 pb-12 before:absolute before:inset-0 before:bg-[repeating-linear-gradient(-45deg,var(--color-border),var(--color-border)_1px,transparent_1px,transparent_6px)] before:opacity-50" />
                 </div>
-                <div className="hidden md:block absolute left-1/2 top-6 -translate-x-1/2 w-80 rounded-[2rem] border border-border/50 p-2 backdrop-blur-3xl">
+                <div className="absolute left-1/2 top-6 -translate-x-1/2 w-80 rounded-[2rem] border border-border/50 p-2 backdrop-blur-3xl">
                   <div className="space-y-2 overflow-hidden rounded-[1.5rem] border p-2 shadow-xl bg-background/80 dark:bg-white/5 dark:shadow-black dark:backdrop-blur-3xl">
                     <AppComponent />
                     <div className="rounded-[1rem] p-4 pb-16 bg-muted/40 dark:bg-white/5" />
