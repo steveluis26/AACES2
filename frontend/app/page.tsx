@@ -177,7 +177,7 @@ export default function Home() {
       {/* Validation Result */}
       {validationResult && (
         <section className="py-12 bg-[var(--card)] text-[var(--card-foreground)] border-t border-[var(--border)]">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto px-4">
             <div className={`card ${validationResult.valido ? 'border-success-200 bg-success-50' : 'border-error-200 bg-error-50'}`}>
               <div className="card-body">
                 <div className="flex items-center mb-4">
@@ -192,8 +192,8 @@ export default function Home() {
                 </div>
                 
                 {validationResult.datos_certificado && (
-                  <div className="grid md:grid-cols-2 gap-6 mt-6">
-                    <div className="space-y-3">
+                  <div className="grid md:grid-cols-2 gap-4 sm:gap-6 mt-6">
+                    <div className="space-y-2 sm:space-y-3">
                       <div>
                         <label className="text-sm font-medium text-gray-500">Participante</label>
                         <p className="text-gray-900 font-medium">{validationResult.datos_certificado.nombre_participante}</p>
@@ -241,7 +241,7 @@ export default function Home() {
         <DialogHeader>
           <DialogTitle>Certificación Verificada</DialogTitle>
         </DialogHeader>
-        <DialogContent>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           {validationResult?.datos_certificado ? (
             <div className="space-y-3 uppercase">
               <div className="flex justify-center">
