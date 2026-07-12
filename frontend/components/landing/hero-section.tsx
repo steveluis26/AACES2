@@ -27,8 +27,8 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
                   <div className="bg-background relative grid grid-cols-[1fr_auto] items-center rounded-[1.5rem] border pr-2 shadow-[0_8px_30px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-muted">
                     <Mail className="pointer-events-none absolute inset-y-0 left-4 my-auto h-4 w-4" />
                     <input
-                      placeholder="Ingrese código de validación o ID CERT-XXXXXX"
-                      className="h-12 w-full bg-transparent pl-12 focus:outline-none font-mono tracking-wider"
+                      placeholder="Código de validación"
+                      className="h-12 w-full bg-transparent pl-12 focus:outline-none font-mono tracking-wider text-sm"
                       type="text"
                       value={value}
                       onChange={(e) => onChange(e.target.value)}
