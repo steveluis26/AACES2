@@ -68,7 +68,7 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative mx-auto max-w-6xl pb-20 pt-10 lg:pt-24">
             <div className="relative z-10 mx-auto max-w-4xl text-center">
-              <h1 className="text-balance text-5xl font-medium md:text-6xl">Validación de <span className="text-orange-500">Certificados</span></h1>
+              <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium">Validación de <span className="text-orange-500">Certificados</span></h1>
               <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg">Verifique la autenticidad ingresando el código de validación.</p>
               <div className="mt-12">
                 <form onSubmit={onSubmit} className="mx-auto max-w-sm">
@@ -98,12 +98,12 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
                   <p className="text-sm mt-2 text-[var(--destructive)]">Has excedido el número de intentos. Por favor, intenta más tarde.</p>
                 )}
               </div>
-              <div className="relative mx-auto mt-24 max-w-2xl text-left h-[28rem]">
+              <div className="relative mx-auto mt-12 md:mt-24 max-w-2xl text-left h-[20rem] md:h-[28rem]">
                 <div className="absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] mix-blend-overlay [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)] dark:opacity-5" />
-                <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-8 w-80 rounded-[2rem] border border-border/50 p-2">
+                <div className="hidden md:block absolute left-1/2 top-0 -translate-x-1/2 -translate-y-8 w-80 rounded-[2rem] border border-border/50 p-2">
                   <div className="relative h-96 overflow-hidden rounded-[1.5rem] border p-2 pb-12 before:absolute before:inset-0 before:bg-[repeating-linear-gradient(-45deg,var(--color-border),var(--color-border)_1px,transparent_1px,transparent_6px)] before:opacity-50" />
                 </div>
-                <div className="absolute left-1/2 top-6 -translate-x-1/2 w-80 rounded-[2rem] border border-border/50 p-2 backdrop-blur-3xl">
+                <div className="hidden md:block absolute left-1/2 top-6 -translate-x-1/2 w-80 rounded-[2rem] border border-border/50 p-2 backdrop-blur-3xl">
                   <div className="space-y-2 overflow-hidden rounded-[1.5rem] border p-2 shadow-xl bg-background/80 dark:bg-white/5 dark:shadow-black dark:backdrop-blur-3xl">
                     <AppComponent />
                     <div className="rounded-[1rem] p-4 pb-16 bg-muted/40 dark:bg-white/5" />
