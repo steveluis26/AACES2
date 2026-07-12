@@ -1,6 +1,6 @@
 "use client"
 import React from "react"
-import { Mail, SendHorizonal } from "lucide-react"
+import { QrCode, SendHorizonal } from "lucide-react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
  
@@ -25,7 +25,7 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
               <div className="mt-12">
                 <form onSubmit={onSubmit} className="mx-auto max-w-sm">
                   <div className="bg-background relative grid grid-cols-[1fr_auto] items-center rounded-[1.5rem] border pr-2 shadow-[0_8px_30px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-muted">
-                    <Mail className="pointer-events-none absolute inset-y-0 left-4 my-auto h-4 w-4" />
+                    <QrCode className="pointer-events-none absolute inset-y-0 left-4 my-auto h-4 w-4" />
                     <input
                       placeholder="Código de validación"
                       className="h-12 w-full bg-transparent pl-12 focus:outline-none font-mono tracking-wider text-sm"
