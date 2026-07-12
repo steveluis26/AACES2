@@ -40,46 +40,40 @@ async def lifespan(app: FastAPI):
                 pass
             # tipos_curso table and index
             try:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS tipos_curso (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+                      nombre VARCHAR(200) NOT NULL,
+                      descripcion TEXT,
+                      costo_por_persona NUMERIC(10,2) DEFAULT 0,
+                      estado VARCHAR(20) DEFAULT 'activo',
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
                 await conn.execute(text(
-                        """
-                        CREATE TABLE IF NOT EXISTS tipos_curso (
-                          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                          cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-                          nombre VARCHAR(200) NOT NULL,
-                          descripcion TEXT,
-                          costo_por_persona NUMERIC(10,2) DEFAULT 0,
-                          estado VARCHAR(20) DEFAULT 'activo',
-                          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    ))
-                    await conn.execute(text(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS idx_tipos_curso_cliente_nombre ON tipos_curso (cliente_id, nombre)"
-                    ))
-                    await conn.execute(text(
-                        """
-                        CREATE TABLE IF NOT EXISTS grupos_curso (
-                          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                          cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-                          nombre VARCHAR(200) NOT NULL,
-                          descripcion TEXT,
-                          precio_base NUMERIC(10,2) DEFAULT 0,
-                          precio_promocional NUMERIC(10,2),
-                          estado VARCHAR(20) DEFAULT 'activo',
-                          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
-                    ))
-                    await conn.execute(text(
-                        """
-                        CREATE TABLE IF NOT EXISTS grupo_curso_items (
-                          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                          grupo_id UUID NOT NULL REFERENCES grupos_curso(id) ON DELETE CASCADE,
-                          tipo_curso_id UUID NOT NULL REFERENCES tipos_curso(id) ON DELETE CASCADE,
-                          UNIQUE(grupo_id, tipo_curso_id)
-                        )
-                        """
-                    ))
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_tipos_curso_cliente_nombre ON tipos_curso (cliente_id, nombre)"
+                ))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS grupos_curso (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+                      nombre VARCHAR(200) NOT NULL,
+                      descripcion TEXT,
+                      precio_base NUMERIC(10,2) DEFAULT 0,
+                      precio_promocional NUMERIC(10,2),
+                      estado VARCHAR(20) DEFAULT 'activo',
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS grupo_curso_items (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      grupo_id UUID NOT NULL REFERENCES grupos_curso(id) ON DELETE CASCADE,
+                      tipo_curso_id UUID NOT NULL REFERENCES tipos_curso(id) ON DELETE CASCADE,
+                      UNIQUE(grupo_id, tipo_curso_id)
+                    )
+                """))
             except Exception:
                 pass
             # Ensure subcursos relation
