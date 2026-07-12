@@ -243,11 +243,11 @@ export default function Home() {
         </DialogHeader>
         <DialogContent className="max-w-[95vw] sm:max-w-lg">
           {validationResult?.datos_certificado ? (
-            <div className="space-y-3 uppercase">
+            <div className="space-y-3 uppercase break-words">
               <div className="flex justify-center">
                 <Image src="/logo.png" alt="AACES" width={160} height={40} />
               </div>
-              <div className="font-mono"><span className="font-semibold">ID Certificado:</span> {String(validationResult.datos_certificado.id_certificado || '-')}</div>
+              <div className="font-mono break-all"><span className="font-semibold">ID Certificado:</span> {String(validationResult.datos_certificado.id_certificado || '-')}</div>
               <div><span className="font-semibold">Nombre completo:</span> {String(validationResult.datos_certificado.nombre_participante || '-')}</div>
               <div><span className="font-semibold">Fecha del curso:</span> {validationResult.datos_certificado.fecha_inicio ? new Date(validationResult.datos_certificado.fecha_inicio).toLocaleDateString('es-ES') : '-'}</div>
               <div><span className="font-semibold">Fecha de expiración:</span> {validationResult.datos_certificado.fecha_expiracion ? new Date(validationResult.datos_certificado.fecha_expiracion).toLocaleDateString('es-ES') : 'No expira'}</div>
