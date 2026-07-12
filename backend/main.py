@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("SET search_path TO aaces"))
             await conn.run_sync(Base.metadata.create_all)
         async with engine.connect() as conn:
+            await conn.execute(text("SET search_path TO aaces"))
             # Extensions
             try:
                 async with conn.begin():
