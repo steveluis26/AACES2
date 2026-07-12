@@ -9,14 +9,13 @@ export function LogoCloud3() {
     { src: "/cas.png", alt: "CAS", h: 28 },
     { src: "/cidesi.png", alt: "CIDESI", h: 28 },
     { src: "/lanited.png", alt: "Lanited", h: 28 },
-    { src: "https://html.tailus.io/blocks/customers/nvidia.svg", alt: "Nvidia", h: 20 },
-    { src: "https://html.tailus.io/blocks/customers/column.svg", alt: "Column", h: 16 },
-    { src: "https://html.tailus.io/blocks/customers/github.svg", alt: "GitHub", h: 16 },
-    { src: "https://html.tailus.io/blocks/customers/nike.svg", alt: "Nike", h: 20 },
-    { src: "https://html.tailus.io/blocks/customers/lemonsqueezy.svg", alt: "Lemon Squeezy", h: 20 },
-    { src: "https://html.tailus.io/blocks/customers/laravel.svg", alt: "Laravel", h: 16 },
-    { src: "https://html.tailus.io/blocks/customers/lilly.svg", alt: "Lilly", h: 28 },
-    { src: "https://html.tailus.io/blocks/customers/openai.svg", alt: "OpenAI", h: 24 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/4/4a/GitHub_Mark_2023.svg", alt: "GitHub", h: 20 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg", alt: "Microsoft", h: 20 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/9/96/Google_2024_Logo.svg", alt: "Google", h: 16 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png", alt: "LinkedIn", h: 20 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/e/e8/Amazon_Web_Services_logo.svg", alt: "AWS", h: 16 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/1/1f/OpenAI_Logo.svg", alt: "OpenAI", h: 22 },
+    { src: "https://upload.wikimedia.org/wikipedia/commons/7/7f/Vercel_logo.svg", alt: "Vercel", h: 16 },
   ]
 
   return (
@@ -24,9 +23,9 @@ export function LogoCloud3() {
       <div className="group relative m-auto max-w-6xl px-6">
         <div className="flex flex-col items-center md:flex-row">
           <div className="inline md:max-w-44 md:border-r md:pr-6">
-            <p className="text-end text-sm">Powering the best teams</p>
+            <p className="text-center md:text-end text-sm">Confían en nosotros</p>
           </div>
-          <div className="relative py-6 md:w-[calc(100%-11rem)] overflow-hidden">
+          <div className="relative py-6 w-full overflow-hidden">
             <InfiniteSlider speedOnHover={20} speed={40} gap={112}>
               {logos.map((l, i) => (
                 <div key={`${l.src}-${i}`} className="flex">
