@@ -113,6 +113,7 @@ async def lifespan(app: FastAPI):
                 res = await conn.execute(text("SELECT COUNT(*) FROM clientes"))
                 count = int(res.scalar() or 0)
                 if count == 0:
+                    logger.info("No users found, seeding admin...")
                     ph = security_service.hash_password("admin123")
                     async with conn.begin():
                         await conn.execute(
@@ -121,8 +122,9 @@ async def lifespan(app: FastAPI):
                             ),
                             {"id": str(uuid.uuid4()), "nombre": "Administrador", "correo": "admin@aaces.com", "ph": ph},
                         )
-            except Exception:
-                pass
+                    logger.info("Admin seeded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to seed admin: {e}")
             logger.info("Database tables created successfully")
     except Exception as e:
         logger.warning(f"Could not connect to database: {e}")
