@@ -117,7 +117,7 @@ async def lifespan(app: FastAPI):
                     async with conn.begin():
                         await conn.execute(
                             text(
-                                "INSERT INTO clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true)"
+                                "INSERT INTO clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos, plan, cursos_max, cursos_creados, descuento_pct) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true, 'ilimitado', 999999, 0, 0)"
                             ),
                             {"id": str(uuid.uuid4()), "nombre": "Administrador", "correo": "admin@aaces.com", "ph": ph},
                         )
