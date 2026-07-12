@@ -11,8 +11,8 @@ export default function CommunitySection() {
                     </h2>
                     <p className="mt-6">Nuestra comunidad impulsa la mejora continua y comparte buenas prácticas.</p>
                 </div>
-                <div className="mx-auto mt-12 space-y-3">
-                    <div className="flex justify-center gap-3">
+                <div className="mx-auto mt-12 max-w-sm sm:max-w-none space-y-3">
+                    <div className="flex justify-center gap-3 flex-wrap">
                         {[
                             '/1.jpg',
                             '/2.jpg',
@@ -21,12 +21,12 @@ export default function CommunitySection() {
                             '/5.jpg',
                             '/6.jpg',
                         ].map((src, i) => (
-                            <Link key={`r1-${i}`} href="https://github.com/meschacirung" target="_blank" title="Méschac Irung" className="relative block w-14 h-14 rounded-full border overflow-hidden">
-                                <Image className="object-cover" alt={`Avatar ${i+1}`} src={src} fill sizes="56px" />
+                            <Link key={`r1-${i}`} href="https://github.com/meschacirung" target="_blank" title="Méschac Irung" className="relative block w-12 h-12 sm:w-14 sm:h-14 rounded-full border overflow-hidden">
+                                <Image className="object-cover" alt={`Avatar ${i+1}`} src={src} fill sizes="48px" />
                             </Link>
                         ))}
                     </div>
-                    <div className="flex justify-center gap-3">
+                    <div className="flex justify-center gap-3 flex-wrap">
                         {[
                             '/7.jpg',
                             '/8.jpg',
@@ -34,8 +34,8 @@ export default function CommunitySection() {
                             '/10.jpg',
                             '/11.jpg',
                         ].map((src, i) => (
-                            <Link key={`r2-${i}`} href="https://github.com/meschacirung" target="_blank" title="Méschac Irung" className="relative block w-14 h-14 rounded-full border overflow-hidden">
-                                <Image className="object-cover" alt={`Avatar ${i+7}`} src={src} fill sizes="56px" />
+                            <Link key={`r2-${i}`} href="https://github.com/meschacirung" target="_blank" title="Méschac Irung" className="relative block w-12 h-12 sm:w-14 sm:h-14 rounded-full border overflow-hidden">
+                                <Image className="object-cover" alt={`Avatar ${i+7}`} src={src} fill sizes="48px" />
                             </Link>
                         ))}
                     </div>
