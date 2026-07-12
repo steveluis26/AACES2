@@ -30,19 +30,17 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("CREATE SCHEMA IF NOT EXISTS aaces"))
             await conn.execute(text("SET search_path TO aaces"))
             await conn.run_sync(Base.metadata.create_all)
-        async with engine.connect() as conn:
+        async with engine.begin() as conn:
             await conn.execute(text("SET search_path TO aaces"))
             # Extensions
             try:
-                async with conn.begin():
-                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
-                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
             except Exception:
                 pass
             # tipos_curso table and index
             try:
-                async with conn.begin():
-                    await conn.execute(text(
+                await conn.execute(text(
                         """
                         CREATE TABLE IF NOT EXISTS tipos_curso (
                           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,26 +84,22 @@ async def lifespan(app: FastAPI):
                 pass
             # Ensure subcursos relation
             try:
-                async with conn.begin():
-                    await conn.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID REFERENCES cursos(id) ON DELETE CASCADE"))
-                    await conn.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES grupos_curso(id) ON DELETE SET NULL"))
+                await conn.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID REFERENCES cursos(id) ON DELETE CASCADE"))
+                await conn.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES grupos_curso(id) ON DELETE SET NULL"))
             except Exception:
                 pass
             
             # Optional pricing columns in curso_participante
             try:
-                async with conn.begin():
-                    await conn.execute(text("ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0"))
-                    await conn.execute(text("ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0"))
+                await conn.execute(text("ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0"))
+                await conn.execute(text("ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0"))
             except Exception:
                 pass
             # Vigencia columns for clientes
             try:
-                async with conn.begin():
-                    await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE"))
-                    await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE"))
-                    await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false"))
-                
+                await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE"))
+                await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE"))
+                await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false"))
             except Exception:
                 pass
             # Seed admin if empty
@@ -115,13 +109,12 @@ async def lifespan(app: FastAPI):
                 if count == 0:
                     logger.info("No users found, seeding admin...")
                     ph = security_service.hash_password("admin123")
-                    async with conn.begin():
-                        await conn.execute(
-                            text(
-                                "INSERT INTO clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos, plan, cursos_max, cursos_creados, descuento_pct) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true, 'ilimitado', 999999, 0, 0)"
-                            ),
-                            {"id": str(uuid.uuid4()), "nombre": "Administrador", "correo": "admin@aaces.com", "ph": ph},
-                        )
+                    await conn.execute(
+                        text(
+                            "INSERT INTO clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos, plan, cursos_max, cursos_creados, descuento_pct) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true, 'ilimitado', 999999, 0, 0)"
+                        ),
+                        {"id": str(uuid.uuid4()), "nombre": "Administrador", "correo": "admin@aaces.com", "ph": ph},
+                    )
                     logger.info("Admin seeded successfully")
             except Exception as e:
                 logger.warning(f"Failed to seed admin: {e}")
