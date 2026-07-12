@@ -25,7 +25,7 @@ services:
       - key: ALLOW_DEV_LOGIN
         value: "false"
       - key: ALLOWED_ORIGINS
-        value: "http://localhost:3000,https://aaces-frontend.onrender.com"
+        value: "http://localhost:3000,https://aaces-frontend.onrender.com,https://verceldeploy-4ktk6vizo-riquer.vercel.app"
 
 databases:
   - name: aaces-db
