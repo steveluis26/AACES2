@@ -30,7 +30,7 @@ export default function WhySection() {
         <div className="mt-10 grid gap-6 md:grid-cols-3">
           {benefits.map((b, i) => (
             <div key={i} className="rounded-2xl border border-border/50 bg-card p-6 text-left">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-black dark:bg-orange-500 dark:text-black">
                 <b.icon className="h-5 w-5" />
               </div>
               <h3 className="text-lg font-semibold">{b.title}</h3>
