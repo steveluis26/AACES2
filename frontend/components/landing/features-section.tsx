@@ -29,8 +29,8 @@ const features = [
   },
   {
     icon: Compass,
-    title: "Haz que las empresas te encuentren",
-    description: "Próximamente podrás aparecer en nuestro directorio para que empresas en tu ciudad te encuentren y contraten tus servicios de capacitación."
+    title: "Trazabilidad completa",
+    description: "Cada certificado conserva el historial desde su emisión hasta su validación."
   }
 ]
 
@@ -49,11 +49,7 @@ export default function FeaturesSection() {
                 <f.icon className="h-5 w-5" />
               </div>
               <h3 className="text-lg font-semibold">{f.title}</h3>
-              {i === features.length - 1 && (
-                <span className="mt-1 inline-block rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-orange-600 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
-                  Próximamente
-                </span>
-              )}
+
               <p className="mt-2 text-sm text-muted-foreground">{f.description}</p>
             </div>
           ))}
