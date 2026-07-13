@@ -38,7 +38,7 @@ export default function ProductoPage() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((f, i) => (
               <div key={i} className="rounded-2xl border border-border/50 bg-card p-6">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-black dark:bg-orange-500 dark:text-black">
                   <f.icon className="h-5 w-5" />
                 </div>
                 <h3 className="text-lg font-semibold">{f.title}</h3>
@@ -59,7 +59,7 @@ export default function ProductoPage() {
           <div className="mt-12 flex flex-col items-center gap-6 md:flex-row md:justify-center md:gap-4">
             {steps.map((s, i) => (
               <div key={i} className="flex flex-col items-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-black dark:bg-orange-500 dark:text-black">
                   <s.icon className="h-6 w-6" />
                 </div>
                 <p className="mt-2 text-xs font-medium max-w-28 text-center">{s.label}</p>
