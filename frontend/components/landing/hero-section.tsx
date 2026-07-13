@@ -1,7 +1,6 @@
 "use client"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
 
 export default function HeroSection() {
   return (
@@ -20,20 +19,6 @@ export default function HeroSection() {
               <span className="rounded-full border border-border px-3 py-1">Capacitadores independientes</span>
               <span className="rounded-full border border-border px-3 py-1">Agencias capacitadoras</span>
               <span className="rounded-full border border-border px-3 py-1">Empresas</span>
-            </div>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-              <Link
-                href="/login"
-                className="inline-flex items-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-              >
-                Ingresar <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-              <Link
-                href="/verificar"
-                className="inline-flex items-center rounded-full border border-border bg-background px-6 py-3 text-sm font-medium hover:bg-muted transition-colors"
-              >
-                Verificar certificado
-              </Link>
             </div>
           </div>
           <div className="relative mx-auto mt-12 max-w-lg">
