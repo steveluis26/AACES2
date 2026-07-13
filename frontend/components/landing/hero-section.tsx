@@ -28,12 +28,12 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
                     className="h-12 w-full bg-transparent pl-12 focus:outline-none font-mono tracking-wider text-sm"
                     type="text"
                     value={value}
-                    onChange={(e) => onChange(e.target.value)}
+                    onChange={(e) => onChange(e.target.value.toUpperCase())}
                     maxLength={20}
                     disabled={loading || attemptsLeft <= 0}
                   />
                   <div className="md:pr-1.5 lg:pr-0">
-                    <Button aria-label="submit" size="sm" className="rounded-[1.5rem] bg-black text-white dark:bg-white dark:text-black" disabled={loading || attemptsLeft <= 0}>
+                    <Button type="submit" aria-label="submit" size="sm" className="rounded-[1.5rem] bg-black text-white dark:bg-white dark:text-black" disabled={loading || attemptsLeft <= 0}>
                       <span className="hidden md:block">Validar</span>
                       <SendHorizonal className="relative mx-auto h-5 w-5 md:hidden" strokeWidth={2} />
                     </Button>
