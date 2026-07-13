@@ -13,7 +13,6 @@ import { useSearchParams } from 'next/navigation';
 import HeroSection from '@/components/landing/hero-section'
 import FeaturesSection from '@/components/landing/features-section'
 import PlansSection from '@/components/landing/plans-section'
-import ValidatorSection from '@/components/landing/validator-section'
 import FooterSection from 'src/components/footer'
 import CommunitySection from 'src/components/content-6'
 
@@ -169,16 +168,15 @@ export default function Home() {
     <Suspense fallback={<div className="flex min-h-svh items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" /></div>}>
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
 
-      <HeroSection />
-      <FeaturesSection />
-      <PlansSection />
-      <ValidatorSection
+      <HeroSection
         value={validationCode}
         onChange={(v) => setValidationCode(v.toUpperCase())}
         onSubmit={validateCertificate}
         loading={isValidating}
         attemptsLeft={attemptsLeft}
       />
+      <FeaturesSection />
+      <PlansSection />
 
       {/* Validation Result */}
       {validationResult && (
