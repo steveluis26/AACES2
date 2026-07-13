@@ -44,7 +44,6 @@ export function HeroHeader() {
               Marketplace
               <span className="rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">Próximamente</span>
             </a>
-            <a href="/verificar" className="opacity-80 hover:text-orange-500">Verificar</a>
             <a href="/blog" className="opacity-80 hover:text-orange-500">Blog</a>
             <a href="/contacto" className="opacity-80 hover:text-orange-500">Contacto</a>
           </nav>
@@ -81,7 +80,6 @@ export function HeroHeader() {
               <a href="/verificar" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Verificar</a>
               <a href="/producto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Producto</a>
               <a href="/marketplace" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Marketplace</a>
-              <a href="/verificar" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Verificar</a>
               <a href="/blog" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Blog</a>
               <a href="/contacto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Contacto</a>
             </nav>
