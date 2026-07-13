@@ -1,44 +1,63 @@
 "use client"
+import { QrCode, SendHorizonal } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
-export default function HeroSection() {
+type Props = {
+  value: string
+  onChange: (v: string) => void
+  onSubmit: (e: React.FormEvent) => void
+  loading: boolean
+  attemptsLeft: number
+}
+
+export default function HeroSection({ value, onChange, onSubmit, loading, attemptsLeft }: Props) {
   return (
     <section className="py-16 md:py-24 bg-gradient-to-b from-background to-muted/20">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-6xl pb-10 pt-10 lg:pt-16">
           <div className="mx-auto max-w-4xl text-center">
-            <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium">
-              Gestiona tus capacitaciones con certificación oficial
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
-              La plataforma sencilla para capacitadores que genera constancias DC-3 con validez STPS, controla participantes y emite certificados digitales verificables por QR.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link
-                href="/login"
-                className="inline-flex items-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-              >
-                Ingresar
-              </Link>
-              <Link
-                href="#planes"
-                className="inline-flex items-center rounded-full border border-border bg-background px-6 py-3 text-sm font-semibold hover:bg-muted transition-colors"
-              >
-                Ver planes
-              </Link>
+            <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium">Validación de <span className="text-orange-500">Certificados</span></h1>
+            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">Verifique la autenticidad ingresando el código de validación.</p>
+            <div className="mt-10">
+              <form onSubmit={onSubmit} className="mx-auto max-w-sm">
+                <div className="bg-background relative grid grid-cols-[1fr_auto] items-center rounded-[1.5rem] border pr-2 shadow-[0_8px_30px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-muted">
+                  <QrCode className="pointer-events-none absolute inset-y-0 left-4 my-auto h-4 w-4" />
+                  <input
+                    placeholder="Código de validación"
+                    className="h-12 w-full bg-transparent pl-12 focus:outline-none font-mono tracking-wider text-sm"
+                    type="text"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    maxLength={20}
+                    disabled={loading || attemptsLeft <= 0}
+                  />
+                  <div className="md:pr-1.5 lg:pr-0">
+                    <Button aria-label="submit" size="sm" className="rounded-[1.5rem] bg-black text-white dark:bg-white dark:text-black" disabled={loading || attemptsLeft <= 0}>
+                      <span className="hidden md:block">Validar</span>
+                      <SendHorizonal className="relative mx-auto h-5 w-5 md:hidden" strokeWidth={2} />
+                    </Button>
+                  </div>
+                </div>
+              </form>
+              {attemptsLeft <= 3 && attemptsLeft > 0 && (
+                <p className="text-sm opacity-80 mt-2">Intentos restantes: {attemptsLeft}</p>
+              )}
+              {attemptsLeft <= 0 && (
+                <p className="text-sm mt-2 text-destructive">Has excedido el número de intentos. Por favor, intenta más tarde.</p>
+              )}
             </div>
-          </div>
-          <div className="relative mx-auto mt-12 max-w-lg">
-            <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-xl bg-white">
-              <Image
-                src="/hero-preview.png"
-                alt="Panel de control AACES"
-                width={800}
-                height={640}
-                className="w-full h-auto"
-                priority
-              />
+            <div className="relative mx-auto mt-10 max-w-lg">
+              <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-xl bg-white">
+                <Image
+                  src="/hero-preview.png"
+                  alt="Panel de control AACES"
+                  width={800}
+                  height={640}
+                  className="w-full h-auto"
+                  priority
+                />
+              </div>
             </div>
           </div>
         </div>
