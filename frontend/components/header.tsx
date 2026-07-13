@@ -37,8 +37,15 @@ export function HeroHeader() {
             <span className="text-sm font-semibold transition-colors group-hover:text-orange-500">AACES</span>
           </a>
           <nav className="hidden md:flex items-center gap-6">
+            <a href="/" className="opacity-80 hover:text-orange-500">Inicio</a>
+            <a href="/producto" className="opacity-80 hover:text-orange-500">Producto</a>
+            <a href="/#planes" className="opacity-80 hover:text-orange-500">Precios</a>
+            <a href="/marketplace" className="opacity-80 hover:text-orange-500 flex items-center gap-1">
+              Marketplace
+              <span className="rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">Próximamente</span>
+            </a>
+            <a href="/verificar" className="opacity-80 hover:text-orange-500">Verificar</a>
             <a href="/blog" className="opacity-80 hover:text-orange-500">Blog</a>
-            <a href="/nosotros" className="opacity-80 hover:text-orange-500">Nosotros</a>
             <a href="/contacto" className="opacity-80 hover:text-orange-500">Contacto</a>
           </nav>
           <div className="flex items-center gap-2">
@@ -72,8 +79,10 @@ export function HeroHeader() {
             </div>
             <nav className="flex flex-col gap-1 p-5">
               <a href="/" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Inicio</a>
+              <a href="/producto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Producto</a>
+              <a href="/marketplace" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Marketplace</a>
+              <a href="/verificar" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Verificar</a>
               <a href="/blog" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Blog</a>
-              <a href="/nosotros" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Nosotros</a>
               <a href="/contacto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Contacto</a>
             </nav>
             <div className="p-5 border-t border-border">
