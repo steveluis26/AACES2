@@ -15,12 +15,23 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
   return (
     <section className="py-16 md:py-24 bg-gradient-to-b from-background to-muted/20">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="mx-auto max-w-6xl pb-10 pt-10 lg:pt-16">
+        <div className="mx-auto max-w-6xl pt-10 lg:pt-16">
           <div className="mx-auto max-w-4xl text-center">
-            <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium">Validación de <span className="text-orange-500">Certificados</span></h1>
-            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">Verifique la autenticidad ingresando el código de validación.</p>
-            <div className="mt-10">
-              <form onSubmit={onSubmit} className="mx-auto max-w-sm">
+            <h1 className="text-balance text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium">
+              La plataforma de <span className="text-orange-500">confianza</span> para la capacitación laboral en México.
+            </h1>
+            <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
+              Centraliza la operación de tu agencia capacitadora, emite constancias verificables y demuestra la autenticidad de cada certificación con AACES.
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Ideal para:</span>
+              <span className="rounded-full border border-border px-3 py-1">Capacitadores independientes</span>
+              <span className="rounded-full border border-border px-3 py-1">Agencias capacitadoras</span>
+              <span className="rounded-full border border-border px-3 py-1">Empresas</span>
+            </div>
+            <div className="mt-10 border-t border-border/50 pt-8">
+              <p className="text-sm font-medium text-muted-foreground">¿Ya tienes un certificado? <span className="text-foreground">Verifica su autenticidad aquí.</span></p>
+              <form onSubmit={onSubmit} className="mx-auto mt-4 max-w-sm">
                 <div className="bg-background relative grid grid-cols-[1fr_auto] items-center rounded-[1.5rem] border pr-2 shadow-[0_8px_30px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-muted">
                   <QrCode className="pointer-events-none absolute inset-y-0 left-4 my-auto h-4 w-4" />
                   <input
@@ -47,17 +58,17 @@ export default function HeroSection({ value, onChange, onSubmit, loading, attemp
                 <p className="text-sm mt-2 text-destructive">Has excedido el número de intentos. Por favor, intenta más tarde.</p>
               )}
             </div>
-            <div className="relative mx-auto mt-10 max-w-lg">
-              <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-xl bg-white">
-                <Image
-                  src="/hero-preview.png"
-                  alt="Panel de control AACES"
-                  width={800}
-                  height={640}
-                  className="w-full h-auto"
-                  priority
-                />
-              </div>
+          </div>
+          <div className="relative mx-auto mt-10 max-w-lg">
+            <div className="relative rounded-2xl border border-border/50 overflow-hidden shadow-xl bg-white">
+              <Image
+                src="/hero-preview.png"
+                alt="Panel de control AACES"
+                width={800}
+                height={640}
+                className="w-full h-auto"
+                priority
+              />
             </div>
           </div>
         </div>
