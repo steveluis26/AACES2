@@ -55,7 +55,7 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ) -> Dict[str, Any]:
-    """Get current authenticated user."""
+    """Get current authenticated user. Supports both old (clientes) and new (usuarios) schema."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -71,15 +71,45 @@ async def get_current_user(
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
+
+        source = payload.get("source")
         
-        # Get user from database
+        if source == "usuario":
+            # New schema: query from usuarios + organizaciones
+            from sqlalchemy import text
+            result = await db.execute(
+                text("""
+                    SELECT u.id, u.nombre, u.correo, u.rol, u.activo, u.organizacion_id,
+                           o.estatus, o.razon_social
+                    FROM aaces.usuarios u
+                    JOIN aaces.organizaciones o ON o.id = u.organizacion_id
+                    WHERE u.id = :id AND u.activo = true
+                """),
+                {"id": user_id}
+            )
+            row = result.fetchone()
+            if row is None:
+                raise credentials_exception
+            return {
+                "id": str(row[0]),
+                "nombre": row[1],
+                "correo": row[2],
+                "rol": row[3],
+                "activo": row[4],
+                "organizacion_id": str(row[5]),
+                "org_estatus": row[6],
+                "razon_social": row[7],
+                "source": "usuario",
+            }
+        
+        # Old schema: query from clientes
+        from sqlalchemy import select
         result = await db.execute(select(Cliente).where(Cliente.id == user_id))
         user = result.scalar_one_or_none()
         
         if user is None:
             raise credentials_exception
         
-        # Check if user is active
         if user.estado != "activo":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,7 +121,8 @@ async def get_current_user(
             "correo": user.correo,
             "nombre": user.nombre,
             "categoria": user.categoria,
-            "estado": user.estado
+            "estado": user.estado,
+            "source": "cliente",
         }
     
     except HTTPException:

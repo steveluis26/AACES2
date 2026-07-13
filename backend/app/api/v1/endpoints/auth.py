@@ -68,19 +68,31 @@ async def login(
                 detail=f"Cuenta bloqueada hasta {user.bloqueado_hasta.strftime('%Y-%m-%d %H:%M')}"
             )
         
-        # Determinar rol del usuario
-        role = determine_user_role(user)
+        # Determinar rol del usuario (nuevo esquema vs viejo)
+        if getattr(user, "source", None) == "usuario":
+            role = user.rol
+            org_id = str(user.organizacion_id) if user.organizacion_id else None
+            category = user.rol
+        else:
+            role = determine_user_role(user)
+            org_id = None
+            category = getattr(user, 'categoria', 'basico')
         
         # Crear tokens JWT
-        access_token = auth_service.create_access_token(
-            data={
-                "sub": str(user.id),
-                "email": user.correo,
-                "role": role,
-                "name": user.nombre,
-                "category": user.categoria
-            }
-        )
+        token_data = {
+            "sub": str(user.id),
+            "email": user.correo,
+            "role": role,
+            "name": user.nombre,
+        }
+        if org_id:
+            token_data["org_id"] = org_id
+        if category:
+            token_data["category"] = category
+        if getattr(user, "source", None) == "usuario":
+            token_data["source"] = "usuario"
+        
+        access_token = auth_service.create_access_token(data=token_data)
         
         refresh_token = auth_service.create_refresh_token(
             data={
@@ -95,7 +107,7 @@ async def login(
             user_id=str(user.id),
             action="successful_login",
             resource="auth",
-            details={"email": user.correo, "role": role}
+            details={"email": user.correo, "role": role, "source": getattr(user, "source", "cliente")}
         )
         
         return {
@@ -347,3 +359,139 @@ async def update_profile(
         await db.rollback()
         logger.error(f"Error actualizando perfil: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno del servidor")
+
+
+@router.post("/register")
+async def register(
+    payload: Dict[str, Any],
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Registro de nueva organización + administrador + suscripción"""
+    try:
+        org_data = payload.get("organizacion", {})
+        admin_data = payload.get("admin", {})
+        plan_codigo = (payload.get("plan") or "trial").strip().lower()
+
+        rfc = (org_data.get("rfc") or "").strip().upper()
+        razon_social = (org_data.get("razon_social") or "").strip()
+        nombre_comercial = (org_data.get("nombre_comercial") or "").strip()
+        estado = (org_data.get("estado") or "").strip()
+        ciudad = (org_data.get("ciudad") or "").strip()
+
+        admin_nombre = (admin_data.get("nombre") or "").strip()
+        admin_correo = (admin_data.get("correo") or "").strip().lower()
+        admin_password = admin_data.get("password") or ""
+
+        if not rfc or not razon_social:
+            raise HTTPException(status_code=400, detail="RFC y Razón Social son requeridos")
+        if not admin_nombre or not admin_correo or not admin_password:
+            raise HTTPException(status_code=400, detail="Nombre, correo y contraseña del administrador son requeridos")
+        if len(admin_password) < 6:
+            raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+        if "@" not in admin_correo:
+            raise HTTPException(status_code=400, detail="Correo electrónico inválido")
+
+        if plan_codigo not in ("trial", "profesional"):
+            plan_codigo = "trial"
+
+        await db.execute(text("SET LOCAL search_path TO aaces"))
+
+        # Check RFC duplicado
+        rfc_check = await db.execute(
+            text("SELECT id FROM aaces.organizaciones WHERE rfc = :rfc LIMIT 1"),
+            {"rfc": rfc}
+        )
+        if rfc_check.fetchone():
+            await _log_intento(db, rfc, admin_correo, request, "duplicado", "RFC ya registrado")
+            raise HTTPException(status_code=409, detail="Ya existe una organización registrada con este RFC")
+
+        # Check correo duplicado en usuarios
+        email_check = await db.execute(
+            text("SELECT id FROM aaces.usuarios WHERE correo = :correo LIMIT 1"),
+            {"correo": admin_correo}
+        )
+        if email_check.fetchone():
+            await _log_intento(db, rfc, admin_correo, request, "duplicado", "Correo ya registrado")
+            raise HTTPException(status_code=409, detail="Este correo ya está registrado")
+
+        # Get plan
+        plan_res = await db.execute(
+            text("SELECT id FROM aaces.planes WHERE codigo = :codigo AND activo = true LIMIT 1"),
+            {"codigo": plan_codigo}
+        )
+        plan_row = plan_res.fetchone()
+        if not plan_row:
+            raise HTTPException(status_code=400, detail="Plan no válido")
+
+        plan_id = plan_row[0]
+
+        # Create organization
+        org_id_res = await db.execute(
+            text("""
+                INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus)
+                VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, 'pendiente')
+                RETURNING id
+            """),
+            {
+                "rfc": rfc, "razon_social": razon_social,
+                "nombre_comercial": nombre_comercial or razon_social,
+                "email_contacto": admin_correo,
+                "estado": estado, "ciudad": ciudad,
+            }
+        )
+        org_id = str(org_id_res.scalar())
+
+        # Create admin user
+        password_hash = auth_service.get_password_hash(admin_password)
+        await db.execute(
+            text("""
+                INSERT INTO aaces.usuarios (organizacion_id, nombre, correo, password_hash, rol)
+                VALUES (:org_id, :nombre, :correo, :ph, 'admin')
+            """),
+            {"org_id": org_id, "nombre": admin_nombre, "correo": admin_correo, "ph": password_hash}
+        )
+
+        # Create pending subscription
+        await db.execute(
+            text("""
+                INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus)
+                VALUES (:org_id, :plan_id, 'pendiente')
+            """),
+            {"org_id": org_id, "plan_id": plan_id}
+        )
+
+        await db.commit()
+
+        await _log_intento(db, rfc, admin_correo, request, "exito", f"Registro exitoso plan={plan_codigo}")
+
+        return {
+            "success": True,
+            "message": "Registro exitoso. Recibirás un correo cuando tu cuenta sea activada.",
+            "organizacion_id": org_id,
+            "plan": plan_codigo
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error en registro: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+async def _log_intento(db: AsyncSession, rfc: str, correo: str, request: Request, resultado: str, detalle: str = None):
+    """Registrar intento de registro en tabla registro_intentos"""
+    try:
+        ip = request.client.host if request.client else None
+        ua = request.headers.get("user-agent") if request.headers else None
+        await db.execute(
+            text("""
+                INSERT INTO aaces.registro_intentos (rfc, correo, ip_origen, user_agent, resultado, detalle)
+                VALUES (:rfc, :correo, :ip, :ua, :resultado, :detalle)
+            """),
+            {"rfc": rfc, "correo": correo, "ip": ip, "ua": ua, "resultado": resultado, "detalle": detalle}
+        )
+        await db.commit()
+    except Exception:
+        pass

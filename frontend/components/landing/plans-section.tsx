@@ -14,7 +14,7 @@ const tiers = [
       "Validación QR"
     ],
     cta: "Comenzar",
-    href: "/login"
+    href: "/register?plan=trial"
   },
   {
     name: "Profesional",
@@ -29,7 +29,7 @@ const tiers = [
       "Soporte prioritario"
     ],
     cta: "Elegir plan",
-    href: "/login"
+    href: "/register?plan=profesional"
   },
   {
     name: "Empresa",

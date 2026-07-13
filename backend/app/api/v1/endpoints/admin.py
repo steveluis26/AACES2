@@ -875,3 +875,395 @@ async def drop_curso_participante_underscore(
         await db.rollback()
         logger.error(f"Error eliminando tabla curso_participante_: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+# =============================================================================
+# ORGANIZACIONES (Nuevo esquema SaaS)
+# =============================================================================
+
+@router.get("/organizaciones")
+async def listar_organizaciones(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    estatus: Optional[str] = Query(None, regex="^(pendiente|activa|suspendida|cancelada)$"),
+    search: Optional[str] = Query(None, min_length=2),
+    user_data: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    where = []
+    params: Dict[str, Any] = {}
+
+    if estatus:
+        where.append("o.estatus = :estatus")
+        params["estatus"] = estatus
+    if search:
+        where.append(
+            "(o.razon_social ILIKE :s OR o.rfc ILIKE :s OR o.nombre_comercial ILIKE :s OR "
+            "o.email_contacto ILIKE :s)"
+        )
+        params["s"] = f"%{search}%"
+
+    where_sql = " WHERE " + " AND ".join(where) if where else ""
+
+    total_res = await db.execute(
+        text(f"SELECT count(*) FROM aaces.organizaciones o{where_sql}"),
+        params
+    )
+    total = int(total_res.scalar() or 0)
+
+    offset = (page - 1) * per_page
+    rows_res = await db.execute(
+        text(f"""
+            SELECT o.id, o.rfc, o.razon_social, o.nombre_comercial, o.email_contacto,
+                   o.estado, o.ciudad, o.estatus, o.fecha_creacion, o.fecha_activacion,
+                   o.notas_admin,
+                   (SELECT count(*) FROM aaces.usuarios WHERE organizacion_id = o.id) as num_usuarios,
+                   (SELECT count(*) FROM aaces.suscripciones WHERE organizacion_id = o.id AND estatus = 'activa') as suscripciones_activas
+            FROM aaces.organizaciones o{where_sql}
+            ORDER BY
+                CASE WHEN o.estatus = 'pendiente' THEN 0 ELSE 1 END,
+                o.fecha_creacion DESC
+            LIMIT :limit OFFSET :offset
+        """),
+        {**params, "limit": per_page, "offset": offset}
+    )
+    rows = rows_res.fetchall()
+
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": (total + per_page - 1) // per_page if total > 0 else 1,
+        "data": [
+            {
+                "id": str(r[0]), "rfc": r[1], "razon_social": r[2],
+                "nombre_comercial": r[3], "email_contacto": r[4],
+                "estado": r[5], "ciudad": r[6], "estatus": r[7],
+                "fecha_creacion": r[8].isoformat() if r[8] else None,
+                "fecha_activacion": r[9].isoformat() if r[9] else None,
+                "notas_admin": r[10],
+                "num_usuarios": int(r[11] or 0),
+                "suscripciones_activas": int(r[12] or 0),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.get("/organizaciones/{org_id}")
+async def detalle_organizacion(
+    org_id: str,
+    user_data: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    res = await db.execute(
+        text("""
+            SELECT o.id, o.rfc, o.razon_social, o.nombre_comercial, o.email_contacto,
+                   o.telefono, o.estado, o.ciudad, o.direccion, o.estatus,
+                   o.fecha_creacion, o.fecha_activacion, o.notas_admin
+            FROM aaces.organizaciones o WHERE o.id = :id
+        """),
+        {"id": org_id}
+    )
+    row = res.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    # Get usuarios
+    usuarios_res = await db.execute(
+        text("""
+            SELECT id, nombre, correo, rol, activo, ultimo_acceso, fecha_creacion
+            FROM aaces.usuarios WHERE organizacion_id = :org_id ORDER BY fecha_creacion
+        """),
+        {"org_id": org_id}
+    )
+    usuarios = [
+        {
+            "id": str(u[0]), "nombre": u[1], "correo": u[2],
+            "rol": u[3], "activo": u[4],
+            "ultimo_acceso": u[5].isoformat() if u[5] else None,
+            "fecha_creacion": u[6].isoformat() if u[6] else None,
+        }
+        for u in usuarios_res.fetchall()
+    ]
+
+    # Get suscripciones
+    susc_res = await db.execute(
+        text("""
+            SELECT s.id, s.plan_id, p.codigo, p.nombre, s.estatus,
+                   s.fecha_inicio, s.fecha_fin, s.cursos_max, s.usuarios_max,
+                   s.constancias_max, s.fecha_creacion,
+                   COALESCE(s.cursos_max, p.cursos_max) as cursos_efectivo,
+                   COALESCE(s.usuarios_max, p.usuarios_max) as usuarios_efectivo,
+                   COALESCE(s.constancias_max, p.constancias_max) as constancias_efectivo
+            FROM aaces.suscripciones s
+            JOIN aaces.planes p ON p.id = s.plan_id
+            WHERE s.organizacion_id = :org_id
+            ORDER BY s.fecha_creacion DESC
+        """),
+        {"org_id": org_id}
+    )
+    suscripciones = [
+        {
+            "id": str(s[0]), "plan_id": str(s[1]), "plan_codigo": s[2],
+            "plan_nombre": s[3], "estatus": s[4],
+            "fecha_inicio": s[5].isoformat() if s[5] else None,
+            "fecha_fin": s[6].isoformat() if s[6] else None,
+            "cursos_max": int(s[7] or s[11] or 0),
+            "usuarios_max": int(s[8] or s[12] or 0),
+            "constancias_max": int(s[9] or s[13] or 0),
+            "fecha_creacion": s[10].isoformat() if s[10] else None,
+        }
+        for s in susc_res.fetchall()
+    ]
+
+    return {
+        "id": str(row[0]), "rfc": row[1], "razon_social": row[2],
+        "nombre_comercial": row[3], "email_contacto": row[4],
+        "telefono": row[5], "estado": row[6], "ciudad": row[7],
+        "direccion": row[8], "estatus": row[9],
+        "fecha_creacion": row[10].isoformat() if row[10] else None,
+        "fecha_activacion": row[11].isoformat() if row[11] else None,
+        "notas_admin": row[12],
+        "usuarios": usuarios,
+        "suscripciones": suscripciones,
+    }
+
+
+@router.put("/organizaciones/{org_id}/activar")
+async def activar_organizacion(
+    org_id: str,
+    payload: Dict[str, Any],
+    user_data: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    res = await db.execute(
+        text("SELECT id, estatus FROM aaces.organizaciones WHERE id = :id"),
+        {"id": org_id}
+    )
+    org = res.fetchone()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    vigencia_desde = payload.get("vigencia_desde")
+    vigencia_hasta = payload.get("vigencia_hasta")
+    plan_id = payload.get("plan_id")
+    cursos_max = payload.get("cursos_max")
+    usuarios_max = payload.get("usuarios_max")
+    constancias_max = payload.get("constancias_max")
+
+    await db.execute(
+        text("""
+            UPDATE aaces.organizaciones
+            SET estatus = 'activa', fecha_activacion = now(), notas_admin = :notas
+            WHERE id = :id
+        """),
+        {"id": org_id, "notas": payload.get("notas_admin")}
+    )
+
+    if plan_id:
+        susc_res = await db.execute(
+            text("""
+                UPDATE aaces.suscripciones
+                SET estatus = 'activa', plan_id = :plan_id,
+                    fecha_inicio = COALESCE(:fecha_inicio, CURRENT_DATE),
+                    fecha_fin = :fecha_fin,
+                    cursos_max = :cursos_max, usuarios_max = :usuarios_max,
+                    constancias_max = :constancias_max,
+                    activada_por = :admin_id
+                WHERE organizacion_id = :org_id AND estatus = 'pendiente'
+                RETURNING id
+            """),
+            {
+                "org_id": org_id, "plan_id": plan_id,
+                "fecha_inicio": vigencia_desde, "fecha_fin": vigencia_hasta,
+                "cursos_max": cursos_max, "usuarios_max": usuarios_max,
+                "constancias_max": constancias_max,
+                "admin_id": user_data["sub"],
+            }
+        )
+        if susc_res.rowcount == 0:
+            # No pending subscription, create one
+            await db.execute(
+                text("""
+                    INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus, fecha_inicio, fecha_fin, cursos_max, usuarios_max, constancias_max, activada_por)
+                    VALUES (:org_id, :plan_id, 'activa', COALESCE(:fecha_inicio, CURRENT_DATE), :fecha_fin, :cursos_max, :usuarios_max, :constancias_max, :admin_id)
+                """),
+                {
+                    "org_id": org_id, "plan_id": plan_id,
+                    "fecha_inicio": vigencia_desde, "fecha_fin": vigencia_hasta,
+                    "cursos_max": cursos_max, "usuarios_max": usuarios_max,
+                    "constancias_max": constancias_max,
+                    "admin_id": user_data["sub"],
+                }
+            )
+    else:
+        # Activate without changing plan
+        await db.execute(
+            text("""
+                UPDATE aaces.suscripciones
+                SET estatus = 'activa',
+                    fecha_inicio = COALESCE(:fecha_inicio, CURRENT_DATE),
+                    fecha_fin = :fecha_fin,
+                    cursos_max = COALESCE(:cursos_max, cursos_max),
+                    usuarios_max = COALESCE(:usuarios_max, usuarios_max),
+                    constancias_max = COALESCE(:constancias_max, constancias_max),
+                    activada_por = :admin_id
+                WHERE organizacion_id = :org_id AND estatus = 'pendiente'
+            """),
+            {
+                "org_id": org_id,
+                "fecha_inicio": vigencia_desde, "fecha_fin": vigencia_hasta,
+                "cursos_max": cursos_max, "usuarios_max": usuarios_max,
+                "constancias_max": constancias_max,
+                "admin_id": user_data["sub"],
+            }
+        )
+
+    await db.commit()
+
+    audit_logger.log_user_action(
+        user_id=user_data["sub"],
+        action="activar_organizacion",
+        resource="organizacion",
+        details={"org_id": org_id, "plan_id": plan_id}
+    )
+
+    return {"success": True, "message": "Organización activada exitosamente"}
+
+
+@router.put("/organizaciones/{org_id}/suspender")
+async def suspender_organizacion(
+    org_id: str,
+    payload: Dict[str, Any],
+    user_data: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    res = await db.execute(
+        text("SELECT id FROM aaces.organizaciones WHERE id = :id"),
+        {"id": org_id}
+    )
+    if not res.fetchone():
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    await db.execute(
+        text("UPDATE aaces.organizaciones SET estatus = 'suspendida', notas_admin = :notas WHERE id = :id"),
+        {"id": org_id, "notas": payload.get("notas_admin")}
+    )
+    await db.execute(
+        text("UPDATE aaces.suscripciones SET estatus = 'expirada' WHERE organizacion_id = :org_id AND estatus = 'activa'"),
+        {"org_id": org_id}
+    )
+    await db.commit()
+
+    return {"success": True, "message": "Organización suspendida"}
+
+
+@router.put("/organizaciones/{org_id}/suscripcion")
+async def actualizar_suscripcion(
+    org_id: str,
+    payload: Dict[str, Any],
+    user_data: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    res = await db.execute(
+        text("SELECT id FROM aaces.organizaciones WHERE id = :id"),
+        {"id": org_id}
+    )
+    if not res.fetchone():
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    plan_id = payload.get("plan_id")
+    fecha_inicio = payload.get("fecha_inicio")
+    fecha_fin = payload.get("fecha_fin")
+    cursos_max = payload.get("cursos_max")
+    usuarios_max = payload.get("usuarios_max")
+    constancias_max = payload.get("constancias_max")
+    estatus = payload.get("estatus", "activa")
+
+    updates = ["fecha_actualizacion = now()"]
+    params: Dict[str, Any] = {"org_id": org_id}
+    if plan_id:
+        updates.append("plan_id = :plan_id")
+        params["plan_id"] = plan_id
+    if fecha_inicio:
+        updates.append("fecha_inicio = :fecha_inicio")
+        params["fecha_inicio"] = fecha_inicio
+    if fecha_fin:
+        updates.append("fecha_fin = :fecha_fin")
+        params["fecha_fin"] = fecha_fin
+    if cursos_max is not None:
+        updates.append("cursos_max = :cursos_max")
+        params["cursos_max"] = int(cursos_max)
+    if usuarios_max is not None:
+        updates.append("usuarios_max = :usuarios_max")
+        params["usuarios_max"] = int(usuarios_max)
+    if constancias_max is not None:
+        updates.append("constancias_max = :constancias_max")
+        params["constancias_max"] = int(constancias_max)
+    if estatus:
+        updates.append("estatus = :estatus")
+        params["estatus"] = estatus
+
+    await db.execute(
+        text(f"UPDATE aaces.suscripciones SET {', '.join(updates)} WHERE organizacion_id = :org_id AND estatus IN ('activa', 'pendiente')"),
+        params
+    )
+    await db.commit()
+
+    return {"success": True, "message": "Suscripción actualizada"}
+
+
+@router.get("/registro-intentos")
+async def listar_registro_intentos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    resultado: Optional[str] = Query(None, regex="^(exito|duplicado|bloqueado|error)$"),
+    user_data: Dict[str, Any] = Depends(require_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    where = []
+    params: Dict[str, Any] = {}
+    if resultado:
+        where.append("resultado = :resultado")
+        params["resultado"] = resultado
+
+    where_sql = " WHERE " + " AND ".join(where) if where else ""
+
+    total_res = await db.execute(
+        text(f"SELECT count(*) FROM aaces.registro_intentos{where_sql}"),
+        params
+    )
+    total = int(total_res.scalar() or 0)
+
+    offset = (page - 1) * per_page
+    rows_res = await db.execute(
+        text(f"""
+            SELECT id, rfc, correo, ip_origen, user_agent, resultado, detalle, fecha
+            FROM aaces.registro_intentos{where_sql}
+            ORDER BY fecha DESC
+            LIMIT :limit OFFSET :offset
+        """),
+        {**params, "limit": per_page, "offset": offset}
+    )
+
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "data": [
+            {
+                "id": str(r[0]), "rfc": r[1], "correo": r[2],
+                "ip_origen": r[3], "user_agent": r[4],
+                "resultado": r[5], "detalle": r[6],
+                "fecha": r[7].isoformat() if r[7] else None,
+            }
+            for r in rows_res.fetchall()
+        ]
+    }

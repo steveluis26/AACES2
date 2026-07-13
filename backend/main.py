@@ -76,6 +76,145 @@ async def lifespan(app: FastAPI):
                 """))
             except Exception:
                 pass
+            # Contactos table
+            try:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.contactos (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      nombre VARCHAR(200) NOT NULL,
+                      email VARCHAR(255) NOT NULL,
+                      empresa VARCHAR(200),
+                      asunto VARCHAR(50) NOT NULL,
+                      mensaje TEXT NOT NULL,
+                      leido BOOLEAN DEFAULT false,
+                      respondido BOOLEAN DEFAULT false,
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      fecha_leido TIMESTAMP WITH TIME ZONE,
+                      notas_admin TEXT
+                    )
+                """))
+            except Exception:
+                pass
+            # New schema tables: planes, organizaciones, usuarios, suscripciones, registro_intentos
+            try:
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.planes (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      codigo VARCHAR(50) UNIQUE NOT NULL,
+                      nombre VARCHAR(100) NOT NULL,
+                      descripcion TEXT,
+                      precio_mensual NUMERIC(10,2) DEFAULT 0,
+                      precio_anual NUMERIC(10,2) DEFAULT 0,
+                      cursos_max INTEGER DEFAULT 10,
+                      usuarios_max INTEGER DEFAULT 1,
+                      constancias_max INTEGER DEFAULT 50,
+                      incluye_marketplace BOOLEAN DEFAULT false,
+                      incluye_api BOOLEAN DEFAULT false,
+                      incluye_white_label BOOLEAN DEFAULT false,
+                      incluye_soporte_prioritario BOOLEAN DEFAULT false,
+                      activo BOOLEAN DEFAULT true,
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.organizaciones (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      rfc VARCHAR(13) UNIQUE NOT NULL,
+                      razon_social VARCHAR(200) NOT NULL,
+                      nombre_comercial VARCHAR(200),
+                      email_contacto VARCHAR(255),
+                      telefono VARCHAR(20),
+                      estado VARCHAR(100),
+                      ciudad VARCHAR(100),
+                      direccion TEXT,
+                      estatus VARCHAR(30) DEFAULT 'pendiente' NOT NULL,
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      fecha_activacion TIMESTAMP WITH TIME ZONE,
+                      fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      notas_admin TEXT
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.usuarios (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      organizacion_id UUID NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+                      nombre VARCHAR(100) NOT NULL,
+                      correo VARCHAR(255) NOT NULL,
+                      password_hash VARCHAR(255) NOT NULL,
+                      rol VARCHAR(30) DEFAULT 'admin' NOT NULL,
+                      telefono VARCHAR(20),
+                      activo BOOLEAN DEFAULT true,
+                      ultimo_acceso TIMESTAMP WITH TIME ZONE,
+                      intentos_fallidos INTEGER DEFAULT 0,
+                      bloqueado_hasta TIMESTAMP WITH TIME ZONE,
+                      must_change_password BOOLEAN DEFAULT false,
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      UNIQUE(organizacion_id, correo)
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.suscripciones (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      organizacion_id UUID NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+                      plan_id UUID NOT NULL REFERENCES planes(id),
+                      estatus VARCHAR(30) DEFAULT 'pendiente' NOT NULL,
+                      fecha_inicio DATE,
+                      fecha_fin DATE,
+                      cursos_max INTEGER,
+                      usuarios_max INTEGER,
+                      constancias_max INTEGER,
+                      metodo_pago VARCHAR(50),
+                      referencia_pago VARCHAR(100),
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      activada_por UUID
+                    )
+                """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.registro_intentos (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      rfc VARCHAR(13),
+                      correo VARCHAR(255),
+                      ip_origen VARCHAR(45),
+                      user_agent TEXT,
+                      resultado VARCHAR(20),
+                      detalle TEXT,
+                      fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            except Exception as e:
+                logger.warning(f"Failed to create new schema tables: {e}")
+            # Seed default plans
+            try:
+                res = await conn.execute(text("SELECT COUNT(*) FROM aaces.planes"))
+                if int(res.scalar() or 0) == 0:
+                    await conn.execute(
+                        text("""
+                            INSERT INTO aaces.planes (codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
+                            VALUES ('trial', 'Prueba', 'Plan gratuito para probar la plataforma', 0, 10, 1, 50, false)
+                        """)
+                    )
+                    await conn.execute(
+                        text("""
+                            INSERT INTO aaces.planes (codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
+                            VALUES ('profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true)
+                        """)
+                    )
+                    await conn.execute(
+                        text("""
+                            INSERT INTO aaces.planes (codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario)
+                            VALUES ('empresa', 'Empresa', 'Solución completa para grandes organizaciones', 799, 999999, 999999, 999999, true, true, true, true)
+                        """)
+                    )
+                    logger.info("Default plans seeded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to seed plans: {e}")
+            # Add organizacion_id to clientes for migration linking
+            try:
+                await conn.execute(text("ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL"))
+            except Exception:
+                pass
             # Ensure subcursos relation
             try:
                 await conn.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID REFERENCES cursos(id) ON DELETE CASCADE"))

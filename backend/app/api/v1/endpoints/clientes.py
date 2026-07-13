@@ -804,26 +804,56 @@ async def crear_curso(
         if not (nombre and ciudad):
             raise HTTPException(status_code=400, detail="Nombre y ciudad son requeridos")
 
-        # Trial check: límite de cursos según plan
-        plan_res = await db.execute(
-            text("SELECT plan, cursos_max FROM clientes WHERE id = :cid"),
-            {"cid": cid}
-        )
-        plan_row = plan_res.fetchone()
-        if plan_row:
-            plan_name = plan_row[0]
-            cursos_max = int(plan_row[1] or 10)
-            if plan_name == 'trial':
-                cursos_count_res = await db.execute(
-                    text("SELECT count(*) FROM cursos WHERE cliente_id = :cid AND estado IN ('activo', 'en_espera', 'finalizado')"),
-                    {"cid": cid}
-                )
-                cursos_actuales = int(cursos_count_res.scalar() or 0)
-                if cursos_actuales >= cursos_max:
-                    raise HTTPException(
-                        status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                        detail=f"Has alcanzado el límite de {cursos_max} cursos del plan trial. Actualiza tu plan para crear más cursos."
+        # Trial check: límite de cursos según plan/suscripción
+        org_id = user_data.get("organizacion_id")
+        if org_id:
+            # New schema: check subscription limits
+            sub_res = await db.execute(
+                text("""
+                    SELECT s.cursos_max, p.codigo
+                    FROM aaces.suscripciones s
+                    JOIN aaces.planes p ON p.id = s.plan_id
+                    WHERE s.organizacion_id = :org_id AND s.estatus = 'activa'
+                    LIMIT 1
+                """),
+                {"org_id": org_id}
+            )
+            sub_row = sub_res.fetchone()
+            if sub_row:
+                cursos_max = int(sub_row[0] or 10)
+                plan_name = sub_row[1]
+                if plan_name == 'trial':
+                    cursos_count_res = await db.execute(
+                        text("SELECT count(*) FROM aaces.cursos WHERE cliente_id IN (SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id) AND estado IN ('activo', 'en_espera', 'finalizado')"),
+                        {"org_id": org_id}
                     )
+                    cursos_actuales = int(cursos_count_res.scalar() or 0)
+                    if cursos_actuales >= cursos_max:
+                        raise HTTPException(
+                            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                            detail=f"Has alcanzado el límite de {cursos_max} cursos del plan trial. Actualiza tu plan para crear más cursos."
+                        )
+        else:
+            # Old schema: check clientes table
+            plan_res = await db.execute(
+                text("SELECT plan, cursos_max FROM clientes WHERE id = :cid"),
+                {"cid": cid}
+            )
+            plan_row = plan_res.fetchone()
+            if plan_row:
+                plan_name = plan_row[0]
+                cursos_max = int(plan_row[1] or 10)
+                if plan_name == 'trial':
+                    cursos_count_res = await db.execute(
+                        text("SELECT count(*) FROM cursos WHERE cliente_id = :cid AND estado IN ('activo', 'en_espera', 'finalizado')"),
+                        {"cid": cid}
+                    )
+                    cursos_actuales = int(cursos_count_res.scalar() or 0)
+                    if cursos_actuales >= cursos_max:
+                        raise HTTPException(
+                            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                            detail=f"Has alcanzado el límite de {cursos_max} cursos del plan trial. Actualiza tu plan para crear más cursos."
+                        )
 
         # Parseo de fechas flexible
         def parse_date(val):

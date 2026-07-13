@@ -16,6 +16,7 @@ import {
   UsersIcon,
   CalendarIcon,
   CreditCardIcon,
+  MailIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -149,13 +150,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       url: role === "admin" ? "/admin/dashboard" : "/cliente/pagos",
       icon: CreditCardIcon,
     },
-    {
-      title: role === "admin" ? "Projects" : "Gestión",
-      url: role === "admin" ? "#" : "/cliente/gestion",
-      icon: FolderIcon,
-    },
     ...(role === "admin"
       ? []
+      : [
+          {
+            title: "Gestión",
+            url: "/cliente/gestion",
+            icon: FolderIcon,
+          },
+        ]),
+    ...(role === "admin"
+      ? [
+          {
+            title: "Organizaciones",
+            url: "/admin/organizaciones",
+            icon: FolderIcon,
+          },
+          {
+            title: "Mensajes",
+            url: "/admin/contacto",
+            icon: MailIcon,
+          },
+        ]
       : [
           {
             title: "Calendario",

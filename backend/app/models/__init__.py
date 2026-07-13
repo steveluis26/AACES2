@@ -265,3 +265,137 @@ class AuditoriaCambio(Base):
         Index('idx_auditoria_usuario', 'usuario_id'),
         Index('idx_auditoria_fecha', 'fecha_cambio'),
     )
+
+
+class Plan(Base):
+    __tablename__ = "planes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    codigo = Column(String(50), unique=True, nullable=False)
+    nombre = Column(String(100), nullable=False)
+    descripcion = Column(Text)
+    precio_mensual = Column(Numeric(10, 2), default=0)
+    precio_anual = Column(Numeric(10, 2), default=0)
+    cursos_max = Column(Integer, default=10)
+    usuarios_max = Column(Integer, default=1)
+    constancias_max = Column(Integer, default=50)
+    incluye_marketplace = Column(Boolean, default=False)
+    incluye_api = Column(Boolean, default=False)
+    incluye_white_label = Column(Boolean, default=False)
+    incluye_soporte_prioritario = Column(Boolean, default=False)
+    activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_planes_codigo', 'codigo'),
+        Index('idx_planes_activo', 'activo'),
+    )
+
+
+class Organizacion(Base):
+    __tablename__ = "organizaciones"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rfc = Column(String(13), unique=True, nullable=False)
+    razon_social = Column(String(200), nullable=False)
+    nombre_comercial = Column(String(200))
+    email_contacto = Column(String(255))
+    telefono = Column(String(20))
+    estado = Column(String(100))
+    ciudad = Column(String(100))
+    direccion = Column(Text)
+    estatus = Column(String(30), default='pendiente', nullable=False)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_activacion = Column(DateTime(timezone=True))
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    notas_admin = Column(Text)
+
+    usuarios = relationship("Usuario", back_populates="organizacion", foreign_keys="Usuario.organizacion_id")
+    suscripciones = relationship("Suscripcion", back_populates="organizacion")
+
+    __table_args__ = (
+        CheckConstraint("estatus IN ('pendiente', 'activa', 'suspendida', 'cancelada')", name="check_estatus_org"),
+        Index('idx_organizaciones_rfc', 'rfc'),
+        Index('idx_organizaciones_estatus', 'estatus'),
+        Index('idx_organizaciones_fecha_creacion', 'fecha_creacion'),
+    )
+
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    nombre = Column(String(100), nullable=False)
+    correo = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    rol = Column(String(30), default='admin', nullable=False)
+    telefono = Column(String(20))
+    activo = Column(Boolean, default=True)
+    ultimo_acceso = Column(DateTime(timezone=True))
+    intentos_fallidos = Column(Integer, default=0)
+    bloqueado_hasta = Column(DateTime(timezone=True))
+    must_change_password = Column(Boolean, default=False)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    organizacion = relationship("Organizacion", foreign_keys=[organizacion_id], back_populates="usuarios")
+
+    __table_args__ = (
+        UniqueConstraint('organizacion_id', 'correo', name='uq_org_correo'),
+        CheckConstraint("rol IN ('admin', 'capacitador', 'operador')", name="check_rol_usuario"),
+        Index('idx_usuarios_org_id', 'organizacion_id'),
+        Index('idx_usuarios_correo', 'correo'),
+        Index('idx_usuarios_activo', 'activo'),
+    )
+
+
+class Suscripcion(Base):
+    __tablename__ = "suscripciones"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    plan_id = Column(UUID(as_uuid=True), ForeignKey("planes.id"), nullable=False)
+    estatus = Column(String(30), default='pendiente', nullable=False)
+    fecha_inicio = Column(Date)
+    fecha_fin = Column(Date)
+    cursos_max = Column(Integer)
+    usuarios_max = Column(Integer)
+    constancias_max = Column(Integer)
+    metodo_pago = Column(String(50))
+    referencia_pago = Column(String(100))
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    activada_por = Column(UUID(as_uuid=True))
+
+    organizacion = relationship("Organizacion", foreign_keys=[organizacion_id], back_populates="suscripciones")
+    plan = relationship("Plan")
+
+    __table_args__ = (
+        CheckConstraint("estatus IN ('pendiente', 'activa', 'expirada', 'cancelada')", name="check_estatus_suscripcion"),
+        Index('idx_suscripciones_org_id', 'organizacion_id'),
+        Index('idx_suscripciones_plan_id', 'plan_id'),
+        Index('idx_suscripciones_estatus', 'estatus'),
+        Index('idx_suscripciones_fechas', 'fecha_inicio', 'fecha_fin'),
+    )
+
+
+class RegistroIntento(Base):
+    __tablename__ = "registro_intentos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rfc = Column(String(13))
+    correo = Column(String(255))
+    ip_origen = Column(String(45))
+    user_agent = Column(Text)
+    resultado = Column(String(20))
+    detalle = Column(Text)
+    fecha = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("resultado IN ('exito', 'duplicado', 'bloqueado', 'error')", name="check_resultado_intento"),
+        Index('idx_intentos_rfc', 'rfc'),
+        Index('idx_intentos_correo', 'correo'),
+        Index('idx_intentos_fecha', 'fecha'),
+        Index('idx_intentos_resultado', 'resultado'),
+    )

@@ -68,7 +68,82 @@ class AuthService:
             return None
     
     async def authenticate_user(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
-        """Autenticar usuario por email y contraseña (solo esquema aaces)"""
+        """Autenticar usuario por email y contraseña. Prueba nuevo esquema (usuarios) y fallback al viejo (clientes)."""
+        try:
+            user = await self._authenticate_usuario(db, email, password)
+            if user:
+                return user
+            return await self._authenticate_cliente(db, email, password)
+        except Exception as e:
+            logger.error(f"Error en autenticación: {e}")
+            return None
+
+    async def _authenticate_usuario(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
+        """Autenticar contra nuevo esquema usuarios + organizaciones"""
+        try:
+            result = await db.execute(
+                text(
+                    """
+                    SELECT u.id, u.correo, u.nombre, u.rol, u.activo, u.password_hash,
+                           u.intentos_fallidos, u.bloqueado_hasta, u.organizacion_id,
+                           o.estatus, o.razon_social
+                    FROM aaces.usuarios u
+                    JOIN aaces.organizaciones o ON o.id = u.organizacion_id
+                    WHERE u.correo = :email AND u.activo = true
+                    LIMIT 1
+                    """
+                ),
+                {"email": email}
+            )
+            row = result.fetchone()
+            if row is None:
+                return None
+
+            user = SimpleNamespace(
+                id=row[0], correo=row[1], nombre=row[2], rol=row[3], activo=row[4],
+                password_hash=row[5], intentos_fallidos=row[6], bloqueado_hasta=row[7],
+                organizacion_id=row[8], org_estatus=row[9], razon_social=row[10],
+                source="usuario"
+            )
+
+            if not self.verify_password(password, user.password_hash):
+                new_intentos = (user.intentos_fallidos or 0) + 1
+                bloqueado = None
+                if new_intentos >= 5:
+                    bloqueado = datetime.utcnow() + timedelta(minutes=30)
+                await db.execute(
+                    text("UPDATE aaces.usuarios SET intentos_fallidos = :i, bloqueado_hasta = :b WHERE id = :id"),
+                    {"i": new_intentos, "b": bloqueado, "id": user.id}
+                )
+                await db.commit()
+                return None
+
+            if user.org_estatus == 'pendiente':
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Tu cuenta está pendiente de activación por el administrador"
+                )
+            if user.org_estatus == 'suspendida':
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Tu organización ha sido suspendida. Contacta al administrador."
+                )
+
+            await db.execute(
+                text("UPDATE aaces.usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = :ua WHERE id = :id"),
+                {"ua": datetime.utcnow(), "id": user.id}
+            )
+            await db.commit()
+
+            return user
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error autenticando usuario: {e}")
+            return None
+
+    async def _authenticate_cliente(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
+        """Autenticar contra esquema viejo (clientes) - backward compatibility"""
         try:
             result = await db.execute(
                 text(
@@ -82,18 +157,16 @@ class AuthService:
                 {"email": email}
             )
             row = result.fetchone()
-            logger.debug(f"Auth aaces.clientes found: {bool(row)} for {email}")
             if row is None:
                 return None
 
             user = SimpleNamespace(
                 id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4],
-                password_hash=row[5], bloqueado_hasta=row[6], intentos_fallidos=row[7]
+                password_hash=row[5], bloqueado_hasta=row[6], intentos_fallidos=row[7],
+                source="cliente"
             )
 
-            if settings.DEBUG and settings.ALLOW_DEV_LOGIN:
-                logger.debug("Dev login bypass (aaces.clientes)")
-            elif not self.verify_password(password, user.password_hash):
+            if not self.verify_password(password, user.password_hash):
                 new_intentos = (user.intentos_fallidos or 0) + 1
                 bloqueado = None
                 if new_intentos >= 5:
@@ -105,16 +178,15 @@ class AuthService:
                 await db.commit()
                 return None
 
-            if not (settings.DEBUG and settings.ALLOW_DEV_LOGIN):
-                await db.execute(
-                    text("UPDATE aaces.clientes SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = :ua WHERE id = :id"),
-                    {"ua": datetime.utcnow(), "id": user.id}
-                )
-                await db.commit()
+            await db.execute(
+                text("UPDATE aaces.clientes SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = :ua WHERE id = :id"),
+                {"ua": datetime.utcnow(), "id": user.id}
+            )
+            await db.commit()
 
             return user
         except Exception as e:
-            logger.error(f"Error en autenticación: {e}")
+            logger.error(f"Error autenticando cliente: {e}")
             return None
     
     async def get_user_by_id(self, db: AsyncSession, user_id: str) -> Optional[SimpleNamespace]:
