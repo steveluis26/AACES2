@@ -11,8 +11,12 @@ import Image from 'next/image';
 import { LogoCloud3 } from '@/components/ui/logo-cloud-3'
 import { useSearchParams } from 'next/navigation';
 import HeroSection from '@/components/landing/hero-section'
+import MetricsSection from '@/components/landing/metrics-section'
+import MainBenefitSection from '@/components/landing/main-benefit-section'
 import FeaturesSection from '@/components/landing/features-section'
 import PlansSection from '@/components/landing/plans-section'
+import TrustSection from '@/components/landing/trust-section'
+import MarketplaceSection from '@/components/landing/marketplace-section'
 import FooterSection from 'src/components/footer'
 import CommunitySection from 'src/components/content-6'
 
@@ -175,8 +179,12 @@ export default function Home() {
         loading={isValidating}
         attemptsLeft={attemptsLeft}
       />
+      <MetricsSection />
+      <MainBenefitSection />
       <FeaturesSection />
       <PlansSection />
+      <TrustSection />
+      <MarketplaceSection />
 
       {/* Validation Result */}
       {validationResult && (
