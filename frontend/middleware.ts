@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const ADMIN_ROUTES = ['/admin']
 const LOGIN_ROUTE = '/login'
 const CLIENTE_ROUTE = '/cliente/dashboard'
 
@@ -18,9 +17,8 @@ function decodeToken(token: string): Record<string, unknown> | null {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  const isAdminRoute = ADMIN_ROUTES.some(
-    (route) => pathname === route || pathname.startsWith(route + '/')
-  )
+  const isAdminRoute =
+    pathname === '/admin' || pathname.startsWith('/admin/')
 
   if (!isAdminRoute) {
     return NextResponse.next()
@@ -36,6 +34,11 @@ export function middleware(request: NextRequest) {
 
   const payload = decodeToken(token)
   if (!payload || payload.role !== 'admin') {
+    return NextResponse.redirect(new URL(CLIENTE_ROUTE, request.url))
+  }
+
+  // org_id presente = admin de organizacion, no superadmin
+  if (payload.org_id) {
     return NextResponse.redirect(new URL(CLIENTE_ROUTE, request.url))
   }
 

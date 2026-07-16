@@ -46,12 +46,14 @@ export function LoginForm({
       localStorage.setItem("aaces_token", token)
       document.cookie = `aaces_token=${token}; path=/; max-age=604800; SameSite=Lax`
       let role: "admin" | "client" = "client"
+      let isSuperAdmin = false
       try {
         const parts = token.split(".")
         if (parts.length === 3) {
           const payload = JSON.parse(typeof atob === "function" ? atob(parts[1]) : Buffer.from(parts[1], "base64").toString("utf-8"))
           role = payload.role === "admin" ? "admin" : "client"
-          localStorage.setItem("aaces_user", JSON.stringify({ id: payload.sub, email: payload.email, nombre: payload.name, rol: role }))
+          isSuperAdmin = role === "admin" && !payload.org_id
+          localStorage.setItem("aaces_user", JSON.stringify({ id: payload.sub, email: payload.email, nombre: payload.name, rol: role, isSuperAdmin }))
         }
       } catch {}
       const mustChange = Boolean(data.must_change_password)
@@ -59,7 +61,7 @@ export function LoginForm({
         router.push("/cliente/cambiar-password")
         return
       }
-      router.push(role === "admin" ? "/admin/dashboard" : "/cliente/dashboard")
+      router.push(isSuperAdmin ? "/admin/dashboard" : "/cliente/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de conexión")
     } finally {

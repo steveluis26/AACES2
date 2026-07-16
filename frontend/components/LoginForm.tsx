@@ -29,9 +29,10 @@ export default function LoginForm() {
       // Decodificar el token para obtener el rol
       const tokenPayload = JSON.parse(atob(response.access_token.split('.')[1]));
       const userRole = tokenPayload.role || tokenPayload.rol;
+      const isSuperAdmin = userRole === 'admin' && !tokenPayload.org_id;
       
       // Redirigir según el rol
-      if (userRole === 'admin') {
+      if (isSuperAdmin) {
         router.push('/panel-maestro');
       } else if (userRole === 'cliente') {
         router.push('/panel-cliente');

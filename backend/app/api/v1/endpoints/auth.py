@@ -318,6 +318,23 @@ require_client = require_role([Role.ADMIN, Role.CLIENT])
 require_trainer = require_role([Role.ADMIN, Role.CLIENT, Role.TRAINER])
 require_authenticated = require_role([Role.ADMIN, Role.CLIENT, Role.TRAINER])
 
+
+async def require_superadmin(
+    user_data: Dict[str, Any] = Depends(get_current_user_data)
+):
+    """Requerir rol admin SIN organizacion_id (superadmin de plataforma)."""
+    if user_data.get("role") not in [Role.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador"
+        )
+    if user_data.get("org_id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso no autorizado para administradores de organización"
+        )
+    return user_data
+
 @router.put("/profile")
 async def update_profile(
     payload: ClienteUpdate,

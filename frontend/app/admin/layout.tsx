@@ -27,6 +27,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace('/cliente/dashboard')
         return
       }
+      // org_id presente = admin de organizacion, no superadmin
+      if (payload.org_id) {
+        router.replace('/cliente/dashboard')
+        return
+      }
       setAuthorized(true)
     } catch {
       router.replace('/login')

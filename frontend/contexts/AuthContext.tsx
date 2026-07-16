@@ -75,7 +75,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(userData);
 
       // Redirigir según el rol
-      if (userData?.rol === 'admin') {
+      const isSuperAdmin = userData?.rol === 'admin' && !payload.org_id;
+      if (isSuperAdmin) {
         navigate('/admin');
       } else {
         navigate('/cliente');

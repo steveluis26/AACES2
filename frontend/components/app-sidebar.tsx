@@ -125,9 +125,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
+  const getIsSuperAdmin = () => {
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem("aaces_user") : null
+      if (!raw) return false
+      const u = JSON.parse(raw)
+      return u.isSuperAdmin === true
+    } catch {
+      return false
+    }
+  }
+
   const [role, setRole] = React.useState<string | undefined>(undefined)
+  const [isSuperAdmin, setIsSuperAdmin] = React.useState(false)
   React.useEffect(() => {
     setRole(getRole())
+    setIsSuperAdmin(getIsSuperAdmin())
   }, [])
 
   const navMain = [
@@ -165,7 +178,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: FolderIcon,
           },
         ]),
-    ...(role === "admin"
+    ...(isSuperAdmin
       ? [
           {
             title: "Organizaciones",

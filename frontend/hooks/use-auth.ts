@@ -120,12 +120,16 @@ export function useAuth() {
 
       showSuccess('Inicio de sesión exitoso');
 
-      // Redirect based on role
-      if (user.rol === 'admin') {
-        router.push('/admin/dashboard');
-      } else {
-        router.push('/cliente/dashboard');
-      }
+      // Redirect based on role (decode JWT to check org_id)
+      let isSuperAdmin = user.rol === 'admin'
+      try {
+        const parts = access_token.split('.')
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]))
+          isSuperAdmin = payload.role === 'admin' && !payload.org_id
+        }
+      } catch {}
+      router.push(isSuperAdmin ? '/admin/dashboard' : '/cliente/dashboard');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al iniciar sesión';
       setAuthState(prev => ({

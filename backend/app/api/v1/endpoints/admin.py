@@ -11,7 +11,7 @@ from app.models import Cliente, Curso, CursoParticipante, Participante, Pago, Au
 # Evitar uso de ORM en este módulo para prevenir conflictos de mapeo
 from app.services.security import security_service
 from app.schemas import ClienteResponse, PaginatedResponse
-from app.api.v1.endpoints.auth import require_admin, get_current_user_data
+from app.api.v1.endpoints.auth import require_superadmin, get_current_user_data
 from app.core.logging import audit_logger
 import logging
 
@@ -20,7 +20,7 @@ router = APIRouter()
 
 @router.get("/dashboard/metrics")
 async def get_admin_dashboard_metrics(
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     """Obtener métricas generales del dashboard administrativo"""
@@ -116,7 +116,7 @@ async def get_admin_dashboard_metrics(
 
 @router.get("/clientes")
 async def get_admin_clientes(
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     categoria: Optional[str] = Query(None, regex="^(basico|premium|enterprise)$"),
@@ -228,7 +228,7 @@ async def get_admin_clientes(
 async def update_cliente_categoria(
     cliente_id: str,
     categoria: str,
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     """Actualizar categoría de cliente (solo admin)"""
@@ -252,7 +252,7 @@ async def update_cliente_categoria(
 
 @router.post("/esquema/consolidar")
 async def consolidar_esquema(
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     try:
@@ -291,7 +291,7 @@ async def consolidar_esquema(
 async def get_cliente_usage(
     cliente_id: str,
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     """Obtener uso detallado de un cliente (cursos, participantes, almacenamiento)"""
     try:
@@ -356,7 +356,7 @@ async def get_cliente_usage(
 async def admin_update_cliente_password(
     cliente_id: str,
     payload: Dict[str, Any],
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     """Actualizar contraseña de un cliente (solo admin)"""
@@ -390,7 +390,7 @@ async def admin_update_cliente_password(
 @router.post("/clientes/{cliente_id}/password/temp")
 async def admin_generate_temp_password(
     cliente_id: str,
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     """Generar una contraseña temporal y marcar que debe cambiarse en el próximo acceso"""
@@ -412,7 +412,7 @@ async def admin_generate_temp_password(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 @router.get("/auditoria")
 async def get_auditoria_logs(
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     tabla: Optional[str] = Query(None),
@@ -479,7 +479,7 @@ async def get_auditoria_logs(
 async def get_monthly_report(
     mes: int = Query(..., ge=1, le=12),
     anio: int = Query(..., ge=2020),
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     """Obtener reporte mensual detallado"""
@@ -587,7 +587,7 @@ async def get_monthly_report(
 async def get_stats_por_ciudad(
     periodo: str = Query("mes", regex="^(semana|mes|anio)$"),
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         tabla = "mv_finanzas_ciudad_mes" if periodo == "mes" else ("mv_finanzas_ciudad_semana" if periodo == "semana" else "mv_finanzas_ciudad_anio")
@@ -615,7 +615,7 @@ async def get_stats_por_ciudad(
 async def create_admin_cliente(
     payload: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         nombre = payload.get("nombre")
@@ -647,7 +647,7 @@ async def update_admin_cliente(
     cliente_id: str,
     payload: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         allowed = ["nombre", "correo", "categoria", "estado", "ciudad_base", "vigencia_desde", "vigencia_hasta", "plan", "cursos_max", "descuento_pct"]
@@ -675,7 +675,7 @@ async def update_admin_cliente(
 async def delete_admin_cliente(
     cliente_id: str,
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         await db.execute(text("UPDATE clientes SET estado = 'eliminado', fecha_eliminacion = now() WHERE id = :id"), {"id": cliente_id})
@@ -690,7 +690,7 @@ async def delete_admin_cliente(
 async def enforce_vigencia(
     ids: Optional[List[str]] = None,
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         if ids and len(ids) > 0:
@@ -722,7 +722,7 @@ async def enforce_vigencia(
 async def bulk_update_estado(
     payload: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         ids = payload.get("ids", [])
@@ -748,7 +748,7 @@ async def admin_update_curso(
     curso_id: str,
     payload: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         allowed = ["ciudad", "empresa_contratante", "fecha_inicio", "fecha_fin", "estado"]
@@ -774,7 +774,7 @@ async def update_precio_participante(
     cp_id: str,
     payload: Dict[str, Any],
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         q_a = text("UPDATE aaces.curso_participante SET costo_asignado = :costo, descuento = :descuento WHERE id = :id")
@@ -792,7 +792,7 @@ async def update_precio_participante(
 async def get_cursos_por_cliente(
     cliente_id: str,
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         q = text("SELECT id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, estado, empresa_contratante FROM cursos WHERE cliente_id = :cid ORDER BY fecha_inicio DESC")
@@ -811,7 +811,7 @@ async def get_cursos_por_cliente(
 async def get_participantes_por_cliente(
     cliente_id: str,
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         res = await db.execute(
@@ -845,7 +845,7 @@ async def get_participantes_por_cliente(
 @router.post("/mantenimiento/fk/pagos-cascade")
 async def ensure_pagos_fk_cascade(
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -862,7 +862,7 @@ async def ensure_pagos_fk_cascade(
 @router.post("/mantenimiento/drop-curso-participante-underscore")
 async def drop_curso_participante_underscore(
     db: AsyncSession = Depends(get_db),
-    user_data: Dict[str, Any] = Depends(require_admin)
+    user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
         chk = await db.execute(text("SELECT to_regclass('curso_participante_') IS NOT NULL"))
@@ -887,7 +887,7 @@ async def listar_organizaciones(
     per_page: int = Query(20, ge=1, le=100),
     estatus: Optional[str] = Query(None, regex="^(pendiente|activa|suspendida|cancelada)$"),
     search: Optional[str] = Query(None, min_length=2),
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -954,7 +954,7 @@ async def listar_organizaciones(
 @router.get("/organizaciones/{org_id}")
 async def detalle_organizacion(
     org_id: str,
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -1036,7 +1036,7 @@ async def detalle_organizacion(
 async def activar_organizacion(
     org_id: str,
     payload: Dict[str, Any],
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -1143,7 +1143,7 @@ async def activar_organizacion(
 async def suspender_organizacion(
     org_id: str,
     payload: Dict[str, Any],
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -1171,7 +1171,7 @@ async def suspender_organizacion(
 async def actualizar_suscripcion(
     org_id: str,
     payload: Dict[str, Any],
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -1228,7 +1228,7 @@ async def listar_registro_intentos(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     resultado: Optional[str] = Query(None, regex="^(exito|duplicado|bloqueado|error)$"),
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
