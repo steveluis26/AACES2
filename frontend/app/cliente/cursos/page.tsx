@@ -699,7 +699,14 @@ export default function CursosClientePage() {
       </Dialog>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Próximos cursos</h1>
-        <Button variant="secondary" onClick={() => { window.location.href = '/cliente/dashboard' }}>Volver al dashboard</Button>
+        <div className="flex gap-2">
+          <Button variant="default" onClick={() => { window.location.href = '/cliente/gestion' }}>
+            Crear curso
+          </Button>
+          <Button variant="secondary" onClick={() => { window.location.href = '/cliente/dashboard' }}>
+            Volver al dashboard
+          </Button>
+        </div>
       </div>
 
       <Card>
