@@ -422,5 +422,34 @@ class RegistroIntento(Base):
         Index('idx_intentos_rfc', 'rfc'),
         Index('idx_intentos_correo', 'correo'),
         Index('idx_intentos_fecha', 'fecha'),
-        Index('idx_intentos_resultado', 'resultado'),
+    )
+
+
+class DocumentoEmitido(Base):
+    __tablename__ = "documentos_emitidos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("aaces.organizaciones.id", ondelete="CASCADE"), nullable=False)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("aaces.templates.id", ondelete="SET NULL"))
+    template_version = Column(Integer)
+    tipo_documento = Column(String(30), nullable=False)
+    codigo_validacion = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False)
+    storage_provider = Column(String(50), nullable=False)
+    storage_key = Column(String(500), nullable=False)
+    pdf_hash = Column(String(64), nullable=False)
+    html_snapshot = Column(Text)
+    metadata = Column(JSONB, default={})
+    emitido_por = Column(UUID(as_uuid=True), ForeignKey("aaces.usuarios.id", ondelete="SET NULL"))
+    fecha_emision = Column(DateTime(timezone=True), server_default=func.now())
+    estatus = Column(String(20), default='emitido', nullable=False)
+
+    organizacion = relationship("Organizacion")
+    template = relationship("Template")
+
+    __table_args__ = (
+        CheckConstraint("tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO')", name="check_tipo_documento_emitido"),
+        CheckConstraint("estatus IN ('emitido', 'cancelado', 'reemitido')", name="check_estatus_documento"),
+        Index('idx_docs_org_tipo', 'organizacion_id', 'tipo_documento'),
+        Index('idx_docs_validacion', 'codigo_validacion'),
+        Index('idx_docs_emision', 'fecha_emision'),
     )

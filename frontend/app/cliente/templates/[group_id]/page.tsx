@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "react-query"
 import { apiRequest } from "@/app/services/api"
 import {
@@ -207,6 +207,43 @@ export default function TemplateDetailPage() {
     }
   }
 
+  const [pdfLoading, setPdfLoading] = useState(false)
+
+  const loadPdfPreview = async () => {
+    if (!activeTemplate) return
+    setPdfLoading(true)
+    try {
+      const token = localStorage.getItem('aaces_token')
+      const res = await fetch('/api/v1/documentos/generar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          template_id: activeTemplate.id,
+          data: PREVIEW_DATA,
+        }),
+      })
+      if (!res.ok) throw new Error('Error al generar PDF')
+      const data = await res.json()
+      const docId = data.documento.id
+      const downloadRes = await fetch(`/api/v1/documentos/${docId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!downloadRes.ok) throw new Error('Error al descargar preview')
+      const blob = await downloadRes.blob()
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+      toast.success('PDF generado correctamente')
+    } catch (err) {
+      toast.error('Error al generar PDF de vista previa')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
   const getToken = () => {
     if (typeof window !== "undefined") {
       for (const k of ["aaces_token", "token", "access_token"]) {
@@ -264,6 +301,10 @@ export default function TemplateDetailPage() {
           <Button variant="outline" onClick={loadPreview} disabled={previewLoading}>
             <EyeIcon className="h-4 w-4 mr-2" />
             {previewLoading ? "Cargando..." : "Vista previa"}
+          </Button>
+          <Button variant="secondary" onClick={loadPdfPreview} disabled={pdfLoading}>
+            <FileTextIcon className="h-4 w-4 mr-2" />
+            {pdfLoading ? "Generando..." : "Vista previa PDF"}
           </Button>
           <Button onClick={() => setShowNewVersion(true)}>
             <PlusIcon className="h-4 w-4 mr-2" />

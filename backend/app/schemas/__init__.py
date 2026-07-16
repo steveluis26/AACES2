@@ -341,3 +341,43 @@ class SuccessResponse(BaseSchema):
     success: bool = True
     message: str
     data: Optional[Dict[str, Any]] = None
+
+
+# Documento schemas
+class DocumentoGenerarRequest(BaseSchema):
+    template_id: UUID
+    data: Dict[str, Any] = Field(default_factory=dict)
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class DocumentoResponse(BaseSchema):
+    id: UUID
+    organizacion_id: UUID
+    template_id: Optional[UUID] = None
+    template_version: Optional[int] = None
+    tipo_documento: str
+    codigo_validacion: str
+    pdf_hash: str
+    storage_key: str
+    estatus: str
+    fecha_emision: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentoListResponse(BaseSchema):
+    id: UUID
+    tipo_documento: str
+    codigo_validacion: str
+    pdf_hash: str
+    estatus: str
+    fecha_emision: datetime
+    metadata: Optional[Dict[str, Any]] = None
+    organizacion_razon_social: Optional[str] = None
+
+
+class DocumentoGenerarResponse(BaseSchema):
+    success: bool = True
+    documento: DocumentoResponse
+    descarga_url: str
+    codigo_validacion: str

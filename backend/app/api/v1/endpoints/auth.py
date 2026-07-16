@@ -335,6 +335,24 @@ async def require_superadmin(
         )
     return user_data
 
+
+async def require_org_admin(
+    user_data: Dict[str, Any] = Depends(get_current_user_data)
+):
+    """Requerir admin con organizacion_id (admin de una organizacion)."""
+    if user_data.get("role") not in [Role.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol de administrador"
+        )
+    org_id = user_data.get("org_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere una organización asociada al usuario"
+        )
+    return user_data
+
 @router.put("/profile")
 async def update_profile(
     payload: ClienteUpdate,

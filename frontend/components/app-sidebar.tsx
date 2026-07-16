@@ -160,6 +160,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       icon: StampIcon,
     },
     {
+      title: "Documentos",
+      url: role === "admin" ? "/admin/dashboard" : "/cliente/documentos",
+      icon: FileTextIcon,
+    },
+    {
       title: "Analítica",
       url: "/analytics",
       icon: BarChartIcon,

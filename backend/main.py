@@ -211,6 +211,29 @@ async def lifespan(app: FastAPI):
                       fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     )
                 """))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.documentos_emitidos (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+                      template_id UUID REFERENCES aaces.templates(id) ON DELETE SET NULL,
+                      template_version INTEGER,
+                      tipo_documento VARCHAR(30) NOT NULL,
+                      codigo_validacion UUID NOT NULL DEFAULT gen_random_uuid(),
+                      storage_provider VARCHAR(50) NOT NULL,
+                      storage_key VARCHAR(500) NOT NULL,
+                      pdf_hash VARCHAR(64) NOT NULL,
+                      html_snapshot TEXT,
+                      metadata JSONB DEFAULT '{}',
+                      emitido_por UUID REFERENCES aaces.usuarios(id) ON DELETE SET NULL,
+                      fecha_emision TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      estatus VARCHAR(20) DEFAULT 'emitido' NOT NULL,
+                      CONSTRAINT check_tipo_documento_emitido CHECK (tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO')),
+                      CONSTRAINT check_estatus_documento CHECK (estatus IN ('emitido', 'cancelado', 'reemitido'))
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_org_tipo ON aaces.documentos_emitidos (organizacion_id, tipo_documento)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_validacion ON aaces.documentos_emitidos (codigo_validacion)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_emision ON aaces.documentos_emitidos (fecha_emision)"))
             except Exception as e:
                 logger.warning(f"Failed to create new schema tables: {e}")
             # Fix existing rows where activo is NULL (from previous schema without DEFAULT)
