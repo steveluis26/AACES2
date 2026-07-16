@@ -172,8 +172,7 @@ export interface ConstanciaDetalleDTO {
       descargar: boolean
       compartir: boolean
     }
-  }>
-}
+  }
 
 export function mapConstanciaToDocumentViewModel(dto: ConstanciaDetalleDTO): DocumentViewModel {
   const estado = dto.estado as DocumentStatus
