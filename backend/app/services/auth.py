@@ -74,8 +74,10 @@ class AuthService:
             if user:
                 return user
             return await self._authenticate_cliente(db, email, password)
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error en autenticación: {e}")
+            logger.exception(f"Error en autenticación: {e}")
             return None
 
     async def _authenticate_usuario(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
