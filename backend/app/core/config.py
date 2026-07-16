@@ -81,10 +81,12 @@ class Settings(BaseSettings):
     # Encryption key for sensitive data
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", Fernet.generate_key().decode())
 
-    # Payments settings
+    # Payments & URLs
     MERCADOPAGO_ACCESS_TOKEN: str = os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")
     FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:3000")
     PUBLIC_API_BASE_URL: str = os.getenv("PUBLIC_API_BASE_URL", "http://127.0.0.1:8000/api/v1")
+    PUBLIC_FRONTEND_URL: str = os.getenv("PUBLIC_FRONTEND_URL", "http://127.0.0.1:3000")
+    PUBLIC_VERIFICATION_URL: str = os.getenv("PUBLIC_VERIFICATION_URL", "http://127.0.0.1:3000/v")
 
     AACES_PRICE_MONTH: float = float(os.getenv("AACES_PRICE_MONTH", "0"))
     AACES_PRICE_6M: float = float(os.getenv("AACES_PRICE_6M", "0"))

@@ -4,8 +4,13 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-from fastapi import HTTPException, status, Depends
 from app.core.config import settings
+from app.errors import (
+    DomainError,
+    OrganizationPendingError,
+    OrganizationSuspendedError,
+    AccountBlockedError,
+)
 from types import SimpleNamespace
 import logging
 
@@ -74,7 +79,7 @@ class AuthService:
             if user:
                 return user
             return await self._authenticate_cliente(db, email, password)
-        except HTTPException:
+        except DomainError:
             raise
         except Exception as e:
             logger.exception(f"Error en autenticación: {e}")
@@ -121,14 +126,12 @@ class AuthService:
                 return None
 
             if user.org_estatus == 'pendiente':
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Tu cuenta está pendiente de activación por el administrador"
+                raise OrganizationPendingError(
+                    "Tu cuenta está pendiente de activación por el administrador"
                 )
             if user.org_estatus == 'suspendida':
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Tu organización ha sido suspendida. Contacta al administrador."
+                raise OrganizationSuspendedError(
+                    "Tu organización ha sido suspendida. Contacta al administrador."
                 )
 
             await db.execute(
@@ -138,7 +141,7 @@ class AuthService:
             await db.commit()
 
             return user
-        except HTTPException:
+        except DomainError:
             raise
         except Exception as e:
             logger.error(f"Error autenticando usuario: {e}")

@@ -87,6 +87,39 @@ class DashboardService:
             )
             if int(pendientes.scalar() or 0) > 0:
                 alertas_count += 1
+        pendientes = {"acreditar": 0, "emitir": 0, "vencer": 0}
+        if row:
+            pendientes_p = await db.execute(
+                text(f"""
+                    SELECT count(*) FROM aaces.curso_participante cp
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    WHERE c.cliente_id IN ({cid_list}) AND cp.estado_acreditacion = false
+                """)
+            )
+            pendientes["acreditar"] = int(pendientes_p.scalar() or 0)
+
+            acreditados = await db.execute(
+                text(f"""
+                    SELECT count(*) FROM aaces.curso_participante cp
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    WHERE c.cliente_id IN ({cid_list}) AND cp.estado_acreditacion = true
+                """)
+            )
+            total_acreditados = int(acreditados.scalar() or 0)
+            con_constancia = await db.execute(
+                text(f"""
+                    SELECT count(DISTINCT cp.id) FROM aaces.documentos_emitidos d
+                    JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    WHERE c.cliente_id IN ({cid_list}) AND d.tipo_documento = 'CONSTANCIA'
+                """)
+            )
+            pendientes["emitir"] = total_acreditados - int(con_constancia.scalar() or 0)
+            if pendientes["emitir"] < 0:
+                pendientes["emitir"] = 0
+
+            pendientes["vencer"] = int(row[3] or 0) if row else 0
+
         return {
             "kpis": {
                 "cursos_activos": int(row[0] or 0) if row else 0,
@@ -94,7 +127,8 @@ class DashboardService:
                 "constancias_mes": int(row[2] or 0) if row else 0,
                 "por_vencer": int(row[3] or 0) if row else 0,
                 "alertas_criticas": alertas_count,
-            }
+            },
+            "pendientes": pendientes,
         }
 
     async def get_onboarding(

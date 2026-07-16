@@ -3,10 +3,8 @@ import * as React from "react"
 import {
   ArrowUpCircleIcon,
   BarChartIcon,
-  CameraIcon,
   ClipboardListIcon,
   DatabaseIcon,
-  FileCodeIcon,
   FileTextIcon,
   FolderIcon,
   HelpCircleIcon,
@@ -14,7 +12,6 @@ import {
   ListIcon,
   ScrollTextIcon,
   SettingsIcon,
-  UsersIcon,
   CalendarIcon,
   CreditCardIcon,
   MailIcon,
@@ -102,7 +99,7 @@ const data = {
   ],
   documents: [
     {
-      name: "Datos",
+      name: "Organización",
       url: "#",
       icon: DatabaseIcon,
     },
@@ -160,18 +157,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       url: role === "admin" ? "/admin/templates" : "/cliente/templates",
       icon: StampIcon,
     },
-    {
-      title: "Documentos",
-      url: role === "admin" ? "/admin/dashboard" : "/cliente/documentos",
-      icon: FileTextIcon,
-    },
+    ...(isSuperAdmin
+      ? [
+          {
+            title: "Documentos",
+            url: "/admin/dashboard",
+            icon: FileTextIcon,
+          },
+        ]
+      : []),
     {
       title: "Constancias",
       url: role === "admin" ? "/admin/dashboard" : "/cliente/constancias",
       icon: ScrollTextIcon,
     },
     {
-      title: "Analítica",
+      title: "Reportes",
       url: "/analytics",
       icon: BarChartIcon,
     },
@@ -209,11 +210,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             icon: CalendarIcon,
           },
         ]),
-    {
-      title: "Perfil",
-      url: role === "admin" ? "/admin/perfil" : "/cliente/perfil",
-      icon: UsersIcon,
-    },
   ]
 
   return (

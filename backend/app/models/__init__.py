@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text, Numeric
 from sqlalchemy.dialects.postgresql import UUID, INET, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from app.core.enums import VerificationType, VerificationResult
 from app.core.database import Base
 import uuid
 
@@ -434,6 +435,7 @@ class DocumentoEmitido(Base):
     template_version = Column(Integer)
     tipo_documento = Column(String(30), nullable=False)
     codigo_validacion = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False)
+    folio = Column(String(50), nullable=True)
     storage_provider = Column(String(50), nullable=False)
     storage_key = Column(String(500), nullable=False)
     pdf_hash = Column(String(64), nullable=False)
@@ -452,4 +454,28 @@ class DocumentoEmitido(Base):
         Index('idx_docs_org_tipo', 'organizacion_id', 'tipo_documento'),
         Index('idx_docs_validacion', 'codigo_validacion'),
         Index('idx_docs_emision', 'fecha_emision'),
+        Index('idx_docs_folio', 'folio'),
+    )
+
+
+class Verificacion(Base):
+    __tablename__ = "verificaciones"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    documento_id = Column(UUID(as_uuid=True), ForeignKey("aaces.documentos_emitidos.id", ondelete="CASCADE"), nullable=True)
+    codigo = Column(String(36), nullable=False, index=True)
+    fecha = Column(DateTime(timezone=True), server_default=func.now())
+    ip = Column(String(45))
+    user_agent = Column(Text)
+    tipo = Column(String(20), default=VerificationType.QR, nullable=False)
+    resultado = Column(String(20), default=VerificationResult.VALIDA, nullable=False)
+
+    documento = relationship("DocumentoEmitido")
+
+    __table_args__ = (
+        CheckConstraint("tipo IN ('QR', 'LINK', 'API')", name="check_tipo_verificacion"),
+        CheckConstraint("resultado IN ('VALIDA', 'REVOCADA', 'EXPIRADA', 'NO_EXISTE')", name="check_resultado_verificacion"),
+        Index('idx_verificaciones_codigo', 'codigo'),
+        Index('idx_verificaciones_fecha', 'fecha'),
+        Index('idx_verificaciones_documento', 'documento_id'),
     )

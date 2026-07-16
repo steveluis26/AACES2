@@ -8,6 +8,7 @@ from datetime import datetime
 from app.services.document_service import DocumentService
 from app.services.storage_provider import LocalStorageProvider, StorageProvider
 from app.core.config import settings
+from app.core.enums import VerificationType
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class DocumentosService:
         t_id, t_org, tipo_doc, version, html, recursos, config = template
 
         codigo_validacion = str(uuid.uuid4())
-        qr_data = f"https://aaces-backend-3hw1.onrender.com/api/v1/validaciones/{codigo_validacion}"
+        qr_data = f"{settings.PUBLIC_VERIFICATION_URL}/{codigo_validacion}"
 
         result = await self._doc_service.generate(
             html_template=html,

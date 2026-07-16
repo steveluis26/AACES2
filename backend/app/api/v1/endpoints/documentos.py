@@ -142,13 +142,13 @@ async def verificar_documento_publico(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
 ):
+    from fastapi.responses import RedirectResponse
+    from app.core.config import settings
     row = await db.execute(
         text("""
-            SELECT d.codigo_validacion, d.tipo_documento, d.estatus, d.fecha_emision,
-                   d.pdf_hash, o.razon_social
-            FROM aaces.documentos_emitidos d
-            JOIN aaces.organizaciones o ON o.id = d.organizacion_id
-            WHERE d.id = :id
+            SELECT codigo_validacion
+            FROM aaces.documentos_emitidos
+            WHERE id = :id
             LIMIT 1
         """),
         {"id": doc_id}
@@ -156,12 +156,5 @@ async def verificar_documento_publico(
     r = row.fetchone()
     if not r:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado")
-    return {
-        "valido": r[2] == "emitido",
-        "codigo_validacion": str(r[0]),
-        "tipo_documento": r[1],
-        "estatus": r[2],
-        "fecha_emision": r[3].isoformat() if r[3] else None,
-        "pdf_hash": r[4],
-        "organizacion": r[5],
-    }
+    redirect_url = f"{settings.PUBLIC_VERIFICATION_URL}/{r[0]}"
+    return RedirectResponse(url=redirect_url, status_code=302)

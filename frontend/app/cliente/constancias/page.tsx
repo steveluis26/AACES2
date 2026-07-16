@@ -1,128 +1,132 @@
-'use client'
+"use client"
 
-import React, { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { toast } from 'sonner'
-
-interface Constancia {
-  id: string
-  codigo_validacion: string
-  estatus: string
-  fecha_emision: string
-  pdf_hash: string
-  descarga_url: string
-  participante_nombre: string
-  curso_nombre: string
-}
-
-const ESTATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  emitido: 'default',
-  cancelado: 'destructive',
-  reemitido: 'secondary',
-}
+import React, { useCallback, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { fetchConstanciasList, fetchConstanciaDetalle } from "@/adapters/constancia.adapter"
+import {
+  ConstanciaResumenVM,
+  ConstanciaListResponseVM,
+  ConstanciaSortField,
+  OrderDirection,
+  mapConstanciaListResponse,
+} from "@/viewmodels/document"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { toast } from "sonner"
+import { SearchBar } from "@/components/documentos/SearchBar"
+import { FilterBar } from "@/components/documentos/FilterBar"
+import { SortSelect } from "@/components/documentos/SortSelect"
+import { Pagination } from "@/components/documentos/Pagination"
+import { DataTable } from "@/components/documentos/DataTable"
 
 export default function ConstanciasPage() {
-  const [constancias, setConstancias] = useState<Constancia[]>([])
+  const router = useRouter()
+  const [data, setData] = useState<ConstanciaListResponseVM | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchConstancias = async () => {
-    setLoading(true)
-    try {
-      const token = localStorage.getItem('aaces_token')
-      const res = await fetch('/api/v1/constancias', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('Error al cargar constancias')
-      const data = await res.json()
-      setConstancias(Array.isArray(data) ? data : [])
-    } catch {
-      toast.error('Error al cargar constancias')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [q, setQ] = useState("")
+  const [estado, setEstado] = useState("")
+  const [verificada, setVerificada] = useState("")
+  const [fechaDesde, setFechaDesde] = useState("")
+  const [fechaHasta, setFechaHasta] = useState("")
+  const [sort, setSort] = useState<ConstanciaSortField>("fecha_emision")
+  const [order, setOrder] = useState<OrderDirection>("desc")
+  const [page, setPage] = useState(1)
+
+  const buildParams = useCallback(() => ({
+    q: q || undefined,
+    estado: (estado as any) || undefined,
+    verificada: verificada ? verificada === "true" : undefined,
+    fecha_desde: fechaDesde || undefined,
+    fecha_hasta: fechaHasta || undefined,
+    sort,
+    order,
+    page,
+    page_size: 25,
+  }), [q, estado, verificada, fechaDesde, fechaHasta, sort, order, page])
 
   useEffect(() => {
-    fetchConstancias()
+    setPage(1)
+  }, [q, estado, verificada, fechaDesde, fechaHasta, sort, order])
+
+  useEffect(() => {
+    setLoading(true)
+    fetchConstanciasList(buildParams())
+      .then(setData)
+      .catch(() => toast.error("Error al cargar constancias"))
+      .finally(() => setLoading(false))
+  }, [buildParams])
+
+  const handleView = useCallback(
+    (id: string) => router.push(`/cliente/constancias/${id}`),
+    [router]
+  )
+
+  const handleDownload = useCallback(async (id: string) => {
+    try {
+      const detalle = await fetchConstanciaDetalle(id)
+      if (detalle.pdfUrl) {
+        window.open(detalle.pdfUrl, "_blank")
+      }
+    } catch {
+      toast.error("Error al descargar")
+    }
   }, [])
 
-  const handleDownload = async (c: Constancia) => {
-    try {
-      const token = localStorage.getItem('aaces_token')
-      const res = await fetch(c.descarga_url, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) throw new Error('Error al descargar')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `constancia_${c.codigo_validacion}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Error al descargar la constancia')
-    }
-  }
+  const items = data?.items ?? []
+  const pagination = data?.pagination
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Constancias emitidas</h1>
-          <p className="text-sm text-muted-foreground">
-            Constancias de cursos emitidas con PDF verificable
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-semibold">Centro de Constancias</h1>
+        <p className="text-sm text-muted-foreground">
+          Busca, filtra y gestiona todas las constancias emitidas
+        </p>
       </div>
 
-      {loading ? (
-        <p className="text-muted-foreground">Cargando...</p>
-      ) : constancias.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Sin constancias</CardTitle>
-            <CardDescription>
-              Aún no has emitido constancias. Ve a la sección Cursos, selecciona un curso con
-              participantes acreditados y usa el botón "Emitir constancia".
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      ) : (
-        <div className="grid gap-3">
-          {constancias.map((c) => (
-            <Card key={c.id}>
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{c.participante_nombre || '—'}</span>
-                    <Badge variant={ESTATUS_VARIANTS[c.estatus] || 'outline'}>
-                      {c.estatus}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Curso: {c.curso_nombre || '—'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Código: {c.codigo_validacion}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(c.fecha_emision).toLocaleDateString('es-MX', {
-                      year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                    })}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => handleDownload(c)}>
-                    Descargar PDF
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SearchBar value={q} onChange={setQ} />
+        <SortSelect
+          sort={sort}
+          order={order}
+          onChangeSort={setSort}
+          onChangeOrder={setOrder}
+        />
+      </div>
+
+      <FilterBar
+        estado={estado}
+        onChangeEstado={setEstado}
+        verificada={verificada}
+        onChangeVerificada={setVerificada}
+        fechaDesde={fechaDesde}
+        onChangeFechaDesde={setFechaDesde}
+        fechaHasta={fechaHasta}
+        onChangeFechaHasta={setFechaHasta}
+      />
+
+      {data && data.meta.filters_applied > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Consulta completada en {data.meta.query_time_ms}ms
+          {data.meta.filters_applied > 0 &&
+            ` · ${data.meta.filters_applied} filtro${data.meta.filters_applied !== 1 ? "s" : ""} aplicado${data.meta.filters_applied !== 1 ? "s" : ""}`}
+        </p>
+      )}
+
+      <DataTable
+        items={items}
+        loading={loading}
+        onView={handleView}
+        onDownload={handleDownload}
+      />
+
+      {pagination && (
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.total_pages}
+          total={pagination.total}
+          onChange={setPage}
+        />
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
@@ -11,6 +12,7 @@ from app.core.config import settings
 from app.core.database import engine
 from app.api.v1.router import api_router
 from app.services.security import security_service
+from app.errors import DomainError, InvalidCredentialsError, AccountBlockedError, OrganizationPendingError, OrganizationSuspendedError, ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +236,9 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_org_tipo ON aaces.documentos_emitidos (organizacion_id, tipo_documento)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_validacion ON aaces.documentos_emitidos (codigo_validacion)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_emision ON aaces.documentos_emitidos (fecha_emision)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_org_emision ON aaces.documentos_emitidos (organizacion_id, fecha_emision DESC)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_org_estado ON aaces.documentos_emitidos (organizacion_id, estatus)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clientes_org_id ON aaces.clientes (organizacion_id)"))
             except Exception as e:
                 logger.warning(f"Failed to create new schema tables: {e}")
             # Fix existing rows where activo is NULL (from previous schema without DEFAULT)
@@ -365,6 +370,27 @@ app.mount("/storage", StaticFiles(directory=settings.STORAGE_DIR), name="storage
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
+
+# Domain error handler (ADR-018)
+DOMAIN_STATUS_MAP = {
+    InvalidCredentialsError: 401,
+    AccountBlockedError: 423,
+    OrganizationPendingError: 403,
+    OrganizationSuspendedError: 403,
+    ResourceNotFoundError: 404,
+}
+
+@app.exception_handler(DomainError)
+async def domain_error_handler(request: Request, exc: DomainError):
+    status_code = 400
+    for exc_type, http_status in DOMAIN_STATUS_MAP.items():
+        if isinstance(exc, exc_type):
+            status_code = http_status
+            break
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": str(exc)},
+    )
 
 # Root endpoint
 @app.get("/")

@@ -3,6 +3,8 @@ from typing import List, Optional, Union, TypeVar, Generic, Dict, Any
 from uuid import UUID
 from pydantic import BaseModel, Field, EmailStr, validator
 
+from app.schemas.capabilities import DocumentCapabilities
+
 # Base schema
 class BaseSchema(BaseModel):
     class Config:
@@ -386,3 +388,153 @@ class DocumentoGenerarResponse(BaseSchema):
 class EmitirConstanciaRequest(BaseSchema):
     curso_participante_id: str
     template_id: Optional[str] = None
+
+
+# Verification schemas
+class VerificacionPublicResponse(BaseSchema):
+    valida: bool
+    codigo_validacion: str
+    tipo_documento: str
+    estatus: str
+    fecha_emision: Optional[str] = None
+    pdf_hash: Optional[str] = None
+    organizacion: Optional[str] = None
+    participante: Optional[Dict[str, Any]] = None
+    curso: Optional[Dict[str, Any]] = None
+    verificaciones_count: int = 0
+
+
+class VerificacionRegistroResponse(BaseSchema):
+    id: UUID
+    fecha: datetime
+    ip: Optional[str] = None
+    user_agent: Optional[str] = None
+    tipo: str
+    resultado: str
+
+
+# Constancia detail schemas
+class ParticipanteResumen(BaseSchema):
+    nombre: str
+    correo: Optional[str] = None
+    empresa: Optional[str] = None
+    puesto: Optional[str] = None
+
+
+class CursoResumen(BaseSchema):
+    nombre: str
+    codigo_curso: Optional[str] = None
+    fecha_inicio: Optional[date] = None
+    fecha_fin: Optional[date] = None
+    duracion_horas: Optional[int] = None
+    modalidad: Optional[str] = None
+    ciudad: Optional[str] = None
+
+
+class OrganizacionResumen(BaseSchema):
+    id: UUID
+    nombre: str
+    nombre_comercial: Optional[str] = None
+    logo_url: Optional[str] = None
+
+
+class ActivoDocumental(BaseSchema):
+    pdf_url: str
+    hash_sha256: str
+    tipo_documento: str
+
+
+class TemplateInfo(BaseSchema):
+    id: Optional[UUID] = None
+    nombre: str
+    version: int
+
+
+class VerificacionResumen(BaseSchema):
+    id: UUID
+    fecha: datetime
+    tipo: str
+    resultado: str
+    ip: Optional[str] = None
+    ciudad: Optional[str] = None
+
+
+class VerificacionesInfo(BaseSchema):
+    total: int
+    ultima_fecha: Optional[datetime] = None
+    ultimas: list[VerificacionResumen] = []
+
+
+class TimelineEvent(BaseSchema):
+    fecha: datetime
+    tipo: str
+    titulo: str
+    descripcion: Optional[str] = None
+    metadata: dict = {}
+
+
+class ConstanciaDetalleResponse(BaseSchema):
+    id: UUID
+    tipo_documento: str
+    estado: str
+    codigo_validacion: str
+    folio: Optional[str] = None
+    fecha_emision: datetime
+    fecha_expiracion: Optional[datetime] = None
+    participante: ParticipanteResumen
+    curso: CursoResumen
+    organizacion: OrganizacionResumen
+    activo_documental: ActivoDocumental
+    template: TemplateInfo
+    verificaciones: VerificacionesInfo
+    timeline: list[TimelineEvent] = []
+    capabilities: DocumentCapabilities = Field(default_factory=DocumentCapabilities)
+
+
+from app.queries.constancia_list import ConstanciaListQuery
+
+# Constancia list schemas
+
+
+class ConstanciaResumen(BaseSchema):
+    id: UUID
+    codigo_validacion: str
+    estatus: str
+    fecha_emision: datetime
+    pdf_hash: str
+    participante_nombre: str
+    curso_nombre: str
+    folio: Optional[str] = None
+    verificaciones_count: int = 0
+    capabilities: DocumentCapabilities = Field(default_factory=DocumentCapabilities)
+
+    model_config = {"from_attributes": True}
+
+
+class PaginationInfo(BaseSchema):
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
+
+
+class ConstanciaListMeta(BaseSchema):
+    filters_applied: int = 0
+    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    query_time_ms: float = 0
+
+
+class ConstanciaListResponse(BaseSchema):
+    items: list[ConstanciaResumen]
+    pagination: PaginationInfo
+    meta: ConstanciaListMeta
+
+
+class ConstanciaResumenResponse(BaseSchema):
+    total: int
+    emitidas: int
+    canceladas: int
+    reemitidas: int
+    verificadas: int
+    pendientes: int
+    tiempo_promedio_horas: Optional[float] = None
