@@ -16,6 +16,12 @@ RUN apt-get update \
         postgresql-client \
         build-essential \
         libpq-dev \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf2.0-0 \
+        libffi-dev \
+        libcairo2 \
+        libgobject-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
