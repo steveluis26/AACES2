@@ -118,6 +118,7 @@ async def lifespan(app: FastAPI):
                       fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     )
                 """))
+                await conn.execute(text("ALTER TABLE aaces.planes ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS aaces.organizaciones (
                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -214,20 +215,20 @@ async def lifespan(app: FastAPI):
                 if int(res.scalar() or 0) == 0:
                     await conn.execute(
                         text("""
-                            INSERT INTO aaces.planes (codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
-                            VALUES ('trial', 'Prueba', 'Plan gratuito para probar la plataforma', 0, 10, 1, 50, false)
+                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
+                            VALUES (gen_random_uuid(), 'trial', 'Prueba', 'Plan gratuito para probar la plataforma', 0, 10, 1, 50, false)
                         """)
                     )
                     await conn.execute(
                         text("""
-                            INSERT INTO aaces.planes (codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
-                            VALUES ('profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true)
+                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
+                            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true)
                         """)
                     )
                     await conn.execute(
                         text("""
-                            INSERT INTO aaces.planes (codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario)
-                            VALUES ('empresa', 'Empresa', 'Solución completa para grandes organizaciones', 799, 999999, 999999, 999999, true, true, true, true)
+                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario)
+                            VALUES (gen_random_uuid(), 'empresa', 'Empresa', 'Solución completa para grandes organizaciones', 799, 999999, 999999, 999999, true, true, true, true)
                         """)
                     )
                     logger.info("Default plans seeded successfully")
