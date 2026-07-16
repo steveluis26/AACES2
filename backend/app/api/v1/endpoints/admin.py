@@ -868,7 +868,46 @@ async def drop_curso_participante_underscore(
         chk = await db.execute(text("SELECT to_regclass('curso_participante_') IS NOT NULL"))
         if chk.scalar():
             await db.execute(text("DROP TABLE IF EXISTS curso_participante_ CASCADE"))
-            await db.commit()
+
+    # Bridge legacy: crear registro en clientes para compatibilidad con CRUD legacy
+    cliente_existente = await db.execute(
+        text("SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id LIMIT 1"),
+        {"org_id": org_id}
+    )
+    if not cliente_existente.fetchone():
+        admin_user = await db.execute(
+            text("""
+                SELECT nombre, correo, password_hash
+                FROM aaces.usuarios
+                WHERE organizacion_id = :org_id AND rol = 'admin'
+                LIMIT 1
+            """),
+            {"org_id": org_id}
+        )
+        admin = admin_user.fetchone()
+        if admin:
+            await db.execute(
+                text("""
+                    INSERT INTO aaces.clientes
+                        (nombre, correo, password_hash, plan, cursos_max,
+                         cursos_creados, descuento_pct, categoria, estado,
+                         organizacion_id)
+                    VALUES
+                        (:nombre, :correo, :ph, :plan, :cursos_max,
+                         0, 0, 'basico', 'activo',
+                         :org_id)
+                """),
+                {
+                    "nombre": admin[0],
+                    "correo": admin[1],
+                    "ph": admin[2],
+                    "plan": "trial" if not plan_id else "empresarial",
+                    "cursos_max": cursos_max or 50,
+                    "org_id": org_id,
+                }
+            )
+
+    await db.commit()
             return {"dropped": True}
         return {"dropped": False}
     except Exception as e:
