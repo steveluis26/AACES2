@@ -1050,6 +1050,10 @@ async def activar_organizacion(
 
     vigencia_desde = payload.get("vigencia_desde")
     vigencia_hasta = payload.get("vigencia_hasta")
+    if isinstance(vigencia_desde, str):
+        vigencia_desde = date.fromisoformat(vigencia_desde)
+    if isinstance(vigencia_hasta, str):
+        vigencia_hasta = date.fromisoformat(vigencia_hasta)
     plan_id = payload.get("plan_id")
     cursos_max = payload.get("cursos_max")
     usuarios_max = payload.get("usuarios_max")
