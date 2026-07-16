@@ -298,6 +298,11 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false"))
             except Exception:
                 pass
+            # Widen codigo_validacion in curso_participante for UUID v4 (36 chars)
+            try:
+                await conn.execute(text("ALTER TABLE aaces.curso_participante ALTER COLUMN codigo_validacion TYPE VARCHAR(36)"))
+            except Exception:
+                pass
             # Seed admin if empty
             try:
                 res = await conn.execute(text("SELECT COUNT(*) FROM clientes"))
