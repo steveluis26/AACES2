@@ -119,6 +119,7 @@ async def lifespan(app: FastAPI):
                     )
                 """))
                 await conn.execute(text("ALTER TABLE aaces.planes ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+                await conn.execute(text("ALTER TABLE aaces.planes ALTER COLUMN activo SET DEFAULT true"))
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS aaces.organizaciones (
                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -209,26 +210,31 @@ async def lifespan(app: FastAPI):
                 """))
             except Exception as e:
                 logger.warning(f"Failed to create new schema tables: {e}")
+            # Fix existing rows where activo is NULL (from previous schema without DEFAULT)
+            try:
+                await conn.execute(text("UPDATE aaces.planes SET activo = true WHERE activo IS NULL"))
+            except Exception:
+                pass
             # Seed default plans
             try:
                 res = await conn.execute(text("SELECT COUNT(*) FROM aaces.planes"))
                 if int(res.scalar() or 0) == 0:
                     await conn.execute(
                         text("""
-                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
-                            VALUES (gen_random_uuid(), 'trial', 'Prueba', 'Plan gratuito para probar la plataforma', 0, 10, 1, 50, false)
+                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario, activo)
+                            VALUES (gen_random_uuid(), 'trial', 'Prueba', 'Plan gratuito para probar la plataforma', 0, 10, 1, 50, false, true)
                         """)
                     )
                     await conn.execute(
                         text("""
-                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario)
-                            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true)
+                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario, activo)
+                            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true, true)
                         """)
                     )
                     await conn.execute(
                         text("""
-                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario)
-                            VALUES (gen_random_uuid(), 'empresa', 'Empresa', 'Solución completa para grandes organizaciones', 799, 999999, 999999, 999999, true, true, true, true)
+                            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario, activo)
+                            VALUES (gen_random_uuid(), 'empresa', 'Empresa', 'Solución completa para grandes organizaciones', 799, 999999, 999999, 999999, true, true, true, true, true)
                         """)
                     )
                     logger.info("Default plans seeded successfully")
