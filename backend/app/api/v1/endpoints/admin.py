@@ -1135,7 +1135,7 @@ async def activar_organizacion(
     if not cliente_existente.fetchone():
         admin_user = await db.execute(
             text("""
-                SELECT nombre, correo, password_hash
+                SELECT id, nombre, correo, password_hash
                 FROM aaces.usuarios
                 WHERE organizacion_id = :org_id AND rol = 'admin'
                 LIMIT 1
@@ -1147,18 +1147,19 @@ async def activar_organizacion(
             await db.execute(
                 text("""
                     INSERT INTO aaces.clientes
-                        (nombre, correo, password_hash, plan, cursos_max,
+                        (id, nombre, correo, password_hash, plan, cursos_max,
                          cursos_creados, descuento_pct, categoria, estado,
                          organizacion_id)
                     VALUES
-                        (:nombre, :correo, :ph, :plan, :cursos_max,
+                        (:id, :nombre, :correo, :ph, :plan, :cursos_max,
                          0, 0, 'basico', 'activo',
                          :org_id)
                 """),
                 {
-                    "nombre": admin[0],
-                    "correo": admin[1],
-                    "ph": admin[2],
+                    "id": admin[0],
+                    "nombre": admin[1],
+                    "correo": admin[2],
+                    "ph": admin[3],
                     "plan": "trial" if not plan_id else "empresarial",
                     "cursos_max": cursos_max or 50,
                     "org_id": org_id,

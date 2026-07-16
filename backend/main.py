@@ -298,6 +298,11 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false"))
             except Exception:
                 pass
+            # Default gen_random_uuid for clientes.id (legacy table)
+            try:
+                await conn.execute(text("ALTER TABLE aaces.clientes ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+            except Exception:
+                pass
             # Widen codigo_validacion in curso_participante for UUID v4 (36 chars)
             try:
                 await conn.execute(text("ALTER TABLE aaces.curso_participante ALTER COLUMN codigo_validacion TYPE VARCHAR(36)"))
