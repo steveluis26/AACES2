@@ -18,7 +18,7 @@ RUN apt-get update \
         libpq-dev \
         libpango-1.0-0 \
         libpangoft2-1.0-0 \
-        libgdk-pixbuf2.0-0 \
+        libgdk-pixbuf-2.0-0 \
         libffi-dev \
         libcairo2 \
         libgobject-2.0-0 \
