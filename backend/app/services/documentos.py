@@ -79,7 +79,7 @@ class DocumentosService:
                 INSERT INTO aaces.documentos_emitidos
                     (id, organizacion_id, template_id, template_version, tipo_documento,
                      codigo_validacion, storage_provider, storage_key, pdf_hash,
-                     html_snapshot, metadata, emitido_por, estatus)
+                     html_snapshot, documento_metadata, emitido_por, estatus)
                 VALUES
                     (:id, :org_id, :template_id, :version, :tipo,
                      :codigo, :provider, :skey, :hash,
@@ -138,7 +138,7 @@ class DocumentosService:
         rows = await db.execute(
             text(f"""
                 SELECT d.id, d.tipo_documento, d.codigo_validacion, d.pdf_hash,
-                       d.estatus, d.fecha_emision, d.metadata, o.razon_social
+                       d.estatus, d.fecha_emision, d.documento_metadata, o.razon_social
                 FROM aaces.documentos_emitidos d
                 JOIN aaces.organizaciones o ON o.id = d.organizacion_id
                 WHERE {where}
@@ -153,7 +153,7 @@ class DocumentosService:
                 "codigo_validacion": str(r[2]), "pdf_hash": r[3],
                 "estatus": r[4],
                 "fecha_emision": r[5].isoformat() if r[5] else None,
-                "metadata": r[6], "organizacion_razon_social": r[7],
+                "documento_metadata": r[6], "organizacion_razon_social": r[7],
             }
             for r in rows.fetchall()
         ]
@@ -163,7 +163,7 @@ class DocumentosService:
             text("""
                 SELECT id, organizacion_id, template_id, template_version, tipo_documento,
                        codigo_validacion, storage_provider, storage_key, pdf_hash,
-                       html_snapshot, metadata, emitido_por, fecha_emision, estatus
+                       html_snapshot, documento_metadata, emitido_por, fecha_emision, estatus
                 FROM aaces.documentos_emitidos
                 WHERE id = :id AND organizacion_id = :org_id
                 LIMIT 1
@@ -179,7 +179,7 @@ class DocumentosService:
             "template_version": r[3], "tipo_documento": r[4],
             "codigo_validacion": str(r[5]), "storage_provider": r[6],
             "storage_key": r[7], "pdf_hash": r[8],
-            "html_snapshot": r[9], "metadata": r[10],
+            "html_snapshot": r[9], "documento_metadata": r[10],
             "emitido_por": str(r[11]) if r[11] else None,
             "fecha_emision": r[12].isoformat() if r[12] else None,
             "estatus": r[13],

@@ -29,7 +29,7 @@ async def generar_documento(
             template_id=str(payload.template_id),
             data=payload.data,
             emitido_por=user_data.get("sub"),
-            extra_metadata=payload.metadata,
+            extra_metadata=payload.documento_metadata,
         )
         audit_logger.log_user_action(
             user_id=user_data.get("sub"),

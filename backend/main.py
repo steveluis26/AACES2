@@ -223,7 +223,7 @@ async def lifespan(app: FastAPI):
                       storage_key VARCHAR(500) NOT NULL,
                       pdf_hash VARCHAR(64) NOT NULL,
                       html_snapshot TEXT,
-                      metadata JSONB DEFAULT '{}',
+                       documento_metadata JSONB DEFAULT '{}',
                       emitido_por UUID REFERENCES aaces.usuarios(id) ON DELETE SET NULL,
                       fecha_emision TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                       estatus VARCHAR(20) DEFAULT 'emitido' NOT NULL,

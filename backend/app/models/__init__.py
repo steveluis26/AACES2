@@ -438,7 +438,7 @@ class DocumentoEmitido(Base):
     storage_key = Column(String(500), nullable=False)
     pdf_hash = Column(String(64), nullable=False)
     html_snapshot = Column(Text)
-    metadata = Column(JSONB, default={})
+    documento_metadata = Column("documento_metadata", JSONB, default={})
     emitido_por = Column(UUID(as_uuid=True), ForeignKey("aaces.usuarios.id", ondelete="SET NULL"))
     fecha_emision = Column(DateTime(timezone=True), server_default=func.now())
     estatus = Column(String(20), default='emitido', nullable=False)

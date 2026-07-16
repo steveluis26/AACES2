@@ -347,7 +347,7 @@ class SuccessResponse(BaseSchema):
 class DocumentoGenerarRequest(BaseSchema):
     template_id: UUID
     data: Dict[str, Any] = Field(default_factory=dict)
-    metadata: Optional[Dict[str, Any]] = None
+    documento_metadata: Optional[Dict[str, Any]] = None
 
 
 class DocumentoResponse(BaseSchema):
@@ -372,7 +372,7 @@ class DocumentoListResponse(BaseSchema):
     pdf_hash: str
     estatus: str
     fecha_emision: datetime
-    metadata: Optional[Dict[str, Any]] = None
+    documento_metadata: Optional[Dict[str, Any]] = None
     organizacion_razon_social: Optional[str] = None
 
 
