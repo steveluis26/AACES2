@@ -213,7 +213,7 @@ class ConstanciasService:
         rows = await db.execute(
             text(f"""
                 SELECT d.id, d.codigo_validacion, d.estatus, d.fecha_emision,
-                       d.pdf_hash,
+                       d.pdf_hash, d.storage_key,
                        p.nombre as part_nombre, p.apellido as part_apellido,
                        c.nombre as curso_nombre
                 FROM aaces.documentos_emitidos d
@@ -236,8 +236,9 @@ class ConstanciasService:
                 "estatus": r[2],
                 "fecha_emision": r[3].isoformat() if r[3] else None,
                 "pdf_hash": r[4],
-                "participante_nombre": f"{r[5] or ''} {r[6] or ''}".strip(),
-                "curso_nombre": r[7],
+                "descarga_url": f"/api/v1/documentos/{str(r[0])}/download",
+                "participante_nombre": f"{r[6] or ''} {r[7] or ''}".strip(),
+                "curso_nombre": r[8],
             }
             for r in rows.fetchall()
         ]
