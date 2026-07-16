@@ -4,6 +4,7 @@ import time
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 from datetime import datetime, date
 
 from app.services.document_service import DocumentService
@@ -357,67 +358,74 @@ class ConstanciasService:
         db: AsyncSession,
         organizacion_id: str,
     ) -> ConstanciaResumenResponse:
-        row = await db.execute(
-            text("""
-                SELECT
-                    COUNT(*) AS total,
-                    COUNT(*) FILTER (WHERE d.estatus = 'emitido') AS emitidas,
-                    COUNT(*) FILTER (WHERE d.estatus = 'cancelado') AS canceladas,
-                    COUNT(*) FILTER (WHERE d.estatus = 'reemitido') AS reemitidas
-                FROM aaces.documentos_emitidos d
-                WHERE d.organizacion_id = :org_id AND d.tipo_documento = 'CONSTANCIA'
-            """),
-            {"org_id": organizacion_id}
-        )
-        r = row.fetchone()
-        total = int(r[0] or 0)
-        emitidas = int(r[1] or 0)
-        canceladas = int(r[2] or 0)
-        reemitidas = int(r[3] or 0)
+        try:
+            row = await db.execute(
+                text("""
+                    SELECT
+                        COUNT(*) AS total,
+                        COUNT(*) FILTER (WHERE d.estatus = 'emitido') AS emitidas,
+                        COUNT(*) FILTER (WHERE d.estatus = 'cancelado') AS canceladas,
+                        COUNT(*) FILTER (WHERE d.estatus = 'reemitido') AS reemitidas
+                    FROM aaces.documentos_emitidos d
+                    WHERE d.organizacion_id = :org_id AND d.tipo_documento = 'CONSTANCIA'
+                """),
+                {"org_id": organizacion_id}
+            )
+            r = row.fetchone()
+            total = int(r[0] or 0)
+            emitidas = int(r[1] or 0)
+            canceladas = int(r[2] or 0)
+            reemitidas = int(r[3] or 0)
 
-        verif = await db.execute(
-            text("""
-                SELECT COUNT(DISTINCT v.codigo)
-                FROM aaces.verificaciones v
-                JOIN aaces.documentos_emitidos d ON d.codigo_validacion::text = v.codigo
-                WHERE d.organizacion_id = :org_id AND d.tipo_documento = 'CONSTANCIA'
-                  AND v.resultado = 'VALIDA'
-            """),
-            {"org_id": organizacion_id}
-        )
-        verificadas = int(verif.scalar() or 0)
+            verif = await db.execute(
+                text("""
+                    SELECT COUNT(DISTINCT v.codigo)
+                    FROM aaces.verificaciones v
+                    JOIN aaces.documentos_emitidos d ON d.codigo_validacion::text = v.codigo
+                    WHERE d.organizacion_id = :org_id AND d.tipo_documento = 'CONSTANCIA'
+                      AND v.resultado = 'VALIDA'
+                """),
+                {"org_id": organizacion_id}
+            )
+            verificadas = int(verif.scalar() or 0)
 
-        acreditadas = await db.execute(
-            text("""
-                SELECT COUNT(*) FROM aaces.curso_participante cp
-                JOIN aaces.cursos c ON c.id = cp.curso_id
-                JOIN aaces.clientes cl ON cl.id = c.cliente_id
-                WHERE cl.organizacion_id = :org_id
-                  AND cp.estado_acreditacion = true
-            """),
-            {"org_id": organizacion_id}
-        )
-        total_acreditados = int(acreditadas.scalar() or 0)
-        pendientes = total_acreditados - emitidas
-        if pendientes < 0:
-            pendientes = 0
+            acreditadas = await db.execute(
+                text("""
+                    SELECT COUNT(*) FROM aaces.curso_participante cp
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    JOIN aaces.clientes cl ON cl.id = c.cliente_id
+                    WHERE cl.organizacion_id = :org_id
+                      AND cp.estado_acreditacion = true
+                """),
+                {"org_id": organizacion_id}
+            )
+            total_acreditados = int(acreditadas.scalar() or 0)
+            pendientes = total_acreditados - emitidas
+            if pendientes < 0:
+                pendientes = 0
 
-        tiempo = await db.execute(
-            text("""
-                SELECT AVG(
-                    EXTRACT(EPOCH FROM (d.fecha_emision - cp.fecha_emision_certificado)) / 3600
-                )
-                FROM aaces.documentos_emitidos d
-                JOIN aaces.curso_participante cp ON cp.codigo_validacion::text = d.codigo_validacion::text
-                JOIN aaces.cursos c ON c.id = cp.curso_id
-                JOIN aaces.clientes cl ON cl.id = c.cliente_id
-                WHERE cl.organizacion_id = :org_id
-                  AND d.tipo_documento = 'CONSTANCIA'
-                  AND cp.fecha_emision_certificado IS NOT NULL
-            """),
-            {"org_id": organizacion_id}
-        )
-        promedio = tiempo.scalar()
+            tiempo = await db.execute(
+                text("""
+                    SELECT AVG(
+                        EXTRACT(EPOCH FROM (d.fecha_emision - cp.fecha_emision_certificado)) / 3600
+                    )
+                    FROM aaces.documentos_emitidos d
+                    JOIN aaces.curso_participante cp ON cp.codigo_validacion::text = d.codigo_validacion::text
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    JOIN aaces.clientes cl ON cl.id = c.cliente_id
+                    WHERE cl.organizacion_id = :org_id
+                      AND d.tipo_documento = 'CONSTANCIA'
+                      AND cp.fecha_emision_certificado IS NOT NULL
+                """),
+                {"org_id": organizacion_id}
+            )
+            promedio = tiempo.scalar()
+        except ProgrammingError:
+            logger.warning(f"Document engine tables not ready for org {organizacion_id}")
+            return ConstanciaResumenResponse(
+                total=0, emitidas=0, canceladas=0, reemitidas=0,
+                verificadas=0, pendientes=0, tiempo_promedio_horas=None,
+            )
 
         return ConstanciaResumenResponse(
             total=total,

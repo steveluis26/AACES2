@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 from typing import Dict, Any
 import logging
 
@@ -106,15 +107,19 @@ class DashboardService:
                 """)
             )
             total_acreditados = int(acreditados.scalar() or 0)
-            con_constancia = await db.execute(
-                text(f"""
-                    SELECT count(DISTINCT cp.id) FROM aaces.documentos_emitidos d
-                    JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion
-                    JOIN aaces.cursos c ON c.id = cp.curso_id
-                    WHERE c.cliente_id IN ({cid_list}) AND d.tipo_documento = 'CONSTANCIA'
-                """)
-            )
-            pendientes["emitir"] = total_acreditados - int(con_constancia.scalar() or 0)
+            try:
+                con_constancia = await db.execute(
+                    text(f"""
+                        SELECT count(DISTINCT cp.id) FROM aaces.documentos_emitidos d
+                        JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion
+                        JOIN aaces.cursos c ON c.id = cp.curso_id
+                        WHERE c.cliente_id IN ({cid_list}) AND d.tipo_documento = 'CONSTANCIA'
+                    """)
+                )
+                emitidas = int(con_constancia.scalar() or 0)
+            except ProgrammingError:
+                emitidas = 0
+            pendientes["emitir"] = total_acreditados - emitidas
             if pendientes["emitir"] < 0:
                 pendientes["emitir"] = 0
 

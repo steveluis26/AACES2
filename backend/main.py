@@ -221,11 +221,12 @@ async def lifespan(app: FastAPI):
                       template_version INTEGER,
                       tipo_documento VARCHAR(30) NOT NULL,
                       codigo_validacion UUID NOT NULL DEFAULT gen_random_uuid(),
+                      folio VARCHAR(50),
                       storage_provider VARCHAR(50) NOT NULL,
                       storage_key VARCHAR(500) NOT NULL,
                       pdf_hash VARCHAR(64) NOT NULL,
                       html_snapshot TEXT,
-                       documento_metadata JSONB DEFAULT '{}',
+                      documento_metadata JSONB DEFAULT '{}',
                       emitido_por UUID REFERENCES aaces.usuarios(id) ON DELETE SET NULL,
                       fecha_emision TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                       estatus VARCHAR(20) DEFAULT 'emitido' NOT NULL,
@@ -238,6 +239,24 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_emision ON aaces.documentos_emitidos (fecha_emision)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_org_emision ON aaces.documentos_emitidos (organizacion_id, fecha_emision DESC)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_org_estado ON aaces.documentos_emitidos (organizacion_id, estatus)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_docs_folio ON aaces.documentos_emitidos (folio)"))
+                await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.verificaciones (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      documento_id UUID REFERENCES aaces.documentos_emitidos(id) ON DELETE CASCADE,
+                      codigo VARCHAR(36) NOT NULL,
+                      fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      ip VARCHAR(45),
+                      user_agent TEXT,
+                      tipo VARCHAR(20) NOT NULL DEFAULT 'QR',
+                      resultado VARCHAR(20) NOT NULL DEFAULT 'VALIDA',
+                      CONSTRAINT check_tipo_verificacion CHECK (tipo IN ('QR', 'LINK', 'API')),
+                      CONSTRAINT check_resultado_verificacion CHECK (resultado IN ('VALIDA', 'REVOCADA', 'EXPIRADA', 'NO_EXISTE'))
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_verificaciones_codigo ON aaces.verificaciones (codigo)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_verificaciones_fecha ON aaces.verificaciones (fecha)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_verificaciones_documento ON aaces.verificaciones (documento_id)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_clientes_org_id ON aaces.clientes (organizacion_id)"))
             except Exception as e:
                 logger.warning(f"Failed to create new schema tables: {e}")
