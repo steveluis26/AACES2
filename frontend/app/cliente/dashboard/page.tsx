@@ -143,7 +143,7 @@ export default function ClienteDashboardPage() {
             </p>
             <button
               onClick={() => {
-                const r = "/cliente/cursos/crear"
+                const r = "/cliente/gestion"
                 try { window.location.href = r } catch {}
               }}
               className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"

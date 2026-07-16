@@ -14,7 +14,7 @@ type Onboarding = {
 }
 
 const EXISTING_ROUTES: Record<string, string | null> = {
-  crear_curso: "/cliente/cursos/crear",
+  crear_curso: "/cliente/gestion",
   registrar_participante: null,
   emitir_constancia: null,
   buscar_participante: "/cliente/participantes",
