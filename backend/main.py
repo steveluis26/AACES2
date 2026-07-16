@@ -120,6 +120,9 @@ async def lifespan(app: FastAPI):
                 """))
                 await conn.execute(text("ALTER TABLE aaces.planes ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
                 await conn.execute(text("ALTER TABLE aaces.planes ALTER COLUMN activo SET DEFAULT true"))
+                await conn.execute(text("ALTER TABLE aaces.organizaciones ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+                await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+                await conn.execute(text("ALTER TABLE aaces.suscripciones ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
                 await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS aaces.organizaciones (
                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
