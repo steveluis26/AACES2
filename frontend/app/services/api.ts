@@ -401,6 +401,28 @@ export const usuariosService = {
   },
 };
 
+// Servicio de plantillas
+export const templatesService = {
+  listar: async (params?: { tipo_documento?: string; solo_activas?: boolean }) => {
+    const query = new URLSearchParams()
+    if (params?.tipo_documento) query.set('tipo_documento', params.tipo_documento)
+    if (params?.solo_activas) query.set('solo_activas', 'true')
+    const qs = query.toString()
+    return apiRequest(`/templates${qs ? `?${qs}` : ''}`)
+  },
+  obtener: async (id: string) => apiRequest(`/templates/${id}`),
+  crear: async (data: Record<string, unknown>) =>
+    apiRequest('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  crearVersion: async (groupId: string, data: Record<string, unknown>) =>
+    apiRequest(`/templates/${groupId}/versiones`, { method: 'POST', body: JSON.stringify(data) }),
+  listarVersiones: async (groupId: string) =>
+    apiRequest(`/templates/${groupId}/versiones`),
+  activar: async (id: string) =>
+    apiRequest(`/templates/${id}/activar`, { method: 'PUT' }),
+  eliminar: async (id: string) =>
+    apiRequest(`/templates/${id}`, { method: 'DELETE' }),
+}
+
 // Utilidades de autenticación
 export const authUtils = {
   getUser: () => {

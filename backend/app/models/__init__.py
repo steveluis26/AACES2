@@ -350,6 +350,31 @@ class Usuario(Base):
     )
 
 
+class Template(Base):
+    __tablename__ = "templates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    template_group_id = Column(UUID(as_uuid=True), nullable=False)
+    tipo_documento = Column(String(30), nullable=False)
+    version = Column(Integer, nullable=False)
+    nombre = Column(String(200), nullable=False)
+    activa = Column(Boolean, default=False)
+    recursos = Column(JSONB, default=dict)
+    config = Column(JSONB, default=dict)
+    html_template = Column(Text, default="")
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    creada_por = Column(UUID(as_uuid=True), ForeignKey("usuarios.id"))
+
+    __table_args__ = (
+        UniqueConstraint('organizacion_id', 'template_group_id', 'version', name='uq_template_version'),
+        CheckConstraint("tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO')", name="check_tipo_documento"),
+        Index('idx_templates_org_tipo', 'organizacion_id', 'tipo_documento'),
+        Index('idx_templates_org_activa', 'organizacion_id', 'activa'),
+        Index('idx_templates_group_id', 'template_group_id'),
+    )
+
+
 class Suscripcion(Base):
     __tablename__ = "suscripciones"
 

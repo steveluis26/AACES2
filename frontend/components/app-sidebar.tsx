@@ -17,6 +17,7 @@ import {
   CalendarIcon,
   CreditCardIcon,
   MailIcon,
+  StampIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -139,6 +140,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       title: "Cursos",
       url: role === "admin" ? "/admin/clientes" : "/cliente/cursos",
       icon: ListIcon,
+    },
+    {
+      title: "Plantillas",
+      url: role === "admin" ? "/admin/templates" : "/cliente/templates",
+      icon: StampIcon,
     },
     {
       title: "Analítica",

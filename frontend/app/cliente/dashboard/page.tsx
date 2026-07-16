@@ -1,207 +1,196 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "react-query"
 import { apiRequest } from "@/app/services/api"
-import { ChartAreaInteractive } from "@/components/chart-area-interactive"
-import { DataTable } from "@/components/data-table"
-import { SectionCards } from "@/components/section-cards"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from "@/components/ui/table"
+import { DashboardHeader } from "@/components/dashboard/Header"
+import { SummaryCards } from "@/components/dashboard/SummaryCards"
+import { QuickActions } from "@/components/dashboard/QuickActions"
+import { AlertsPanel } from "@/components/dashboard/AlertsPanel"
+import { AgendaPanel } from "@/components/dashboard/AgendaPanel"
+import { ActivityTimeline } from "@/components/dashboard/ActivityTimeline"
+import { ConfidenceCard } from "@/components/dashboard/ConfidenceCard"
+import { ChartsPanel } from "@/components/dashboard/ChartsPanel"
+import { Skeleton } from "@/components/ui/skeleton"
 
-type Metrics = {
-  cursos_total: number
+type Kpis = {
   cursos_activos: number
-  cursos_finalizados: number
-  participantes_total: number
-  acreditados: number
-  validaciones: number
-  pagos_recibidos: number
-  pagos_pendientes: number
-  precios?: { promedio_base: number; promedio_promocional: number; porcentaje_con_promocion: number }
-  cursos_por_estado?: { estado: string; cantidad: number }[]
-  pagos_conversion_30d?: { completados: number; fallidos: number; tasa_conversion: number }
-  ingresos_estimados_proximos?: number
-  participantes_promedio_por_curso?: number
-  tasa_acreditacion?: number
-  ingresos_por_modalidad?: { modalidad: string | null; total: number; cantidad: number }[]
+  participantes: number
+  constancias_mes: number
+  por_vencer: number
+  alertas_criticas: number
 }
 
-type CursoRow = {
-  id: string
-  nombre: string
-  ciudad: string
-  estado: string
-  participantes: unknown[]
+type Onboarding = {
+  tiene_cursos: boolean
+  tiene_participantes: boolean
+  tiene_constancias: boolean
+  progreso: number
+}
+
+function useUserInfo() {
+  if (typeof window === "undefined") return { nombre: "Usuario", organizacion: "" }
+  const userStr = localStorage.getItem("aaces_user")
+  if (userStr) {
+    try {
+      const u = JSON.parse(userStr)
+      return { nombre: u.nombre || u.email || "Usuario", organizacion: u.organizacion || "" }
+    } catch {}
+  }
+  try {
+    const token = localStorage.getItem("aaces_token") || ""
+    const payload = JSON.parse(atob(token.split(".")[1]))
+    return {
+      nombre: payload.name || payload.nombre || "Usuario",
+      organizacion: payload.razon_social || "",
+    }
+  } catch {
+    return { nombre: "Usuario", organizacion: "" }
+  }
+}
+
+function SectionSkeleton() {
+  return (
+    <div className="space-y-3">
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-20 w-full rounded-lg" />
+    </div>
+  )
 }
 
 export default function ClienteDashboardPage() {
-  const [metrics, setMetrics] = useState<Metrics | null>(null)
-  const [cursos, setCursos] = useState<CursoRow[]>([])
-  const token = typeof window !== "undefined" ? localStorage.getItem("aaces_token") : null
+  const { nombre, organizacion } = useUserInfo()
 
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      try {
-        const mjson = await apiRequest<Metrics | { resumen?: Metrics }>(`/clientes/dashboard/metrics`)
-        if (!cancelled) setMetrics((mjson as { resumen?: Metrics })?.resumen ?? (mjson as Metrics) ?? null)
-        const cjson = await apiRequest<CursoRow[] | { data?: CursoRow[] }>(`/clientes/mis-cursos`)
-        const cursosData = Array.isArray(cjson) ? (cjson as CursoRow[]) : Array.isArray((cjson as { data?: CursoRow[] })?.data) ? ((cjson as { data?: CursoRow[] }).data || []) : []
-        if (!cancelled) setCursos(cursosData)
-      } catch {
-        if (!cancelled) {
-          setMetrics(null)
-          setCursos([])
-        }
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [token])
+  const resumen = useQuery(["dashboard", "resumen"], () =>
+    apiRequest<{ kpis: Kpis }>("/clientes/dashboard/resumen"),
+    { refetchInterval: 60000, retry: 1 },
+  )
+  const confianza = useQuery(["dashboard", "confianza"], () =>
+    apiRequest("/clientes/dashboard/confianza"),
+    { refetchInterval: 60000, retry: 1 },
+  )
+  const alertas = useQuery(["dashboard", "alertas"], () =>
+    apiRequest("/clientes/dashboard/alertas"),
+    { refetchInterval: 60000, retry: 1 },
+  )
+  const agenda = useQuery(["dashboard", "agenda"], () =>
+    apiRequest("/clientes/dashboard/agenda"),
+    { refetchInterval: 60000, retry: 1 },
+  )
+  const actividad = useQuery(["dashboard", "actividad"], () =>
+    apiRequest("/clientes/dashboard/actividad"),
+    { refetchInterval: 60000, retry: 1 },
+  )
+  const graficas = useQuery(["dashboard", "graficas"], () =>
+    apiRequest("/clientes/dashboard/graficas"),
+    { refetchInterval: 60000, retry: 1 },
+  )
+  const onboarding = useQuery(["dashboard", "onboarding"], () =>
+    apiRequest<Onboarding>("/clientes/dashboard/onboarding"),
+    { retry: 1 },
+  )
 
-  const tableData = useMemo(() => {
-    const list = Array.isArray(cursos) ? cursos : []
-    return list.map((r, idx) => ({
-      id: idx + 1,
-      header: r.nombre,
-      type: r.ciudad,
-      status:
-        r.estado === "finalizado" ? "Done" : r.estado === "activo" ? "In Process" : "Not Started",
-      target: String(r.participantes?.length || 0),
-      limit: "",
-      reviewer: "Assign reviewer",
-    }))
-  }, [cursos])
+  const isLoading = resumen.isLoading || confianza.isLoading
+  const anyError = resumen.error || confianza.error || alertas.error
+
+  if (anyError && !resumen.data) {
+    return (
+      <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <DashboardHeader nombre={nombre} organizacion={organizacion} />
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-6 text-center">
+          <p className="text-destructive font-medium">Error al cargar el dashboard</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Verifica tu conexión e intenta de nuevo
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+        <SectionSkeleton />
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28 rounded-lg" />
+          ))}
+        </div>
+        <Skeleton className="h-16 rounded-lg" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton className="h-40 rounded-lg" />
+          <Skeleton className="h-40 rounded-lg" />
+        </div>
+      </div>
+    )
+  }
+
+  const kpis = (resumen.data as { kpis: Kpis } | undefined)?.kpis
+  const noData = !kpis || kpis.cursos_activos === 0
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <SectionCards
-        data={{
-          pagos_recibidos: metrics?.pagos_recibidos,
-          participantes_total: metrics?.participantes_total,
-          cursos_activos: metrics?.cursos_activos,
-          cursos_total: metrics?.cursos_total,
-        }}
-        labels={{ ingresos: 'Ingresos totales', clientes: 'Participantes', cuentas: 'Cursos activos', crecimiento: 'Tasa de crecimiento' }}
-      />
-      <div className="px-4 lg:px-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        <Card className="md:col-span-2 xl:col-span-3">
-          <CardHeader>
-            <CardTitle>Actividad</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ChartAreaInteractive />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Métricas de precios</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Precio promedio (base)</TableCell>
-                  <TableCell className="text-right">${(metrics?.precios?.promedio_base ?? 0).toFixed(2)}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Precio promedio (promocional)</TableCell>
-                  <TableCell className="text-right">${(metrics?.precios?.promedio_promocional ?? 0).toFixed(2)}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>% cursos con promoción</TableCell>
-                  <TableCell className="text-right">{(metrics?.precios?.porcentaje_con_promocion ?? 0).toFixed(2)}%</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Conversión de pagos (30 días)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Completados</TableCell>
-                  <TableCell className="text-right">{metrics?.pagos_conversion_30d?.completados ?? 0}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Fallidos</TableCell>
-                  <TableCell className="text-right">{metrics?.pagos_conversion_30d?.fallidos ?? 0}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Tasa de conversión</TableCell>
-                  <TableCell className="text-right">{(metrics?.pagos_conversion_30d?.tasa_conversion ?? 0).toFixed(2)}%</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Proyecciones y acreditación</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Ingresos estimados próximos</TableCell>
-                  <TableCell className="text-right">${(metrics?.ingresos_estimados_proximos ?? 0).toFixed(2)}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Participantes promedio por curso</TableCell>
-                  <TableCell className="text-right">{(metrics?.participantes_promedio_por_curso ?? 0).toFixed(2)}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Tasa de acreditación</TableCell>
-                  <TableCell className="text-right">{(metrics?.tasa_acreditacion ?? 0).toFixed(2)}%</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Ingresos por modalidad</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Modalidad</TableHead>
-                  <TableHead>Pagos</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(metrics?.ingresos_por_modalidad ?? []).map((r, idx) => (
-                  <TableRow key={`${r.modalidad}-${idx}`}>
-                    <TableCell><Badge>{r.modalidad ?? "N/A"}</Badge></TableCell>
-                    <TableCell>{r.cantidad}</TableCell>
-                    <TableCell className="text-right">${r.total.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card className="xl:col-span-3 md:col-span-2">
-          <CardHeader>
-            <CardTitle>Mis cursos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DataTable data={tableData} />
-          </CardContent>
-        </Card>
+      <div className="px-4 lg:px-6">
+        <DashboardHeader nombre={nombre} organizacion={organizacion} />
       </div>
+
+      {noData ? (
+        <div className="px-4 lg:px-6">
+          <div className="rounded-lg border border-dashed p-8 text-center space-y-4">
+            <h2 className="text-xl font-semibold">Bienvenido a AACES</h2>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Todavía no tienes cursos registrados. Crea tu primer curso para comenzar a
+              generar constancias y certificados digitales verificables.
+            </p>
+            <button
+              onClick={() => {
+                const r = "/cliente/cursos/crear"
+                try { window.location.href = r } catch {}
+              }}
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Crear mi primer curso
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="px-4 lg:px-6">
+            <SummaryCards kpis={kpis!} />
+          </div>
+
+          <div className="px-4 lg:px-6">
+            <QuickActions onboarding={onboarding.data} />
+          </div>
+
+          {(alertas.data as unknown[])?.length > 0 && (
+            <div className="px-4 lg:px-6">
+              <AlertsPanel alertas={alertas.data as any[]} />
+            </div>
+          )}
+
+          <div className="px-4 lg:px-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AgendaPanel agenda={(agenda.data as any[]) || []} />
+            <ActivityTimeline actividad={(actividad.data as any[]) || []} />
+          </div>
+
+          <div className="px-4 lg:px-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ConfidenceCard data={confianza.data as any} />
+            <div className="rounded-lg border border-dashed p-6 flex flex-col items-center justify-center text-center gap-2">
+              <h3 className="text-sm font-medium text-muted-foreground">Visibilidad</h3>
+              <p className="text-xs text-muted-foreground">
+                Próximamente — Marketplace
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 lg:px-6">
+            <ChartsPanel
+              constancias_mes={(graficas.data as any)?.constancias_mes || []}
+              cursos_categoria={(graficas.data as any)?.cursos_categoria || []}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }

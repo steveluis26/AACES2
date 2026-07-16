@@ -22,3 +22,18 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?AACES2/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+backend/venv/
+backend/app.db
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# IDE
+.vscode/

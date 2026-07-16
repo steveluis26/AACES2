@@ -219,6 +219,56 @@ class PagoResponse(PagoBase):
     fecha_creacion: datetime
     fecha_actualizacion: datetime
 
+# Template schemas
+class TemplateBase(BaseSchema):
+    tipo_documento: str = Field(..., pattern='^(CONSTANCIA|DC3|DIPLOMA|CREDENCIAL|OTRO)$')
+    nombre: str = Field(..., min_length=1, max_length=200)
+    recursos: Optional[Dict[str, Any]] = Field(default_factory=lambda: {
+        "logo_url": None, "firma1_url": None, "firma2_url": None,
+        "fondo_url": None, "sello_url": None,
+    })
+    config: Optional[Dict[str, Any]] = Field(default_factory=lambda: {
+        "posicion_qr": {"x": 450, "y": 50, "w": 100, "h": 100},
+        "tipografia": {"familia": "Arial", "tamano": 12, "color": "#000000"},
+        "colores": {"primario": "#1a365d", "secundario": "#2d6bb5", "fondo": "#ffffff"},
+        "margenes": {"sup": 20, "inf": 20, "izq": 20, "der": 20},
+        "alineacion": "justify",
+        "tamano_hoja": "letter",
+    })
+    html_template: str = ""
+
+class TemplateCreate(TemplateBase):
+    pass
+
+class TemplateUpdate(BaseSchema):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=200)
+    recursos: Optional[Dict[str, Any]] = None
+    config: Optional[Dict[str, Any]] = None
+    html_template: Optional[str] = None
+
+class TemplateResponse(TemplateBase):
+    id: UUID
+    organizacion_id: UUID
+    template_group_id: UUID
+    version: int
+    activa: bool
+    fecha_creacion: datetime
+    creada_por: Optional[UUID] = None
+
+    model_config = {"from_attributes": True}
+
+class TemplateVersionResponse(BaseSchema):
+    id: UUID
+    version: int
+    nombre: str
+    activa: bool
+    creada_por: Optional[UUID] = None
+    fecha_creacion: datetime
+
+class TemplateActivateRequest(BaseSchema):
+    template_id: UUID
+
+
 # Authentication schemas
 class Token(BaseSchema):
     access_token: str

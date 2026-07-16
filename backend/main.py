@@ -172,6 +172,27 @@ async def lifespan(app: FastAPI):
                     )
                 """))
                 await conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS aaces.templates (
+                      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                      organizacion_id UUID NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+                      template_group_id UUID NOT NULL,
+                      tipo_documento VARCHAR(30) NOT NULL,
+                      version INTEGER NOT NULL,
+                      nombre VARCHAR(200) NOT NULL,
+                      activa BOOLEAN DEFAULT false,
+                      recursos JSONB DEFAULT '{}',
+                      config JSONB DEFAULT '{}',
+                      html_template TEXT DEFAULT '',
+                      fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                      creada_por UUID REFERENCES usuarios(id),
+                      UNIQUE(organizacion_id, template_group_id, version),
+                      CONSTRAINT check_tipo_documento CHECK (tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO'))
+                    )
+                """))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_templates_org_tipo ON aaces.templates (organizacion_id, tipo_documento)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_templates_org_activa ON aaces.templates (organizacion_id, activa)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_templates_group_id ON aaces.templates (template_group_id)"))
+                await conn.execute(text("""
                     CREATE TABLE IF NOT EXISTS aaces.registro_intentos (
                       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                       rfc VARCHAR(13),
