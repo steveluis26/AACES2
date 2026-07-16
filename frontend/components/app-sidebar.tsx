@@ -17,6 +17,7 @@ import {
   MailIcon,
   StampIcon,
   CameraIcon,
+  FileCodeIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
