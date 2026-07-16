@@ -218,6 +218,13 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("UPDATE aaces.planes SET activo = true WHERE activo IS NULL"))
             except Exception:
                 pass
+            # Fix usuarios.activo y suscripciones (mismo problema de DEFAULT faltante)
+            try:
+                await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN activo SET DEFAULT true"))
+                await conn.execute(text("UPDATE aaces.usuarios SET activo = true WHERE activo IS NULL"))
+                await conn.execute(text("ALTER TABLE aaces.suscripciones ALTER COLUMN estatus SET DEFAULT 'pendiente'"))
+            except Exception:
+                pass
             # Seed default plans
             try:
                 res = await conn.execute(text("SELECT COUNT(*) FROM aaces.planes"))
