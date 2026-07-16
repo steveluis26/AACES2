@@ -12,6 +12,7 @@ import {
   HelpCircleIcon,
   LayoutDashboardIcon,
   ListIcon,
+  ScrollTextIcon,
   SettingsIcon,
   UsersIcon,
   CalendarIcon,
@@ -163,6 +164,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       title: "Documentos",
       url: role === "admin" ? "/admin/dashboard" : "/cliente/documentos",
       icon: FileTextIcon,
+    },
+    {
+      title: "Constancias",
+      url: role === "admin" ? "/admin/dashboard" : "/cliente/constancias",
+      icon: ScrollTextIcon,
     },
     {
       title: "Analítica",

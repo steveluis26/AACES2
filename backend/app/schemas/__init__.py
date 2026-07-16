@@ -381,3 +381,8 @@ class DocumentoGenerarResponse(BaseSchema):
     documento: DocumentoResponse
     descarga_url: str
     codigo_validacion: str
+
+
+class EmitirConstanciaRequest(BaseSchema):
+    curso_participante_id: str
+    template_id: Optional[str] = None

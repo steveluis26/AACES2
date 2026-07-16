@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import require_org_admin
 from app.services.constancias import constancias_service
+from app.schemas import EmitirConstanciaRequest
 from app.core.logging import audit_logger
 
 logger = logging.getLogger(__name__)
@@ -14,8 +15,7 @@ router = APIRouter()
 
 @router.post("/emitir")
 async def emitir_constancia(
-    curso_participante_id: str = Query(..., description="ID del registro curso-participante"),
-    template_id: Optional[str] = Query(None, description="ID de la plantilla (opcional, usa la CONSTANCIA activa por defecto)"),
+    payload: EmitirConstanciaRequest,
     user_data: dict = Depends(require_org_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -24,9 +24,9 @@ async def emitir_constancia(
         doc = await constancias_service.emitir(
             db=db,
             organizacion_id=organizacion_id,
-            curso_participante_id=curso_participante_id,
+            curso_participante_id=payload.curso_participante_id,
             emitido_por=user_data.get("sub"),
-            template_id=template_id,
+            template_id=payload.template_id,
         )
         audit_logger.log_user_action(
             user_id=user_data.get("sub"),
