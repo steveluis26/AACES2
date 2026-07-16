@@ -44,6 +44,7 @@ export function LoginForm({
       const data = await res.json()
       const token = data.access_token as string
       localStorage.setItem("aaces_token", token)
+      document.cookie = `aaces_token=${token}; path=/; max-age=604800; SameSite=Lax`
       let role: "admin" | "client" = "client"
       try {
         const parts = token.split(".")

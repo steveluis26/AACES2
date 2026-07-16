@@ -107,6 +107,7 @@ export function useAuth() {
 
       // Store token and user data
       localStorage.setItem(TOKEN_KEY, access_token);
+      document.cookie = `aaces_token=${access_token}; path=/; max-age=604800; SameSite=Lax`;
       localStorage.setItem(USER_KEY, JSON.stringify(user));
 
       setAuthState({
@@ -148,6 +149,7 @@ export function useAuth() {
       // Clear local storage
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(USER_KEY);
+      document.cookie = 'aaces_token=; path=/; max-age=0';
 
       setAuthState({
         user: null,
@@ -184,6 +186,7 @@ export function useAuth() {
       const { access_token } = response;
 
       localStorage.setItem(TOKEN_KEY, access_token);
+      document.cookie = `aaces_token=${access_token}; path=/; max-age=604800; SameSite=Lax`;
       setAuthState(prev => ({ ...prev, token: access_token }));
     } catch (error) {
       console.error('Error refreshing token:', error);

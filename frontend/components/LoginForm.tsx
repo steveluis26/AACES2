@@ -19,6 +19,7 @@ export default function LoginForm() {
       
       // Guardar token homogéneo
       localStorage.setItem('aaces_token', response.access_token);
+      document.cookie = `aaces_token=${response.access_token}; path=/; max-age=604800; SameSite=Lax`;
       try {
         const payload = JSON.parse(atob(response.access_token.split('.')[1]))
         const userRole = payload.role || payload.rol || 'cliente'

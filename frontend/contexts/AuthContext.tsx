@@ -70,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch {}
       
       localStorage.setItem('aaces_token', access_token);
+      document.cookie = `aaces_token=${access_token}; path=/; max-age=604800; SameSite=Lax`;
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       setUser(userData);
 
@@ -87,6 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('aaces_token');
+    document.cookie = 'aaces_token=; path=/; max-age=0';
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     navigate('/login');

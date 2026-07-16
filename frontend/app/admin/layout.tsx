@@ -1,11 +1,42 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AppSidebar } from '@/components/app-sidebar'
 import { SiteHeader } from '@/components/site-header'
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const [authorized, setAuthorized] = useState(false)
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('aaces_token')
+      if (!token) {
+        router.replace('/login')
+        return
+      }
+      const parts = token.split('.')
+      if (parts.length !== 3) {
+        router.replace('/login')
+        return
+      }
+      const payload = JSON.parse(atob(parts[1]))
+      if (payload.role !== 'admin') {
+        router.replace('/cliente/dashboard')
+        return
+      }
+      setAuthorized(true)
+    } catch {
+      router.replace('/login')
+    }
+  }, [router])
+
+  if (!authorized) {
+    return null
+  }
+
   return (
     <SidebarProvider
       defaultOpen={false}
