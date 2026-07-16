@@ -309,6 +309,10 @@ app.add_middleware(
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
+# Serve generated documents
+os.makedirs(settings.STORAGE_DIR, exist_ok=True)
+app.mount("/storage", StaticFiles(directory=settings.STORAGE_DIR), name="storage")
+
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
 

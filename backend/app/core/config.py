@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # File upload settings
     MAX_FILE_SIZE: int = int(os.getenv("MAX_FILE_SIZE", "10485760"))  # 10MB
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./uploads")
+    STORAGE_DIR: str = os.getenv("STORAGE_DIR", "./storage")
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "local")
     
     # Certificate settings
     CERTIFICATE_TEMPLATE_DIR: str = os.getenv("CERTIFICATE_TEMPLATE_DIR", "./templates/certificates")

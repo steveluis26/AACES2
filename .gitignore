@@ -29,6 +29,7 @@ __pycache__/
 *.pyo
 venv/
 backend/venv/
+backend/venv3/
 backend/app.db
 
 # Next.js
