@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
+from app.db.errors import is_undefined_table
 from typing import Dict, Any
 import logging
 
@@ -117,8 +118,11 @@ class DashboardService:
                     """)
                 )
                 emitidas = int(con_constancia.scalar() or 0)
-            except ProgrammingError:
-                emitidas = 0
+            except ProgrammingError as e:
+                if is_undefined_table(e):
+                    emitidas = 0
+                else:
+                    raise
             pendientes["emitir"] = total_acreditados - emitidas
             if pendientes["emitir"] < 0:
                 pendientes["emitir"] = 0

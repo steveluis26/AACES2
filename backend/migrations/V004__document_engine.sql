@@ -160,4 +160,14 @@ ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE;
 ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE;
 ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false;
 
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS aaces.schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    description TEXT
+);
+INSERT INTO aaces.schema_version (version, description)
+VALUES (4, 'Document engine tables (V004)')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;

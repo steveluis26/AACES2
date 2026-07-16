@@ -1,0 +1,300 @@
+from __future__ import annotations
+import logging
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
+logger = logging.getLogger(__name__)
+
+
+async def create_aaces_schema(conn: AsyncConnection) -> None:
+    await conn.execute(text("CREATE SCHEMA IF NOT EXISTS aaces"))
+    await conn.execute(text("SET search_path TO aaces"))
+
+
+async def create_extensions(conn: AsyncConnection) -> None:
+    for ext in ["pgcrypto", "uuid-ossp"]:
+        try:
+            await conn.execute(text(f'CREATE EXTENSION IF NOT EXISTS "{ext}"'))
+        except Exception:
+            pass
+
+
+async def create_metadata_tables(conn: AsyncConnection) -> None:
+    from app.models import Base
+    await conn.execute(text("SET search_path TO aaces"))
+    await conn.run_sync(Base.metadata.create_all)
+
+
+async def create_tipos_curso(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS tipos_curso (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+          nombre VARCHAR(200) NOT NULL,
+          descripcion TEXT,
+          costo_por_persona NUMERIC(10,2) DEFAULT 0,
+          estado VARCHAR(20) DEFAULT 'activo',
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    await conn.execute(text(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_tipos_curso_cliente_nombre ON tipos_curso (cliente_id, nombre)"
+    ))
+
+
+async def create_grupos_curso(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS grupos_curso (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+          nombre VARCHAR(200) NOT NULL,
+          descripcion TEXT,
+          precio_base NUMERIC(10,2) DEFAULT 0,
+          precio_promocional NUMERIC(10,2),
+          estado VARCHAR(20) DEFAULT 'activo',
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS grupo_curso_items (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          grupo_id UUID NOT NULL REFERENCES grupos_curso(id) ON DELETE CASCADE,
+          tipo_curso_id UUID NOT NULL REFERENCES tipos_curso(id) ON DELETE CASCADE,
+          UNIQUE(grupo_id, tipo_curso_id)
+        )
+    """))
+
+
+async def create_contactos(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.contactos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nombre VARCHAR(200) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          empresa VARCHAR(200),
+          asunto VARCHAR(50) NOT NULL,
+          mensaje TEXT NOT NULL,
+          leido BOOLEAN DEFAULT false,
+          respondido BOOLEAN DEFAULT false,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_leido TIMESTAMP WITH TIME ZONE,
+          notas_admin TEXT
+        )
+    """))
+
+
+async def create_planes(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.planes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          codigo VARCHAR(50) UNIQUE NOT NULL,
+          nombre VARCHAR(100) NOT NULL,
+          descripcion TEXT,
+          precio_mensual NUMERIC(10,2) DEFAULT 0,
+          precio_anual NUMERIC(10,2) DEFAULT 0,
+          cursos_max INTEGER DEFAULT 10,
+          usuarios_max INTEGER DEFAULT 1,
+          constancias_max INTEGER DEFAULT 50,
+          incluye_marketplace BOOLEAN DEFAULT false,
+          incluye_api BOOLEAN DEFAULT false,
+          incluye_white_label BOOLEAN DEFAULT false,
+          incluye_soporte_prioritario BOOLEAN DEFAULT false,
+          activo BOOLEAN DEFAULT true,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    for col in ["id", "activo"]:
+        await conn.execute(text(f"ALTER TABLE aaces.planes ALTER COLUMN {col} SET DEFAULT gen_random_uuid()"))
+
+
+async def create_organizaciones(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.organizaciones (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfc VARCHAR(13) UNIQUE NOT NULL,
+          razon_social VARCHAR(200) NOT NULL,
+          nombre_comercial VARCHAR(200),
+          email_contacto VARCHAR(255),
+          telefono VARCHAR(20),
+          estado VARCHAR(100),
+          ciudad VARCHAR(100),
+          direccion TEXT,
+          estatus VARCHAR(30) DEFAULT 'pendiente' NOT NULL,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_activacion TIMESTAMP WITH TIME ZONE,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          notas_admin TEXT
+        )
+    """))
+    await conn.execute(text("ALTER TABLE aaces.organizaciones ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+
+
+async def create_usuarios(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.usuarios (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+          nombre VARCHAR(100) NOT NULL,
+          correo VARCHAR(255) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          rol VARCHAR(30) DEFAULT 'admin' NOT NULL,
+          telefono VARCHAR(20),
+          activo BOOLEAN DEFAULT true,
+          ultimo_acceso TIMESTAMP WITH TIME ZONE,
+          intentos_fallidos INTEGER DEFAULT 0,
+          bloqueado_hasta TIMESTAMP WITH TIME ZONE,
+          must_change_password BOOLEAN DEFAULT false,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(organizacion_id, correo)
+        )
+    """))
+    await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+    await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN activo SET DEFAULT true"))
+
+
+async def create_suscripciones(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.suscripciones (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+          plan_id UUID NOT NULL REFERENCES planes(id),
+          estatus VARCHAR(30) DEFAULT 'pendiente' NOT NULL,
+          fecha_inicio DATE,
+          fecha_fin DATE,
+          cursos_max INTEGER,
+          usuarios_max INTEGER,
+          constancias_max INTEGER,
+          metodo_pago VARCHAR(50),
+          referencia_pago VARCHAR(100),
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          activada_por UUID
+        )
+    """))
+    await conn.execute(text("ALTER TABLE aaces.suscripciones ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+    await conn.execute(text("ALTER TABLE aaces.suscripciones ALTER COLUMN estatus SET DEFAULT 'pendiente'"))
+
+
+async def create_templates(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.templates (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES organizaciones(id) ON DELETE CASCADE,
+          template_group_id UUID NOT NULL,
+          tipo_documento VARCHAR(30) NOT NULL,
+          version INTEGER NOT NULL,
+          nombre VARCHAR(200) NOT NULL,
+          activa BOOLEAN DEFAULT false,
+          recursos JSONB DEFAULT '{}',
+          config JSONB DEFAULT '{}',
+          html_template TEXT DEFAULT '',
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          creada_por UUID REFERENCES usuarios(id),
+          UNIQUE(organizacion_id, template_group_id, version),
+          CONSTRAINT check_tipo_documento CHECK (tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO'))
+        )
+    """))
+
+
+async def create_registro_intentos(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.registro_intentos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          rfc VARCHAR(13),
+          correo VARCHAR(255),
+          ip_origen VARCHAR(45),
+          user_agent TEXT,
+          resultado VARCHAR(20),
+          detalle TEXT,
+          fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+
+
+async def create_documentos_emitidos(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.documentos_emitidos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          template_id UUID REFERENCES aaces.templates(id) ON DELETE SET NULL,
+          template_version INTEGER,
+          tipo_documento VARCHAR(30) NOT NULL,
+          codigo_validacion UUID NOT NULL DEFAULT gen_random_uuid(),
+          folio VARCHAR(50),
+          storage_provider VARCHAR(50) NOT NULL,
+          storage_key VARCHAR(500) NOT NULL,
+          pdf_hash VARCHAR(64) NOT NULL,
+          html_snapshot TEXT,
+          documento_metadata JSONB DEFAULT '{}',
+          emitido_por UUID REFERENCES aaces.usuarios(id) ON DELETE SET NULL,
+          fecha_emision TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          estatus VARCHAR(20) DEFAULT 'emitido' NOT NULL,
+          CONSTRAINT check_tipo_documento_emitido CHECK (tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO')),
+          CONSTRAINT check_estatus_documento CHECK (estatus IN ('emitido', 'cancelado', 'reemitido'))
+        )
+    """))
+
+
+async def create_verificaciones(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.verificaciones (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          documento_id UUID REFERENCES aaces.documentos_emitidos(id) ON DELETE CASCADE,
+          codigo VARCHAR(36) NOT NULL,
+          fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          ip VARCHAR(45),
+          user_agent TEXT,
+          tipo VARCHAR(20) NOT NULL DEFAULT 'QR',
+          resultado VARCHAR(20) NOT NULL DEFAULT 'VALIDA',
+          CONSTRAINT check_tipo_verificacion CHECK (tipo IN ('QR', 'LINK', 'API')),
+          CONSTRAINT check_resultado_verificacion CHECK (resultado IN ('VALIDA', 'REVOCADA', 'EXPIRADA', 'NO_EXISTE'))
+        )
+    """))
+
+
+async def create_legacy_fixes(conn: AsyncConnection) -> None:
+    for stmt in [
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL",
+        "ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID REFERENCES cursos(id) ON DELETE CASCADE",
+        "ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES grupos_curso(id) ON DELETE SET NULL",
+        "ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0",
+        "ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0",
+        "ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE",
+        "ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE",
+        "ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false",
+        "ALTER TABLE aaces.clientes ALTER COLUMN id SET DEFAULT gen_random_uuid()",
+        "ALTER TABLE aaces.curso_participante ALTER COLUMN codigo_validacion TYPE VARCHAR(36)",
+        "UPDATE aaces.planes SET activo = true WHERE activo IS NULL",
+        "UPDATE aaces.usuarios SET activo = true WHERE activo IS NULL",
+    ]:
+        try:
+            await conn.execute(text(stmt))
+        except Exception:
+            pass
+
+
+async def ensure_schema(conn: AsyncConnection) -> None:
+    logger.info("Ensuring database schema...")
+    await create_aaces_schema(conn)
+    await create_extensions(conn)
+    await create_metadata_tables(conn)
+    for fn in [
+        create_tipos_curso,
+        create_grupos_curso,
+        create_contactos,
+        create_planes,
+        create_organizaciones,
+        create_usuarios,
+        create_suscripciones,
+        create_templates,
+        create_registro_intentos,
+        create_documentos_emitidos,
+        create_verificaciones,
+        create_legacy_fixes,
+    ]:
+        try:
+            await fn(conn)
+        except Exception as e:
+            logger.warning(f"Schema step {fn.__name__} failed: {e}")
+    logger.info("Database schema ensured.")

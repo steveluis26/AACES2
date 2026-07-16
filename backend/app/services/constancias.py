@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
+from app.db.errors import is_undefined_table
 from datetime import datetime, date
 
 from app.services.document_service import DocumentService
@@ -420,7 +421,9 @@ class ConstanciasService:
                 {"org_id": organizacion_id}
             )
             promedio = tiempo.scalar()
-        except ProgrammingError:
+        except ProgrammingError as e:
+            if not is_undefined_table(e):
+                raise
             logger.warning(f"Document engine tables not ready for org {organizacion_id}")
             return ConstanciaResumenResponse(
                 total=0, emitidas=0, canceladas=0, reemitidas=0,
