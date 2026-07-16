@@ -40,10 +40,7 @@ export default function ContactoPage() {
         mensaje: form.mensaje,
       }
 
-      const api = process.env.NEXT_PUBLIC_API_URL
-      const url = api ? `${api}/api/v1/contacto` : '/api/contacto'
-
-      await fetch(url, {
+      await fetch('/api/v1/contacto', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

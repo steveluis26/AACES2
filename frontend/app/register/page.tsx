@@ -90,10 +90,7 @@ function RegisterForm() {
         plan: plan,
       }
 
-      const api = process.env.NEXT_PUBLIC_API_URL
-      const url = api ? `${api}/api/v1/auth/register` : '/api/v1/auth/register'
-
-      const res = await fetch(url, {
+      const res = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
