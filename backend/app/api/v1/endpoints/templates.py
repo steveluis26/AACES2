@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import uuid
+import aiofiles
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.services.templates import template_service
@@ -13,6 +18,63 @@ from app.schemas import (
 
 router = APIRouter()
 security = HTTPBearer()
+
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+
+
+@router.post("/upload")
+async def upload_resource(
+    file: UploadFile = File(...),
+    resource_type: str = Form(...),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Formato no permitido: {ext}. Usa: {', '.join(ALLOWED_EXTENSIONS)}")
+
+    org_id = current_user.get("organizacion_id") or current_user.get("id")
+    filename = f"{resource_type}_{uuid.uuid4().hex}{ext}"
+    relative_path = f"{org_id}/{filename}"
+    full_path = os.path.join(settings.UPLOAD_DIR, relative_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
+    async with aiofiles.open(full_path, "wb") as f:
+        content = await file.read()
+        await f.write(content)
+
+    url = f"/uploads/{relative_path}"
+    return {"url": url, "filename": filename, "resource_type": resource_type}
+
+
+@router.post("/preview", response_class=HTMLResponse)
+async def preview_template(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    body = await request.json()
+    template_id = body.get("template_id")
+    html_content = body.get("html_template", "")
+    data = body.get("data", {})
+
+    if template_id:
+        tpl = await template_service.obtener(db, current_user, template_id=template_id)
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template no encontrado")
+        html_content = tpl.get("html_template", html_content)
+        if not data:
+            data = {
+                "nombre": "María García López",
+                "curso": "Curso de Seguridad Industrial",
+                "fecha": "15 de julio de 2026",
+                "duracion": "40 horas",
+                "folio": "AACES-" + uuid.uuid4().hex[:8].upper(),
+            }
+
+    for key, val in data.items():
+        html_content = html_content.replace("{{" + key + "}}", str(val))
+
+    return html_content
 
 
 @router.get("/", response_model=list[TemplateResponse])

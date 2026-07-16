@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "react-query"
 import { apiRequest } from "@/app/services/api"
 import {
@@ -10,8 +10,9 @@ import {
 } from "@/components/ui"
 import { useRouter, useParams } from "next/navigation"
 import {
-  ArrowLeftIcon, CheckCircleIcon,
-  HistoryIcon, Trash2Icon, PlusIcon,
+  ArrowLeftIcon, CheckCircleIcon, EyeIcon,
+  HistoryIcon, Trash2Icon, PlusIcon, UploadIcon,
+  ImageIcon, FileTextIcon, RefreshCwIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -32,7 +33,7 @@ type Template = {
   version: number
   nombre: string
   activa: boolean
-  recursos: Record<string, unknown>
+  recursos: Record<string, string | null>
   config: Record<string, unknown>
   html_template: string
   fecha_creacion: string
@@ -47,35 +48,57 @@ const TIPO_COLORS: Record<string, string> = {
   OTRO: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
 }
 
+const RESOURCE_LABELS: Record<string, string> = {
+  logo_url: "Logo",
+  firma1_url: "Firma 1",
+  firma2_url: "Firma 2",
+  fondo_url: "Fondo",
+  sello_url: "Sello",
+}
+
+const RESOURCE_ICONS: Record<string, React.ReactNode> = {
+  logo_url: <ImageIcon className="h-4 w-4" />,
+  firma1_url: <FileTextIcon className="h-4 w-4" />,
+  firma2_url: <FileTextIcon className="h-4 w-4" />,
+  fondo_url: <ImageIcon className="h-4 w-4" />,
+  sello_url: <ImageIcon className="h-4 w-4" />,
+}
+
+const PREVIEW_DATA = {
+  nombre: "María García López",
+  curso: "Curso de Seguridad Industrial",
+  fecha: "15 de julio de 2026",
+  duracion: "40 horas",
+  folio: "AACES-AB12CD34",
+}
+
 export default function TemplateDetailPage() {
   const router = useRouter()
   const params = useParams()
   const groupId = params.group_id as string
   const queryClient = useQueryClient()
-
   const [showNewVersion, setShowNewVersion] = useState(false)
-  const [versionForm, setVersionForm] = useState({
-    nombre: "",
-    html_template: "",
-  })
+  const [versionForm, setVersionForm] = useState({ nombre: "", html_template: "" })
+  const [editingHtml, setEditingHtml] = useState(false)
+  const [htmlDraft, setHtmlDraft] = useState("")
+  const [uploading, setUploading] = useState<string | null>(null)
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadTarget, setUploadTarget] = useState<string | null>(null)
 
   const { data: activeTemplate, isLoading: loadingActive } = useQuery(
     ["templates", "group", groupId, "active"],
     async () => {
-      const all = await apiRequest<Template[]>("/templates", {
-        method: "GET",
-      }) as Template[]
+      const all = await apiRequest<Template[]>("/templates")
       const group = all.filter((t) => t.template_group_id === groupId)
       return group.find((t) => t.activa) || group[0] || null
     },
     { retry: 1 }
   )
 
-  const {
-    data: versions,
-    isLoading: loadingVersions,
-    error: versionsError,
-  } = useQuery(
+  const { data: versions, isLoading: loadingVersions, error: versionsError } = useQuery(
     ["templates", "versions", groupId],
     () => apiRequest<Version[]>(`/templates/${groupId}/versiones`),
     { retry: 1 }
@@ -125,14 +148,76 @@ export default function TemplateDetailPage() {
     }
   )
 
-  const handleCreateVersion = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!versionForm.nombre.trim()) {
-      toast.error("El nombre es requerido")
-      return
+  const handleUpload = async (resourceKey: string, file: File) => {
+    setUploading(resourceKey)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      form.append("resource_type", resourceKey)
+      const result = await apiRequest<{ url: string }>("/templates/upload", {
+        method: "POST",
+        body: form,
+        headers: {},
+      })
+      const recursos = { ...activeTemplate?.recursos, [resourceKey]: result.url }
+      await apiRequest(`/templates/${activeTemplate!.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ recursos }),
+      })
+      queryClient.invalidateQueries(["templates", "group", groupId])
+      toast.success(`${RESOURCE_LABELS[resourceKey]} subido correctamente`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir archivo")
+    } finally {
+      setUploading(null)
     }
-    createVersionMutation.mutate(versionForm)
   }
+
+  const handleFileSelect = (resourceKey: string) => {
+    setUploadTarget(resourceKey)
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && uploadTarget) {
+      handleUpload(uploadTarget, file)
+    }
+    e.target.value = ""
+  }
+
+  const loadPreview = async () => {
+    if (!activeTemplate) return
+    setPreviewLoading(true)
+    try {
+      const html = await apiRequest<string>(`/templates/preview`, {
+        method: "POST",
+        body: JSON.stringify({
+          template_id: activeTemplate.id,
+          html_template: editingHtml ? htmlDraft : activeTemplate.html_template,
+          data: PREVIEW_DATA,
+        }),
+      })
+      setPreviewHtml(html)
+      setShowPreview(true)
+    } catch (err) {
+      toast.error("Error al generar preview")
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
+
+  const getToken = () => {
+    if (typeof window !== "undefined") {
+      for (const k of ["aaces_token", "token", "access_token"]) {
+        const v = localStorage.getItem(k)
+        if (v) return v
+      }
+    }
+    return null
+  }
+
+  const iframeSrcDoc = previewHtml || ""
 
   if (loadingActive || loadingVersions) {
     return (
@@ -155,6 +240,7 @@ export default function TemplateDetailPage() {
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
+      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.push("/cliente/templates")}>
           <ArrowLeftIcon className="h-5 w-5" />
@@ -174,10 +260,178 @@ export default function TemplateDetailPage() {
             {versions?.length || 0} {versions?.length === 1 ? "versión" : "versiones"}
           </p>
         </div>
-        <Button onClick={() => setShowNewVersion(true)}>
-          <PlusIcon className="h-4 w-4 mr-2" />
-          Nueva versión
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadPreview} disabled={previewLoading}>
+            <EyeIcon className="h-4 w-4 mr-2" />
+            {previewLoading ? "Cargando..." : "Vista previa"}
+          </Button>
+          <Button onClick={() => setShowNewVersion(true)}>
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Nueva versión
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left column: Resources + Details */}
+        <div className="lg:col-span-1 space-y-4">
+          {/* Resources */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" />
+                Recursos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+              {Object.entries(RESOURCE_LABELS).map(([key, label]) => {
+                const url = activeTemplate?.recursos?.[key]
+                return (
+                  <div key={key} className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {RESOURCE_ICONS[key]}
+                      <span className="text-sm truncate">{label}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {url && (
+                        <div
+                          className="h-8 w-8 rounded border bg-muted overflow-hidden cursor-pointer"
+                          onClick={() => window.open(url, "_blank")}
+                          title="Ver recurso"
+                        >
+                          <img src={url} alt={label} className="h-full w-full object-contain" />
+                        </div>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8"
+                        onClick={() => handleFileSelect(key)}
+                        disabled={uploading === key}
+                      >
+                        {uploading === key ? (
+                          <RefreshCwIcon className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <UploadIcon className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Template Details */}
+          {activeTemplate && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Detalles</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Versión activa</span>
+                  <span className="font-medium">v{activeTemplate.version}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tipo</span>
+                  <Badge className={TIPO_COLORS[activeTemplate.tipo_documento] || TIPO_COLORS.OTRO}>
+                    {activeTemplate.tipo_documento}
+                  </Badge>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block mb-1">Configuración</span>
+                  <pre className="text-xs bg-muted rounded p-2 overflow-x-auto">
+                    {JSON.stringify(activeTemplate.config, null, 2)}
+                  </pre>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Right column: HTML Editor + Preview */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* HTML Editor */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileTextIcon className="h-4 w-4" />
+                Plantilla HTML
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (editingHtml) {
+                    setEditingHtml(false)
+                  } else {
+                    setHtmlDraft(activeTemplate?.html_template || "")
+                    setEditingHtml(true)
+                  }
+                }}
+              >
+                {editingHtml ? "Cancelar edición" : "Editar"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {editingHtml ? (
+                <div className="space-y-2">
+                  <textarea
+                    className="w-full h-64 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={htmlDraft}
+                    onChange={(e) => setHtmlDraft(e.target.value)}
+                    placeholder="<html><body>..."
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setEditingHtml(false)}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await apiRequest(`/templates/${groupId}/versiones`, {
+                            method: "POST",
+                            body: JSON.stringify({
+                              nombre: `Edición ${new Date().toLocaleString("es-MX")}`,
+                              html_template: htmlDraft,
+                            }),
+                          })
+                          queryClient.invalidateQueries(["templates"])
+                          queryClient.invalidateQueries(["templates", "group", groupId])
+                          queryClient.invalidateQueries(["templates", "versions", groupId])
+                          setEditingHtml(false)
+                          toast.success("Versión guardada")
+                        } catch {
+                          toast.error("Error al guardar")
+                        }
+                      }}
+                    >
+                      Guardar como nueva versión
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Usa {"{{variable}}"} para datos dinámicos: {"{{nombre}}"}, {"{{curso}}"}, {"{{fecha}}"}
+                  </p>
+                  <pre className="rounded-md bg-muted p-3 text-xs overflow-x-auto max-h-64 overflow-y-auto">
+                    {activeTemplate?.html_template || "Sin contenido HTML"}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Version history */}
@@ -255,55 +509,47 @@ export default function TemplateDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Active template details */}
-      {activeTemplate && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Detalles de la versión activa</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Versión</span>
-                <p className="font-medium">v{activeTemplate.version}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Tipo</span>
-                <p className="font-medium">{activeTemplate.tipo_documento}</p>
-              </div>
-            </div>
-            {activeTemplate.html_template && (
-              <div className="space-y-1">
-                <span className="text-sm text-muted-foreground">HTML de la plantilla</span>
-                <pre className="rounded-md bg-muted p-3 text-xs overflow-x-auto">
-                  {activeTemplate.html_template}
-                </pre>
+      {/* Preview Dialog */}
+      <Dialog open={showPreview} onClose={() => setShowPreview(false)} className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Vista previa</DialogTitle>
+        </DialogHeader>
+        <DialogContent>
+          <div className="bg-white rounded-md overflow-hidden" style={{ minHeight: 400 }}>
+            {previewHtml ? (
+              <iframe
+                srcDoc={iframeSrcDoc}
+                className="w-full border-0"
+                style={{ minHeight: 500 }}
+                title="Preview"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-64 text-muted-foreground">
+                Sin contenido para previsualizar
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Recursos</span>
-                <pre className="text-xs mt-1">
-                  {JSON.stringify(activeTemplate.recursos, null, 2)}
-                </pre>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Configuración</span>
-                <pre className="text-xs mt-1">
-                  {JSON.stringify(activeTemplate.config, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowPreview(false)}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       {/* New Version Dialog */}
       <Dialog open={showNewVersion} onClose={() => setShowNewVersion(false)}>
         <DialogHeader>
           <DialogTitle>Nueva versión</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleCreateVersion}>
+        <form onSubmit={(e) => {
+          e.preventDefault()
+          if (!versionForm.nombre.trim()) {
+            toast.error("El nombre es requerido")
+            return
+          }
+          createVersionMutation.mutate(versionForm)
+        }}>
           <DialogContent>
             <div className="space-y-4">
               <div className="space-y-2">

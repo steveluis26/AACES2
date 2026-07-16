@@ -1,5 +1,7 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 from sqlalchemy import text
@@ -302,6 +304,10 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"]
 )
+
+# Serve uploaded files
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")
