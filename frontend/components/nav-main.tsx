@@ -54,7 +54,7 @@ export function NavMain({
                   isActive={active}
                   className={active ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground" : undefined}
                 >
-                  <a href={item.url} onClick={(e) => { e.stopPropagation(); window.location.href = item.url }}>
+                  <a href={item.url}>
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>
                   </a>

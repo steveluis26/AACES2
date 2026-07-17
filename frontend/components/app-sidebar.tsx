@@ -3,7 +3,6 @@ import * as React from "react"
 import {
   ArrowUpCircleIcon,
   BarChartIcon,
-  ClipboardListIcon,
   DatabaseIcon,
   FileTextIcon,
   FolderIcon,
@@ -16,23 +15,41 @@ import {
   CreditCardIcon,
   MailIcon,
   StampIcon,
-  CameraIcon,
-  FileCodeIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
-// NavUser removido
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+
+// Menu definitions by user type.
+// SuperAdmin = platform admin that manages the SaaS (no org_id).
+// Organization admin = admin of a specific org (has org_id) — uses client experience.
+const MENU_SUPERADMIN = [
+  { title: "Dashboard",      url: "/admin/dashboard",       icon: LayoutDashboardIcon },
+  { title: "Clientes",       url: "/admin/clientes",        icon: ListIcon },
+  { title: "Organizaciones", url: "/admin/organizaciones",  icon: FolderIcon },
+  { title: "Mensajes",       url: "/admin/contacto",        icon: MailIcon },
+  { title: "Reportes",       url: "/analytics",              icon: BarChartIcon },
+]
+
+const MENU_CLIENTE = [
+  { title: "Dashboard",  url: "/cliente/dashboard",   icon: LayoutDashboardIcon },
+  { title: "Cursos",     url: "/cliente/cursos",       icon: ListIcon },
+  { title: "Plantillas", url: "/cliente/templates",    icon: StampIcon },
+  { title: "Constancias",url: "/cliente/constancias",  icon: ScrollTextIcon },
+  { title: "Pagos",      url: "/cliente/pagos",        icon: CreditCardIcon },
+  { title: "Reportes",   url: "/analytics",            icon: BarChartIcon },
+  { title: "Gestión",    url: "/cliente/gestion",      icon: FolderIcon },
+  { title: "Calendario", url: "/cliente/cursos?view=calendar", icon: CalendarIcon },
+]
 
 const data = {
   user: {
@@ -40,54 +57,6 @@ const data = {
     email: "m@example.com",
     avatar: "/avatars/shadcn.jpg",
   },
-  navClouds: [
-    {
-      title: "Capture",
-      icon: CameraIcon,
-      isActive: true,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: FileTextIcon,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Prompts",
-      icon: FileCodeIcon,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-  ],
   navSecondary: [
     {
       title: "Ajustes",
@@ -109,23 +78,12 @@ const data = {
     {
       name: "Reportes",
       url: "#",
-      icon: ClipboardListIcon,
+      icon: BarChartIcon,
     },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const getRole = () => {
-    try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem("aaces_user") : null
-      if (!raw) return undefined
-      const u = JSON.parse(raw)
-      return (u.rol || u.role) as string | undefined
-    } catch {
-      return undefined
-    }
-  }
-
   const getIsSuperAdmin = () => {
     try {
       const raw = typeof window !== "undefined" ? localStorage.getItem("aaces_user") : null
@@ -137,83 +95,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
-  const [role, setRole] = React.useState<string | undefined>(undefined)
-  const [isSuperAdmin, setIsSuperAdmin] = React.useState(false)
-  React.useEffect(() => {
-    setRole(getRole())
-    setIsSuperAdmin(getIsSuperAdmin())
-  }, [])
+  const [navMain, setNavMain] = React.useState(MENU_CLIENTE)
 
-  const navMain = [
-    {
-      title: "Dashboard",
-      url: role === "admin" ? "/admin/dashboard" : "/cliente/dashboard",
-      icon: LayoutDashboardIcon,
-    },
-    {
-      title: "Cursos",
-      url: role === "admin" ? "/admin/clientes" : "/cliente/cursos",
-      icon: ListIcon,
-    },
-    {
-      title: "Plantillas",
-      url: role === "admin" ? "/admin/templates" : "/cliente/templates",
-      icon: StampIcon,
-    },
-    ...(isSuperAdmin
-      ? [
-          {
-            title: "Documentos",
-            url: "/admin/dashboard",
-            icon: FileTextIcon,
-          },
-        ]
-      : []),
-    {
-      title: "Constancias",
-      url: role === "admin" ? "/admin/dashboard" : "/cliente/constancias",
-      icon: ScrollTextIcon,
-    },
-    {
-      title: "Reportes",
-      url: "/analytics",
-      icon: BarChartIcon,
-    },
-    {
-      title: "Pagos",
-      url: role === "admin" ? "/admin/dashboard" : "/cliente/pagos",
-      icon: CreditCardIcon,
-    },
-    ...(role === "admin"
-      ? []
-      : [
-          {
-            title: "Gestión",
-            url: "/cliente/gestion",
-            icon: FolderIcon,
-          },
-        ]),
-    ...(isSuperAdmin
-      ? [
-          {
-            title: "Organizaciones",
-            url: "/admin/organizaciones",
-            icon: FolderIcon,
-          },
-          {
-            title: "Mensajes",
-            url: "/admin/contacto",
-            icon: MailIcon,
-          },
-        ]
-      : [
-          {
-            title: "Calendario",
-            url: "/cliente/cursos?view=calendar",
-            icon: CalendarIcon,
-          },
-        ]),
-  ]
+  React.useEffect(() => {
+    const isSuperAdmin = getIsSuperAdmin()
+    setNavMain(isSuperAdmin ? MENU_SUPERADMIN : MENU_CLIENTE)
+  }, [])
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -236,15 +123,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavDocuments items={data.documents} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="TEST PAGOS">
-              <a href="/cliente/pagos" onClick={(e) => { e.stopPropagation(); window.location.href = '/cliente/pagos' }}>TEST PAGOS</a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
       </Sidebar>
   )
 }

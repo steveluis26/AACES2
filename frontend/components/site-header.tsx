@@ -7,16 +7,16 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import Image from "next/image"
 
 export function SiteHeader() {
-  const [role, setRole] = useState<string | undefined>(undefined)
+  const [href, setHref] = useState("/cliente/dashboard")
   useEffect(() => {
     try {
       const raw = typeof window !== "undefined" ? localStorage.getItem("aaces_user") : null
       if (!raw) return
       const u = JSON.parse(raw)
-      setRole((u.rol || u.role) as string | undefined)
+      const isSuperAdmin = u.isSuperAdmin === true
+      setHref(isSuperAdmin ? "/admin/dashboard" : "/cliente/dashboard")
     } catch {}
   }, [])
-  const href = role === "admin" ? "/admin/dashboard" : "/cliente/dashboard"
   return (
     <header className="group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 flex h-12 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
