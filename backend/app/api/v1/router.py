@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import clientes, validaciones, auth, admin, contacto, dashboard, templates, documentos, constancias, verificaciones
+from app.api.v1.endpoints import clientes, validaciones, auth, admin, contacto, dashboard, templates, documentos, constancias, verificaciones, reportes
 
 api_router = APIRouter()
 
@@ -19,4 +19,4 @@ api_router.include_router(verificaciones.router, prefix="/verificaciones", tags=
 # api_router.include_router(cursos.router, prefix="/cursos", tags=["cursos"])
 # api_router.include_router(participantes.router, prefix="/participantes", tags=["participantes"])
 # api_router.include_router(pagos.router, prefix="/pagos", tags=["pagos"])
-# api_router.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
+api_router.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
