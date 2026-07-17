@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.database import engine
@@ -29,11 +30,24 @@ def setup_logging():
 async def lifespan(app: FastAPI):
     setup_logging()
     try:
-        async with engine.begin() as conn:
+        async with engine.connect() as conn:
+            await conn.execute(text("SET search_path TO aaces"))
             await ensure_schema(conn)
+            await conn.commit()
+        async with engine.connect() as conn:
+            await conn.execute(text("SET search_path TO aaces"))
             await ensure_indexes(conn)
+            await conn.commit()
+        async with engine.connect() as conn:
+            await conn.execute(text("SET search_path TO aaces"))
             await ensure_seed_data(conn, security_service.hash_password)
+            await conn.commit()
+        async with engine.connect() as conn:
+            await conn.execute(text("SET search_path TO aaces"))
             await ensure_schema_version(conn)
+            await conn.commit()
+        async with engine.connect() as conn:
+            await conn.execute(text("SET search_path TO aaces"))
             health = await check_schema_health(conn)
             if health.status == "BROKEN":
                 logger.error("Schema health BROKEN: missing %s", health.missing_tables)

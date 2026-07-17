@@ -8,8 +8,16 @@ logger = logging.getLogger(__name__)
 
 
 async def ensure_seed_data(conn: AsyncConnection, hash_password_fn) -> None:
-    await _ensure_plans(conn)
-    await _ensure_admin(conn, hash_password_fn)
+    try:
+        async with conn.begin_nested():
+            await _ensure_plans(conn)
+    except Exception as e:
+        logger.warning(f"Failed to seed plans: {e}")
+    try:
+        async with conn.begin_nested():
+            await _ensure_admin(conn, hash_password_fn)
+    except Exception as e:
+        logger.warning(f"Failed to seed admin: {e}")
 
 
 async def _ensure_plans(conn: AsyncConnection) -> None:
@@ -39,7 +47,7 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
 
 
 async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
-    res = await conn.execute(text("SELECT COUNT(*) FROM clientes"))
+    res = await conn.execute(text("SELECT COUNT(*) FROM aaces.clientes"))
     if int(res.scalar() or 0) > 0:
         return
 
@@ -47,7 +55,7 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     ph = hash_password_fn("admin123")
     await conn.execute(
         text(
-            "INSERT INTO clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos, plan, cursos_max, cursos_creados, descuento_pct) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true, 'ilimitado', 999999, 0, 0)"
+            "INSERT INTO aaces.clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos, plan, cursos_max, cursos_creados, descuento_pct) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true, 'ilimitado', 999999, 0, 0)"
         ),
         {"id": str(uuid.uuid4()), "nombre": "Administrador", "correo": "admin@aaces.com", "ph": ph},
     )

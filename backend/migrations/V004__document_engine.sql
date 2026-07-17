@@ -151,14 +151,14 @@ CREATE INDEX IF NOT EXISTS idx_docs_folio ON aaces.documentos_emitidos (folio);
 CREATE INDEX IF NOT EXISTS idx_verificaciones_codigo ON aaces.verificaciones (codigo);
 CREATE INDEX IF NOT EXISTS idx_verificaciones_fecha ON aaces.verificaciones (fecha);
 CREATE INDEX IF NOT EXISTS idx_verificaciones_documento ON aaces.verificaciones (documento_id);
-CREATE INDEX IF NOT EXISTS idx_clientes_org_id ON aaces.clientes (organizacion_id);
-CREATE INDEX IF NOT EXISTS idx_registro_intentos_fecha ON aaces.registro_intentos (fecha);
-
 -- Vincular clientes legacy con organizaciones (columna agregada en main.py)
 ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL;
 ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE;
 ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE;
 ALTER TABLE aaces.clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_clientes_org_id ON aaces.clientes (organizacion_id);
+CREATE INDEX IF NOT EXISTS idx_registro_intentos_fecha ON aaces.registro_intentos (fecha);
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS aaces.schema_version (

@@ -65,6 +65,40 @@ async def create_grupos_curso(conn: AsyncConnection) -> None:
     """))
 
 
+async def create_clientes(conn: AsyncConnection) -> None:
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.clientes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nombre VARCHAR(100) NOT NULL,
+          correo VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          ciudad_base VARCHAR(100),
+          categoria VARCHAR(20) NOT NULL DEFAULT 'basico',
+          estado VARCHAR(20) NOT NULL DEFAULT 'activo',
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_cambio_categoria TIMESTAMP WITH TIME ZONE,
+          ultimo_acceso TIMESTAMP WITH TIME ZONE,
+          intentos_fallidos INTEGER DEFAULT 0,
+          bloqueado_hasta TIMESTAMP WITH TIME ZONE,
+          acepta_terminos BOOLEAN DEFAULT false,
+          fecha_acepta_terminos TIMESTAMP WITH TIME ZONE,
+          datos_procesados BOOLEAN DEFAULT true,
+          fecha_eliminacion_logica TIMESTAMP WITH TIME ZONE,
+          must_change_password BOOLEAN DEFAULT false,
+          vigencia_desde DATE,
+          vigencia_hasta DATE,
+          plan VARCHAR(20) NOT NULL DEFAULT 'trial',
+          cursos_creados INTEGER NOT NULL DEFAULT 0,
+          cursos_max INTEGER NOT NULL DEFAULT 10,
+          descuento_pct INTEGER NOT NULL DEFAULT 0,
+          organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL,
+          CONSTRAINT check_categoria CHECK (categoria IN ('basico', 'premium', 'enterprise')),
+          CONSTRAINT check_estado_cliente CHECK (estado IN ('activo', 'suspendido', 'eliminado'))
+        )
+    """))
+
+
 async def create_contactos(conn: AsyncConnection) -> None:
     await conn.execute(text("""
         CREATE TABLE IF NOT EXISTS aaces.contactos (
@@ -103,8 +137,7 @@ async def create_planes(conn: AsyncConnection) -> None:
           fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
     """))
-    for col in ["id", "activo"]:
-        await conn.execute(text(f"ALTER TABLE aaces.planes ALTER COLUMN {col} SET DEFAULT gen_random_uuid()"))
+    await conn.execute(text("ALTER TABLE aaces.planes ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
 
 
 async def create_organizaciones(conn: AsyncConnection) -> None:
@@ -269,7 +302,8 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "UPDATE aaces.usuarios SET activo = true WHERE activo IS NULL",
     ]:
         try:
-            await conn.execute(text(stmt))
+            async with conn.begin_nested():
+                await conn.execute(text(stmt))
         except Exception:
             pass
 
@@ -278,8 +312,8 @@ async def ensure_schema(conn: AsyncConnection) -> None:
     logger.info("Ensuring database schema...")
     await create_aaces_schema(conn)
     await create_extensions(conn)
-    await create_metadata_tables(conn)
     for fn in [
+        create_clientes,
         create_tipos_curso,
         create_grupos_curso,
         create_contactos,
@@ -294,7 +328,9 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_legacy_fixes,
     ]:
         try:
-            await fn(conn)
+            async with conn.begin_nested():
+                await fn(conn)
         except Exception as e:
             logger.warning(f"Schema step {fn.__name__} failed: {e}")
+            logger.warning(f"Step {fn.__name__} error type: {type(e).__name__}")
     logger.info("Database schema ensured.")

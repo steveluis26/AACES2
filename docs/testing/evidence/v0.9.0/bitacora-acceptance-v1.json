@@ -1,0 +1,320 @@
+{
+  "timestamp": "2026-07-16T20:05:52.905319",
+  "base_url": "http://localhost:8000/api/v1",
+  "total_pasos": 27,
+  "pasados": 27,
+  "fallados": 0,
+  "resultados": [
+    {
+      "step": "0.1",
+      "descripcion": "Login como administrador",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 358,
+      "evidence": {
+        "token_prefix": "eyJhbGciOiJIUzI1NiIs..."
+      }
+    },
+    {
+      "step": "1.1",
+      "descripcion": "Crear curso",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 52,
+      "evidence": {
+        "curso_id": "d102fcb2-c809-4de0-822e-a959d1583088"
+      }
+    },
+    {
+      "step": "1.2",
+      "descripcion": "Registrar participante",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 16,
+      "evidence": {
+        "participante_id": "280aca12-fb9a-440d-9e3f-95924a1396ed"
+      }
+    },
+    {
+      "step": "1.3",
+      "descripcion": "Acreditar participante",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 14,
+      "evidence": {}
+    },
+    {
+      "step": "1.4",
+      "descripcion": "Verificar KPIs dashboard",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 9,
+      "evidence": {
+        "dashboard": {
+          "total_cursos": 21,
+          "total_participantes": 19,
+          "total_acreditados": 18,
+          "constancias_emitidas": 16
+        }
+      }
+    },
+    {
+      "step": "2.1",
+      "descripcion": "Emitir constancia",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 8,
+      "evidence": {
+        "documento_id": "01952ab5-89fc-468f-a8a5-caaaf3b8c2e9"
+      }
+    },
+    {
+      "step": "2.2",
+      "descripcion": "Verificar folio asignado",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "folio": "FOL-63F09FAC",
+        "documento": "{'id': '01952ab5-89fc-468f-a8a5-caaaf3b8c2e9', 'tipo_documento': 'CONSTANCIA', 'estatus': 'emitido', 'codigo_validacion': '3d0a91a7-bc4d-4b64-965a-50b8c907306a', 'folio': 'FOL-63F09FAC', 'fecha_emision': '2026-07-17T02:05:52.820395+00:00', 'pdf_url': '/constancias/01952ab5-89fc-468f-a8a5-caaaf3b8c2e9/pdf', 'storage_key': 'constancias/01952ab5-89fc-468f-a8a5-caaaf3b8c2e9.pdf'}"
+      }
+    },
+    {
+      "step": "2.3",
+      "descripcion": "Descargar PDF",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 4,
+      "evidence": {
+        "size_bytes": 328,
+        "path": "docs/testing/evidence/v0.9.0/02-pdf.pdf"
+      }
+    },
+    {
+      "step": "2.4",
+      "descripcion": "Verificar QR URL",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 2,
+      "evidence": {
+        "qr_url": "3d0a91a7-bc4d-4b64-965a-50b8c907306a"
+      }
+    },
+    {
+      "step": "2.5",
+      "descripcion": "Verificar KPIs actualizados",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "dashboard": {
+          "total_cursos": 21,
+          "total_participantes": 19,
+          "total_acreditados": 18,
+          "constancias_emitidas": 17
+        }
+      }
+    },
+    {
+      "step": "3.1",
+      "descripcion": "Verificaci\u00f3n p\u00fablica",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 4,
+      "evidence": {
+        "verificacion": "{'valida': True, 'codigo_validacion': '3d0a91a7-bc4d-4b64-965a-50b8c907306a', 'tipo_documento': 'CONSTANCIA', 'estatus': 'emitido', 'folio': 'FOL-63F09FAC', 'fecha_emision': '2026-07-17T02:05:52.820395+00:00'}"
+      }
+    },
+    {
+      "step": "3.2",
+      "descripcion": "Consultar timeline",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 2,
+      "evidence": {
+        "eventos": [
+          "emitido"
+        ]
+      }
+    },
+    {
+      "step": "3.3",
+      "descripcion": "Verificaci\u00f3n registrada en BD",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 4,
+      "evidence": {
+        "verificaciones": "[{'id': '1fa1ade0-10cb-43d0-a3c5-5164bbec9fbc', 'documento_id': '01952ab5-89fc-468f-a8a5-caaaf3b8c2e9', 'codigo': '3d0a91a7-bc4d-4b64-965a-50b8c907306a', 'fecha': '2026-07-17T02:05:52.842728+00:00', 'tipo': 'API', 'resultado': 'VALIDA'}]"
+      }
+    },
+    {
+      "step": "4.1",
+      "descripcion": "Cancelar constancia",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {}
+    },
+    {
+      "step": "4.2",
+      "descripcion": "Timeline con cancelacion",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 1,
+      "evidence": {
+        "eventos": [
+          "emitido",
+          "cancelado"
+        ]
+      }
+    },
+    {
+      "step": "4.3",
+      "descripcion": "Verificaci\u00f3n p\u00fablica refleja cancelaci\u00f3n",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 2,
+      "evidence": {
+        "verificacion": "{'valida': False, 'codigo_validacion': '3d0a91a7-bc4d-4b64-965a-50b8c907306a', 'tipo_documento': 'CONSTANCIA', 'estatus': 'cancelado', 'folio': 'FOL-63F09FAC', 'fecha_emision': '2026-07-17T02:05:52.820395+00:00'}"
+      }
+    },
+    {
+      "step": "4.4",
+      "descripcion": "Reemitir constancia",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 5,
+      "evidence": {
+        "nuevo_documento_id": "fdc0a7a3-5c8a-4d65-859d-c85bfb6b5f19"
+      }
+    },
+    {
+      "step": "4.5",
+      "descripcion": "Timeline tras reemision",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "eventos": [
+          "emitido",
+          "cancelado",
+          "reemitido"
+        ]
+      }
+    },
+    {
+      "step": "4.6",
+      "descripcion": "Buscar por folio",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 6,
+      "evidence": {
+        "folio": "FOL-63F09FAC",
+        "count": 1
+      }
+    },
+    {
+      "step": "4.7",
+      "descripcion": "Buscar por UUID exacto",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 2,
+      "evidence": {
+        "id": "01952ab5-89fc-468f-a8a5-caaaf3b8c2e9"
+      }
+    },
+    {
+      "step": "4.8",
+      "descripcion": "Buscar ILIKE parcial",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "count": 0
+      }
+    },
+    {
+      "step": "5.1",
+      "descripcion": "Reporte: constancias por per\u00edodo",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 4,
+      "evidence": {
+        "data": [
+          {
+            "periodo": "2026-07-01 06:00:00+00:00",
+            "total": 18
+          }
+        ]
+      }
+    },
+    {
+      "step": "5.2",
+      "descripcion": "Reporte: tiempo promedio emisi\u00f3n",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "promedio_dias": 0.0
+      }
+    },
+    {
+      "step": "5.3",
+      "descripcion": "Reporte: documentos no verificados",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "count": 11
+      }
+    },
+    {
+      "step": "5.4",
+      "descripcion": "Reporte: cursos top",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 3,
+      "evidence": {
+        "data": [
+          {
+            "curso": "Acceptance Test Curso",
+            "total": 1
+          },
+          {
+            "curso": "Acceptance Test Curso",
+            "total": 1
+          },
+          {
+            "curso": "Acceptance Test Curso",
+            "total": 1
+          }
+        ]
+      }
+    },
+    {
+      "step": "5.5",
+      "descripcion": "Reporte: empresas top",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 4,
+      "evidence": {
+        "data": [
+          {
+            "empresa": "Administrador",
+            "total": 3
+          }
+        ]
+      }
+    },
+    {
+      "step": "5.6",
+      "descripcion": "Reporte: pr\u00f3ximos a vencer",
+      "resultado": "\u2705",
+      "error": null,
+      "duracion_ms": 4,
+      "evidence": {
+        "count": 0
+      }
+    }
+  ]
+}

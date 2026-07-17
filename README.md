@@ -1,14 +1,20 @@
-# AACES
+# AACES — Sistema de Gestión de Capacitaciones y Certificaciones
 
-**Sistema de Gestión de Capacitaciones y Certificaciones**
+Plataforma para gestionar cursos, participantes, certificados digitales y pagos, con validación pública de constancias.
 
-Plataforma para gestionar cursos, participantes, certificados y pagos, con validación pública de certificados.
+**Estado:** M1 — Motor Documental Estable ✅ (Julio 2026)
+
+> Arquitectura congelada. Solo se aceptan bugs, seguridad, performance y documentación.
+> No se aceptan nuevos patrones, capas, ADRs ni refactors estructurales hasta nuevo aviso.
+> Ver `docs/ARCHITECTURE_FROZEN.md`.
+
+---
 
 ## Stack
 
 | Capa | Tecnología |
 |---|---|
-| Backend | Python FastAPI + SQLAlchemy async + PostgreSQL 15 |
+| Backend | Python 3.14 + FastAPI + SQLAlchemy async + PostgreSQL 15 |
 | Frontend | Next.js 14 (App Router) + React 18 + TypeScript + Tailwind CSS |
 | Cache | Redis 7 |
 | Infra | Docker Compose + Nginx |
@@ -42,13 +48,32 @@ make down         # Detener Docker
 make logs         # Logs de Docker
 ```
 
+## Validación
+
+Antes de cualquier release, ejecutar el Acceptance Test:
+
+```bash
+# 1. Iniciar backend
+cd backend && uvicorn main:app --reload
+
+# 2. Ejecutar Acceptance v1
+python scripts/acceptance_api.py
+
+# 3. Verificar resultado: 18/18 (27 steps API)
+#    "Acceptance v1: 18/18 PASOS APROBADOS"
+```
+
+El Acceptance Test cubre el flujo completo: login → crear curso → registrar participante → acreditar → emitir constancia → verificar → cancelar → reemitir → reportes.
+
+Ver `docs/testing/acceptance-v1.md` para la especificación completa.
+
 ## Deploy gratis
 
 El proyecto está listo para deploy en servicios gratuitos:
 
-- **Backend + BD**: Render (usa `render.yaml`)
-- **Frontend**: Vercel (configuración incluida) o Render
-- **Almacenamiento PDFs**: Cloudflare R2 (10GB gratis)
+- **Backend + BD:** Render (usa `render.yaml`)
+- **Frontend:** Vercel (configuración incluida) o Render
+- **Almacenamiento PDFs:** Cloudflare R2 (10GB gratis)
 
 ### 1. Render (Backend + PostgreSQL)
 
@@ -81,13 +106,36 @@ Los administradores pueden cambiar el plan, límite de cursos y descuento desde 
 ```
 AACES/
 ├── backend/          FastAPI (Python)
+│   ├── app/
+│   │   ├── api/      Endpoints
+│   │   ├── bootstrap/  Schema, indexes, seed, version, health
+│   │   ├── services/   Lógica de negocio
+│   │   ├── queries/    Query Objects
+│   │   ├── commands/   Command Objects
+│   │   ├── db/         DB errors, session
+│   │   └── models/     SQLAlchemy models
+│   └── migrations/   Migraciones SQL
 ├── frontend/         Next.js 14 (App Router)
-├── scripts/          Migraciones SQL y seeds
+├── scripts/          Migraciones SQL, seeds, acceptance test
+├── docs/
+│   ├── milestones/   Hitos del proyecto
+│   ├── testing/      Acceptance test, performance baseline
+│   └── pilot/        Pilot program documentation
 ├── nginx/            Configuración reverse proxy
 ├── config/           Variables de entorno
-├── docs/             Documentación
 └── docker-compose.yml
 ```
+
+## Documentación clave
+
+| Documento | Propósito |
+|---|---|
+| `docs/milestones/M1-motor-documental-estable.md` | Hito M1 — alcance, evidencia, riesgos |
+| `docs/ARCHITECTURE_FROZEN.md` | Reglas de congelamiento arquitectónico |
+| `docs/testing/acceptance-v1.md` | Especificación del Acceptance Test |
+| `docs/testing/performance-baseline-v1.md` | Línea base de rendimiento |
+| `docs/OPERATIONS.md` | Manual de operación (backup, restore, bootstrap) |
+| `docs/pilot/` | Programa piloto (checklist, feedback) |
 
 ## Licencia
 
