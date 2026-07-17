@@ -88,6 +88,10 @@ export default function ClienteDashboardPage() {
     apiRequest<Onboarding>("/clientes/dashboard/onboarding"),
     { retry: 1 },
   )
+  const vencimientos = useQuery(["dashboard", "vencimientos"], () =>
+    apiRequest("participantes/vencimientos-por-empresa"),
+    { refetchInterval: 60000, retry: 1 },
+  )
 
   const isLoading = resumen.isLoading || confianza.isLoading
   const anyError = resumen.error || confianza.error || alertas.error
@@ -160,6 +164,39 @@ export default function ClienteDashboardPage() {
 
           <div className="px-4 lg:px-6">
             <QuickActions onboarding={onboarding.data} />
+          </div>
+
+          <div className="px-4 lg:px-6">
+            <div className="rounded-lg border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Próximos a vencer</h3>
+                <a href="/cliente/renovaciones" className="text-xs text-primary hover:underline">Ver todos</a>
+              </div>
+              {vencimientos.isLoading ? (
+                <p className="text-xs text-muted-foreground">Cargando...</p>
+              ) : (vencimientos.data as { empresa: string; por_vencer: number; vencidos: number; vigentes: number; total: number }[])?.length > 0 ? (
+                <div className="space-y-2">
+                  {(vencimientos.data as { empresa: string; por_vencer: number; vencidos: number; vigentes: number; total: number }[]).slice(0, 5).map((v: { empresa: string; por_vencer: number; vencidos: number; vigentes: number; total: number }) => (
+                    <div key={v.empresa} className="flex items-center justify-between text-sm">
+                      <span className="truncate max-w-[180px]">{v.empresa}</span>
+                      <div className="flex gap-3 text-xs">
+                        {v.por_vencer > 0 && <span className="text-yellow-600 font-medium">{v.por_vencer} por vencer</span>}
+                        {v.vencidos > 0 && <span className="text-red-600 font-medium">{v.vencidos} vencidos</span>}
+                        <span className="text-muted-foreground">{v.total} total</span>
+                      </div>
+                    </div>
+                  ))}
+                  <a href="/cliente/renovaciones" className="text-xs text-primary hover:underline block text-center pt-1">
+                    Ver {(
+                      (vencimientos.data as { por_vencer: number; vencidos: number }[]).reduce((a: number, v: { por_vencer: number }) => a + (v.por_vencer || 0), 0) +
+                      (vencimientos.data as { vencidos: number }[]).reduce((a: number, v: { vencidos: number }) => a + (v.vencidos || 0), 0)
+                    )} participantes por atender
+                  </a>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Todos los cursos están vigentes</p>
+              )}
+            </div>
           </div>
 
           {(alertas.data as unknown[])?.length > 0 && (

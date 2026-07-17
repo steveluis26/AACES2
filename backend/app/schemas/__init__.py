@@ -92,6 +92,7 @@ class CursoBase(BaseSchema):
     categoria: str = Field("general", max_length=100)
     duracion_horas: int = Field(..., ge=1)
     duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses")
+    vigencia_meses: Optional[int] = Field(None, ge=1, description="Alias de duracion_validacion")
     costo_total: Optional[float] = Field(None, ge=0)
     fecha_inicio: date
     fecha_fin: date
@@ -109,6 +110,7 @@ class CursoUpdate(BaseSchema):
     categoria: Optional[str] = Field(None, min_length=1, max_length=100)
     duracion_horas: Optional[int] = Field(None, ge=1)
     duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses")
+    vigencia_meses: Optional[int] = Field(None, ge=1, description="Alias de duracion_validacion")
     costo_total: Optional[float] = Field(None, ge=0)
     fecha_inicio: Optional[date] = None
     fecha_fin: Optional[date] = None

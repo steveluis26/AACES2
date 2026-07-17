@@ -1,6 +1,7 @@
 from __future__ import annotations
 import secrets
 import string
+from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -21,6 +22,135 @@ def _generate_pax_id() -> str:
 
 class AcreditarSchema(BaseModel):
     calificacion: float = Field(..., ge=0, le=100)
+
+
+# ── Vigencia and renovaciones ────────────────────────────────────
+
+
+@router.get("/proximos-a-vencer")
+async def participantes_proximos_a_vencer(
+    dias: int = Query(60, ge=1, le=365),
+    empresa: str = Query(""),
+    user_data: dict = Depends(get_current_user_data),
+    db: AsyncSession = Depends(get_db),
+):
+    cid = user_data.get("sub")
+    if not cid:
+        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+
+    if empresa:
+        rows = (
+            await db.execute(
+                text("""
+                    SELECT
+                      p.id, p.pax_id, p.nombre, p.correo, p.telefono,
+                      COALESCE(cp.empresa_participacion, p.empresa) AS empresa_actual,
+                      c.nombre AS curso_nombre, c.codigo_curso,
+                      cp.fecha_expiracion,
+                      CASE
+                        WHEN cp.fecha_expiracion < CURRENT_DATE THEN 'vencido'
+                        WHEN cp.fecha_expiracion <= CURRENT_DATE + :dias THEN 'por_vencer'
+                        ELSE 'vigente'
+                      END AS estado_vigencia,
+                      c.id AS curso_id
+                    FROM aaces.curso_participante cp
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    JOIN aaces.participantes p ON p.id = cp.participante_id
+                    WHERE c.cliente_id = :cid
+                      AND cp.fecha_expiracion IS NOT NULL
+                      AND cp.fecha_expiracion <= CURRENT_DATE + :dias
+                      AND COALESCE(cp.empresa_participacion, p.empresa) ILIKE :emp
+                    ORDER BY cp.fecha_expiracion ASC
+                """),
+                {"cid": cid, "dias": timedelta(days=dias), "emp": f"%{empresa}%"},
+            )
+        ).fetchall()
+    else:
+        rows = (
+            await db.execute(
+                text("""
+                    SELECT
+                      p.id, p.pax_id, p.nombre, p.correo, p.telefono,
+                      COALESCE(cp.empresa_participacion, p.empresa) AS empresa_actual,
+                      c.nombre AS curso_nombre, c.codigo_curso,
+                      cp.fecha_expiracion,
+                      CASE
+                        WHEN cp.fecha_expiracion < CURRENT_DATE THEN 'vencido'
+                        WHEN cp.fecha_expiracion <= CURRENT_DATE + :dias THEN 'por_vencer'
+                        ELSE 'vigente'
+                      END AS estado_vigencia,
+                      c.id AS curso_id
+                    FROM aaces.curso_participante cp
+                    JOIN aaces.cursos c ON c.id = cp.curso_id
+                    JOIN aaces.participantes p ON p.id = cp.participante_id
+                    WHERE c.cliente_id = :cid
+                      AND cp.fecha_expiracion IS NOT NULL
+                      AND cp.fecha_expiracion <= CURRENT_DATE + :dias
+                    ORDER BY cp.fecha_expiracion ASC
+                """),
+                {"cid": cid, "dias": timedelta(days=dias)},
+            )
+        ).fetchall()
+
+    return [
+        {
+            "participante_id": str(r[0]),
+            "pax_id": r[1],
+            "nombre": r[2],
+            "correo": r[3],
+            "telefono": r[4],
+            "empresa": r[5],
+            "curso_nombre": r[6],
+            "codigo_curso": r[7],
+            "fecha_expiracion": r[8].isoformat() if r[8] else None,
+            "estado_vigencia": r[9],
+            "curso_id": str(r[10]),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/vencimientos-por-empresa")
+async def vencimientos_por_empresa(
+    user_data: dict = Depends(get_current_user_data),
+    db: AsyncSession = Depends(get_db),
+):
+    cid = user_data.get("sub")
+    if not cid:
+        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+
+    rows = (
+        await db.execute(
+            text("""
+                SELECT
+                  COALESCE(cp.empresa_participacion, p.empresa) AS empresa,
+                  COUNT(*) FILTER (WHERE cp.fecha_expiracion >= CURRENT_DATE AND cp.fecha_expiracion <= CURRENT_DATE + INTERVAL '60 days') AS por_vencer,
+                  COUNT(*) FILTER (WHERE cp.fecha_expiracion < CURRENT_DATE) AS vencidos,
+                  COUNT(*) FILTER (WHERE cp.fecha_expiracion >= CURRENT_DATE + INTERVAL '61 days' OR cp.fecha_expiracion IS NULL) AS vigentes,
+                  COUNT(*) AS total
+                FROM aaces.curso_participante cp
+                JOIN aaces.cursos c ON c.id = cp.curso_id
+                JOIN aaces.participantes p ON p.id = cp.participante_id
+                WHERE c.cliente_id = :cid
+                GROUP BY empresa
+                ORDER BY por_vencer DESC, vencidos DESC
+            """),
+            {"cid": cid},
+        )
+    ).fetchall()
+
+    return [
+        {
+            "empresa": r[0] or "Sin empresa",
+            "por_vencer": r[1],
+            "vencidos": r[2],
+            "vigentes": r[3],
+            "total": r[4],
+        }
+        for r in rows
+    ]
 
 
 # ── Standalone CRUD ──────────────────────────────────────────────

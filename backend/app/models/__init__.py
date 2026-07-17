@@ -175,6 +175,7 @@ class CursoParticipante(Base):
     estado_acreditacion = Column(Boolean, default=False)
     calificacion = Column(Numeric(5, 2))
     asistencia = Column(Numeric(5, 2), default=0)
+    empresa_participacion = Column(String(200))
     observaciones = Column(Text)
     certificado_url = Column(Text)
     fecha_emision_certificado = Column(DateTime(timezone=True))
