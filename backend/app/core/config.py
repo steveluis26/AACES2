@@ -83,6 +83,8 @@ class Settings(BaseSettings):
 
     # Payments & URLs
     MERCADOPAGO_ACCESS_TOKEN: str = os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:3000")
     PUBLIC_API_BASE_URL: str = os.getenv("PUBLIC_API_BASE_URL", "http://127.0.0.1:8000/api/v1")
     PUBLIC_FRONTEND_URL: str = os.getenv("PUBLIC_FRONTEND_URL", "http://127.0.0.1:3000")
