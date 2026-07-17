@@ -166,8 +166,46 @@ class ParticipanteUpdate(BaseSchema):
 
 class ParticipanteResponse(ParticipanteBase):
     id: UUID
+    pax_id: str
     fecha_creacion: datetime
     fecha_actualizacion: datetime
+
+
+class CursoEnHistorial(BaseSchema):
+    curso_id: UUID
+    curso_nombre: str
+    codigo_curso: str
+    fecha_inicio: Optional[date] = None
+    fecha_fin: Optional[date] = None
+    duracion_horas: Optional[int] = None
+    modalidad: Optional[str] = None
+    ciudad: Optional[str] = None
+    empresa_contratante: Optional[str] = None
+    fecha_inicio_vigencia: Optional[date] = None
+    fecha_expiracion: Optional[date] = None
+    estado_acreditacion: bool = False
+    calificacion: Optional[float] = None
+    constancias: list[str] = []
+
+
+class ParticipanteFullResponse(ParticipanteResponse):
+    cursos: list[CursoEnHistorial] = []
+    total_cursos: int = 0
+    constancias_count: int = 0
+    vigentes: int = 0
+    por_vencer: int = 0
+    vencidos: int = 0
+
+
+class ParticipantePublicResponse(BaseSchema):
+    pax_id: str
+    nombre: str
+    cursos: list[CursoEnHistorial] = []
+    total_cursos: int = 0
+    constancias_count: int = 0
+    vigentes: int = 0
+    por_vencer: int = 0
+    vencidos: int = 0
 
 # CursoParticipante schemas
 class CursoParticipanteBase(BaseSchema):

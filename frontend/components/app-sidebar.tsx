@@ -15,6 +15,7 @@ import {
   CreditCardIcon,
   MailIcon,
   StampIcon,
+  UsersIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -42,7 +43,8 @@ const MENU_SUPERADMIN = [
 
 const MENU_CLIENTE = [
   { title: "Dashboard",  url: "/cliente/dashboard",   icon: LayoutDashboardIcon },
-  { title: "Cursos",     url: "/cliente/cursos",       icon: ListIcon },
+  { title: "Cursos",        url: "/cliente/cursos",          icon: ListIcon },
+  { title: "Participantes", url: "/cliente/participantes",    icon: UsersIcon },
   { title: "Plantillas", url: "/cliente/templates",    icon: StampIcon },
   { title: "Constancias",url: "/cliente/constancias",  icon: ScrollTextIcon },
   { title: "Pagos",      url: "/cliente/pagos",        icon: CreditCardIcon },

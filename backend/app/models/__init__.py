@@ -126,6 +126,7 @@ class Participante(Base):
     __tablename__ = "participantes"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    pax_id = Column(String(20), unique=True, nullable=False)
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100))
     apellido_paterno = Column(String(100))
@@ -141,6 +142,7 @@ class Participante(Base):
     direccion = Column(Text)
     codigo_postal = Column(String(20))
     pais = Column(String(50), default='Mexico')
+    cliente_id = Column(UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -149,9 +151,11 @@ class Participante(Base):
     
     __table_args__ = (
         CheckConstraint("genero IN ('M', 'F', 'Otro')", name="check_genero"),
+        Index('idx_participantes_pax_id', 'pax_id'),
         Index('idx_participantes_correo', 'correo'),
         Index('idx_participantes_nombre', 'nombre', 'apellido'),
         Index('idx_participantes_nombres_apellidos', 'nombre', 'apellido', 'apellido_paterno', 'apellido_materno'),
+        Index('idx_participantes_cliente_id', 'cliente_id'),
     )
 
 class CursoParticipante(Base):
