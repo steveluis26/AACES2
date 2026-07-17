@@ -430,8 +430,8 @@ class DocumentoEmitido(Base):
     __tablename__ = "documentos_emitidos"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("aaces.organizaciones.id", ondelete="CASCADE"), nullable=False)
-    template_id = Column(UUID(as_uuid=True), ForeignKey("aaces.templates.id", ondelete="SET NULL"))
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("templates.id", ondelete="SET NULL"))
     template_version = Column(Integer)
     tipo_documento = Column(String(30), nullable=False)
     codigo_validacion = Column(UUID(as_uuid=True), default=uuid.uuid4, nullable=False)
@@ -441,7 +441,7 @@ class DocumentoEmitido(Base):
     pdf_hash = Column(String(64), nullable=False)
     html_snapshot = Column(Text)
     documento_metadata = Column("documento_metadata", JSONB, default={})
-    emitido_por = Column(UUID(as_uuid=True), ForeignKey("aaces.usuarios.id", ondelete="SET NULL"))
+    emitido_por = Column(UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"))
     fecha_emision = Column(DateTime(timezone=True), server_default=func.now())
     estatus = Column(String(20), default='emitido', nullable=False)
 
@@ -462,7 +462,7 @@ class Verificacion(Base):
     __tablename__ = "verificaciones"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    documento_id = Column(UUID(as_uuid=True), ForeignKey("aaces.documentos_emitidos.id", ondelete="CASCADE"), nullable=True)
+    documento_id = Column(UUID(as_uuid=True), ForeignKey("documentos_emitidos.id", ondelete="CASCADE"), nullable=True)
     codigo = Column(String(36), nullable=False, index=True)
     fecha = Column(DateTime(timezone=True), server_default=func.now())
     ip = Column(String(45))

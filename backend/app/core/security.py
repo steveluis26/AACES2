@@ -6,10 +6,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import logging
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.models import Cliente
+
+logger = logging.getLogger(__name__)
 
 # Security setup
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -127,7 +130,8 @@ async def get_current_user(
     
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        logger.error(f"get_current_user error: {e}")
         raise credentials_exception
 
 async def get_current_active_user(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:

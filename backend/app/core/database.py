@@ -29,19 +29,9 @@ engine = create_async_engine(
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     pool_pre_ping=True,
     pool_recycle=3600,
-    future=True
+    future=True,
+    connect_args={"server_settings": {"search_path": "aaces"}},
 )
-
-# Ensure correct schema search_path
-def _set_search_path(dbapi_conn, conn_record):
-    try:
-        cursor = dbapi_conn.cursor()
-        cursor.execute("SET search_path TO aaces")
-        cursor.close()
-    except Exception:
-        pass
-
-event.listen(engine.sync_engine, "connect", _set_search_path)
 
 # Create async session factory
 AsyncSessionLocal = async_sessionmaker(

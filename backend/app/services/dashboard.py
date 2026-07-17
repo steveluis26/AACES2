@@ -112,7 +112,7 @@ class DashboardService:
                 con_constancia = await db.execute(
                     text(f"""
                         SELECT count(DISTINCT cp.id) FROM aaces.documentos_emitidos d
-                        JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion
+                        JOIN aaces.curso_participante cp ON cp.codigo_validacion = CAST(d.codigo_validacion AS varchar)
                         JOIN aaces.cursos c ON c.id = cp.curso_id
                         WHERE c.cliente_id IN ({cid_list}) AND d.tipo_documento = 'CONSTANCIA'
                     """)
