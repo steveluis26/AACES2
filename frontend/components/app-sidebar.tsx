@@ -27,6 +27,7 @@ import { NavSecondary } from "@/components/nav-secondary"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -235,7 +236,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavDocuments items={data.documents} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
-      {/* SidebarFooter removido */}
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="TEST PAGOS">
+              <a href="/cliente/pagos" onClick={(e) => { e.stopPropagation(); window.location.href = '/cliente/pagos' }}>TEST PAGOS</a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       </Sidebar>
   )
 }
