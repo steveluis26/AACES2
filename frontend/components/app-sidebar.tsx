@@ -64,7 +64,7 @@ const data = {
   navSecondary: [
     {
       title: "Ajustes",
-      url: "#",
+      url: "/cliente/ajustes",
       icon: SettingsIcon,
     },
     {
