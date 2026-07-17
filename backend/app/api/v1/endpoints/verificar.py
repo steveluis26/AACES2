@@ -15,6 +15,11 @@ async def verificar_publico(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    try:
+        uuid.UUID(codigo)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Código de validación inválido")
+
     await db.execute(text("SET LOCAL search_path TO aaces"))
     res = await db.execute(
         text("""

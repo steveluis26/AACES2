@@ -819,7 +819,6 @@ async def get_participantes_por_cliente(
                 CursoParticipante.participante_id,
                 func.max(Participante.nombre),
                 func.max(Participante.apellido),
-                func.max(Participante.nombres),
                 func.max(Participante.apellido_paterno),
                 func.max(Participante.apellido_materno),
                 func.max(Participante.correo),

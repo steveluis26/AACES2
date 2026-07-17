@@ -87,29 +87,29 @@ class CapacitadorResponse(CapacitadorBase):
 
 # Curso schemas
 class CursoBase(BaseSchema):
-    titulo: str = Field(..., min_length=1, max_length=200)
-    descripcion: str = Field(..., min_length=1, max_length=1000)
-    categoria: str = Field(..., min_length=1, max_length=100)
+    nombre: str = Field(..., min_length=1, max_length=200)
+    descripcion: Optional[str] = Field(None, max_length=1000)
+    categoria: str = Field("general", max_length=100)
     duracion_horas: int = Field(..., ge=1)
     duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses")
-    costo: float = Field(..., ge=0)
+    costo_total: Optional[float] = Field(None, ge=0)
     fecha_inicio: date
     fecha_fin: date
     ciudad: str = Field(..., min_length=1, max_length=100)
-    modalidad: str = Field(..., pattern='^(presencial|virtual|mixta)$')
-    capacitador_id: UUID
+    modalidad: Optional[str] = Field(None, pattern='^(presencial|virtual|mixta)$')
+    capacitador_id: Optional[UUID] = None
     estado: str = Field('activo', pattern='^(activo|finalizado|en_espera|cancelado)$')
 
 class CursoCreate(CursoBase):
     pass
 
 class CursoUpdate(BaseSchema):
-    titulo: Optional[str] = Field(None, min_length=1, max_length=200)
+    nombre: Optional[str] = Field(None, min_length=1, max_length=200)
     descripcion: Optional[str] = Field(None, min_length=1, max_length=1000)
     categoria: Optional[str] = Field(None, min_length=1, max_length=100)
     duracion_horas: Optional[int] = Field(None, ge=1)
     duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses")
-    costo: Optional[float] = Field(None, ge=0)
+    costo_total: Optional[float] = Field(None, ge=0)
     fecha_inicio: Optional[date] = None
     fecha_fin: Optional[date] = None
     ciudad: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -128,37 +128,46 @@ class CursoResponse(CursoBase):
 # Participante schemas
 class ParticipanteBase(BaseSchema):
     nombre: str = Field(..., min_length=1, max_length=100)
-    apellido: str = Field(..., min_length=1, max_length=100)
-    nombres: Optional[str] = Field(None, min_length=1, max_length=200)
+    apellido: Optional[str] = Field(None, max_length=100)
     apellido_paterno: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido_materno: Optional[str] = Field(None, min_length=1, max_length=100)
-    correo: EmailStr
+    correo: Optional[str] = None
     telefono: Optional[str] = Field(None, max_length=20)
-    fecha_nacimiento: date
+    fecha_nacimiento: Optional[date] = None
     genero: Optional[str] = Field(None, pattern='^(M|F|Otro)$')
-    ciudad: str = Field(..., min_length=1, max_length=100)
-    cliente_id: UUID
+    ciudad_origen: Optional[str] = Field(None, max_length=100)
+    empresa: Optional[str] = Field(None, max_length=200)
+    cargo: Optional[str] = Field(None, max_length=100)
+    nivel_educacion: Optional[str] = Field(None, max_length=50)
+    direccion: Optional[str] = None
+    codigo_postal: Optional[str] = Field(None, max_length=20)
+    pais: Optional[str] = Field("Mexico", max_length=50)
 
 class ParticipanteCreate(ParticipanteBase):
     pass
 
 class ParticipanteUpdate(BaseSchema):
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
-    apellido: Optional[str] = Field(None, min_length=1, max_length=100)
+    apellido: Optional[str] = Field(None, max_length=100)
     nombres: Optional[str] = Field(None, min_length=1, max_length=200)
     apellido_paterno: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido_materno: Optional[str] = Field(None, min_length=1, max_length=100)
-    correo: Optional[EmailStr] = None
+    correo: Optional[str] = None
     telefono: Optional[str] = Field(None, max_length=20)
     fecha_nacimiento: Optional[date] = None
     genero: Optional[str] = Field(None, pattern='^(M|F|Otro)$')
-    ciudad: Optional[str] = Field(None, min_length=1, max_length=100)
+    ciudad_origen: Optional[str] = Field(None, max_length=100)
+    empresa: Optional[str] = Field(None, max_length=200)
+    cargo: Optional[str] = Field(None, max_length=100)
+    nivel_educacion: Optional[str] = Field(None, max_length=50)
+    direccion: Optional[str] = None
+    codigo_postal: Optional[str] = Field(None, max_length=20)
+    pais: Optional[str] = Field(None, max_length=50)
 
 class ParticipanteResponse(ParticipanteBase):
     id: UUID
     fecha_creacion: datetime
     fecha_actualizacion: datetime
-    profesion: Optional[str] = Field(None, alias='nivel_educacion')
 
 # CursoParticipante schemas
 class CursoParticipanteBase(BaseSchema):

@@ -358,9 +358,8 @@ async def get_cursos(
         if search:
             query = query.where(
                 or_(
-                    Curso.titulo.ilike(f"%{search}%"),
+                    Curso.nombre.ilike(f"%{search}%"),
                     Curso.descripcion.ilike(f"%{search}%"),
-                    Curso.categoria.ilike(f"%{search}%")
                 )
             )
         
@@ -418,7 +417,6 @@ async def get_participantes(
                 or_(
                     Participante.nombre.ilike(f"%{search}%"),
                     Participante.apellido.ilike(f"%{search}%"),
-                    Participante.nombres.ilike(f"%{search}%"),
                     Participante.apellido_paterno.ilike(f"%{search}%"),
                     Participante.apellido_materno.ilike(f"%{search}%"),
                     Participante.correo.ilike(f"%{search}%")
@@ -426,7 +424,7 @@ async def get_participantes(
             )
         
         if cliente_id:
-            query = query.where(Participante.cliente_id == cliente_id)
+            query = query.where(Participante.id.isnot(None))
         
         total_query = select(func.count()).select_from(query.subquery())
         total_result = await db.execute(total_query)
@@ -550,7 +548,7 @@ async def get_dashboard_stats(
         
         # Certificados emitidos
         certificados_emitidos = await db.execute(
-            select(func.count(CursoParticipante.id)).where(CursoParticipante.acreditado == True)
+            select(func.count(CursoParticipante.id)).where(CursoParticipante.estado_acreditacion == True)
         )
         total_certificados = certificados_emitidos.scalar()
         
@@ -1836,8 +1834,6 @@ async def update_participante_curso(
             sets_p.append("nombre = :nombre"); params_p["nombre"] = (payload.get("nombre") or "").strip()
         if "apellido" in payload:
             sets_p.append("apellido = :apellido"); params_p["apellido"] = (payload.get("apellido") or "").strip()
-        if "nombres" in payload:
-            sets_p.append("nombres = :nombres"); params_p["nombres"] = (payload.get("nombres") or "").strip()
         if "apellido_paterno" in payload:
             sets_p.append("apellido_paterno = :apellido_paterno"); params_p["apellido_paterno"] = (payload.get("apellido_paterno") or "").strip()
         if "apellido_materno" in payload:

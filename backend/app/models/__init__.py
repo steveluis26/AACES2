@@ -128,7 +128,6 @@ class Participante(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100))
-    nombres = Column(String(200))
     apellido_paterno = Column(String(100))
     apellido_materno = Column(String(100))
     correo = Column(String(255))
@@ -152,7 +151,7 @@ class Participante(Base):
         CheckConstraint("genero IN ('M', 'F', 'Otro')", name="check_genero"),
         Index('idx_participantes_correo', 'correo'),
         Index('idx_participantes_nombre', 'nombre', 'apellido'),
-        Index('idx_participantes_nombres_apellidos', 'nombres', 'apellido_paterno', 'apellido_materno'),
+        Index('idx_participantes_nombres_apellidos', 'nombre', 'apellido', 'apellido_paterno', 'apellido_materno'),
     )
 
 class CursoParticipante(Base):
