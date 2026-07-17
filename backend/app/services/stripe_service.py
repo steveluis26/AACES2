@@ -1,7 +1,9 @@
 import stripe
 from app.core.config import settings
 
-stripe.api_key = settings.STRIPE_SECRET_KEY
+
+def init_stripe():
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 def create_payment_intent(
@@ -10,6 +12,8 @@ def create_payment_intent(
     description: str = "",
     metadata: dict = None,
 ) -> dict:
+    if not stripe.api_key:
+        init_stripe()
     intent = stripe.PaymentIntent.create(
         amount=int(round(amount * 100)),
         currency=currency,
@@ -25,6 +29,8 @@ def create_payment_intent(
 
 
 def construct_webhook_event(payload: bytes, sig_header: str) -> stripe.Event:
+    if not stripe.api_key:
+        init_stripe()
     return stripe.Webhook.construct_event(
         payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
     )

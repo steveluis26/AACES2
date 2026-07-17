@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import clientes, validaciones, auth, admin, contacto, dashboard, templates, documentos, constancias, verificaciones, reportes, cursos, participantes, dashboard_kpi, verificar, public as public_endpoints, pagos, stripe_payments
+from app.api.v1.endpoints import clientes, validaciones, auth, admin, contacto, dashboard, templates, documentos, constancias, verificaciones, reportes, cursos, participantes, dashboard_kpi, verificar, public as public_endpoints, stripe_payments
 
 api_router = APIRouter()
 
@@ -20,7 +20,6 @@ api_router.include_router(verificaciones.router, prefix="/verificaciones", tags=
 # api_router.include_router(participantes.router, prefix="/participantes", tags=["participantes"])
 api_router.include_router(dashboard_kpi.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(verificar.router, prefix="/verificar", tags=["verificar"])
-api_router.include_router(pagos.router, prefix="/pagos", tags=["pagos"])
 api_router.include_router(stripe_payments.router, prefix="/stripe", tags=["stripe"])
 api_router.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
 api_router.include_router(cursos.router, prefix="/cursos", tags=["cursos"])
