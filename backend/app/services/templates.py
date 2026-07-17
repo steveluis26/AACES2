@@ -323,6 +323,26 @@ class TemplateService:
         await db.commit()
         return True
 
+    async def actualizar_recursos(
+        self, db: AsyncSession, user_data: Dict[str, Any],
+        template_id: str, recursos: dict
+    ) -> bool:
+        org_id = await self._get_org_id(user_data)
+        if not org_id:
+            return False
+
+        result = await db.execute(
+            text("""
+                UPDATE aaces.templates
+                SET recursos = :recursos::jsonb
+                WHERE id = :id AND organizacion_id = :org_id
+                RETURNING id
+            """),
+            {"id": template_id, "org_id": org_id, "recursos": json.dumps(recursos)},
+        )
+        await db.commit()
+        return result.fetchone() is not None
+
     async def eliminar(
         self, db: AsyncSession, user_data: Dict[str, Any],
         template_id: str

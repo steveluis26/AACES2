@@ -140,6 +140,22 @@ async def list_versions(
     return await template_service.obtener_versiones(db, current_user, template_group_id)
 
 
+@router.put("/{template_id}")
+async def update_template(
+    template_id: str,
+    data: TemplateUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    payload = data.model_dump(exclude_none=True)
+    if "recursos" in payload:
+        ok = await template_service.actualizar_recursos(db, current_user, template_id, payload["recursos"])
+        if not ok:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template no encontrado")
+        return {"success": True, "message": "Template actualizado correctamente"}
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No hay campos para actualizar")
+
+
 @router.put("/{template_id}/activar")
 async def activate_template(
     template_id: str,
