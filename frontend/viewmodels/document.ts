@@ -231,7 +231,7 @@ export function mapConstanciaToDocumentViewModel(dto: ConstanciaDetalleDTO): Doc
       fecha: e.fecha,
       tipo: e.tipo as TimelineEventType,
       titulo: e.titulo,
-      descripcion: e.descripcion,
+      descripcion: e.descripcion ?? undefined,
       severity: SEVERITY_MAP[e.tipo] ?? "info",
     })),
     capabilities: dto.capabilities ?? buildCapabilities(estado),
