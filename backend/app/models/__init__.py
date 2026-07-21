@@ -281,6 +281,7 @@ class Plan(Base):
     descripcion = Column(Text)
     precio_mensual = Column(Numeric(10, 2), default=0)
     precio_anual = Column(Numeric(10, 2), default=0)
+    stripe_price_id = Column(String(255))
     cursos_max = Column(Integer, default=10)
     usuarios_max = Column(Integer, default=1)
     constancias_max = Column(Integer, default=50)
@@ -314,6 +315,7 @@ class Organizacion(Base):
     fecha_activacion = Column(DateTime(timezone=True))
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     notas_admin = Column(Text)
+    stripe_customer_id = Column(String(255))
 
     usuarios = relationship("Usuario", back_populates="organizacion", foreign_keys="Usuario.organizacion_id")
     suscripciones = relationship("Suscripcion", back_populates="organizacion")
