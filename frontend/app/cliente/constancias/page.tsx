@@ -64,8 +64,8 @@ export default function ConstanciasPage() {
   const handleDownload = useCallback(async (id: string) => {
     try {
       const detalle = await fetchConstanciaDetalle(id)
-      if (detalle.pdfUrl) {
-        window.open(detalle.pdfUrl, "_blank")
+      if (detalle.activoDocumental?.pdfUrl) {
+        window.open(detalle.activoDocumental.pdfUrl, "_blank")
       }
     } catch {
       toast.error("Error al descargar")

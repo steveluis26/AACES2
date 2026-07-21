@@ -78,6 +78,7 @@ async def preview_template(
 
 
 @router.get("/", response_model=list[TemplateResponse])
+@router.get("", response_model=list[TemplateResponse])
 async def list_templates(
     tipo_documento: str = None,
     solo_activas: bool = False,

@@ -147,7 +147,7 @@ async def listar_constancias(
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     conditions = []
-    params = {}
+    params: Dict[str, Any] = {}
 
     if q:
         conditions.append("(d.folio ILIKE :q OR CAST(d.codigo_validacion AS text) ILIKE :q)")
@@ -159,22 +159,47 @@ async def listar_constancias(
         conditions.append("d.estatus = :estado")
         params["estado"] = estado
     if curso_id:
-        conditions.append("d.id IN (SELECT cp.documento_id FROM aaces.curso_participante cp WHERE cp.curso_id = :curso_id)")
+        conditions.append(
+            "d.codigo_validacion::text IN (SELECT cp.codigo_validacion::text FROM aaces.curso_participante cp WHERE cp.curso_id = :curso_id)"
+        )
         params["curso_id"] = curso_id
 
     where_clause = " AND ".join(conditions) if conditions else "TRUE"
 
+    # Conteo total
     count_res = await db.execute(
         text(f"SELECT count(*) FROM aaces.documentos_emitidos d WHERE {where_clause}"),
         params,
     )
     total = int(count_res.scalar() or 0)
+    total_pages = max(1, (total + page_size - 1) // page_size)
 
     offset = (page - 1) * page_size
+    # JOIN para traer nombre de participante y curso, y conteo de verificaciones
     res = await db.execute(
         text(f"""
-            SELECT d.id, d.tipo_documento, d.estatus, d.codigo_validacion, d.folio, d.fecha_emision
+            SELECT
+                d.id,
+                d.tipo_documento,
+                d.estatus,
+                d.codigo_validacion,
+                d.folio,
+                d.fecha_emision,
+                COALESCE(p.nombre || ' ' || p.apellido, '') AS participante_nombre,
+                COALESCE(c.nombre, '') AS curso_nombre,
+                COALESCE(v.cnt, 0) AS verificaciones_count
             FROM aaces.documentos_emitidos d
+            LEFT JOIN aaces.curso_participante cp
+                ON cp.codigo_validacion::text = d.codigo_validacion::text
+            LEFT JOIN aaces.participantes p
+                ON p.id = cp.participante_id
+            LEFT JOIN aaces.cursos c
+                ON c.id = cp.curso_id
+            LEFT JOIN (
+                SELECT codigo_validacion, count(*) AS cnt
+                FROM aaces.validaciones_publicas
+                GROUP BY codigo_validacion
+            ) v ON v.codigo_validacion::text = d.codigo_validacion::text
             WHERE {where_clause}
             ORDER BY d.fecha_emision DESC
             LIMIT :limit OFFSET :offset
@@ -183,18 +208,33 @@ async def listar_constancias(
     )
     rows = res.fetchall()
 
+    items = [
+        {
+            "id": str(r[0]),
+            "tipo_documento": r[1],
+            "estatus": r[2],
+            "codigo_validacion": str(r[3]),
+            "folio": r[4],
+            "fecha_emision": r[5].isoformat() if r[5] else None,
+            "participante_nombre": (r[6] or "").strip(),
+            "curso_nombre": r[7] or "",
+            "verificaciones_count": int(r[8] or 0),
+        }
+        for r in rows
+    ]
+
     return {
-        "data": [
-            {
-                "id": str(r[0]), "tipo_documento": r[1], "estatus": r[2],
-                "codigo_validacion": str(r[3]), "folio": r[4],
-                "fecha_emision": r[5].isoformat() if r[5] else None,
-            }
-            for r in rows
-        ],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
+        "items": items,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": total,
+            "total_pages": total_pages,
+        },
+        "meta": {
+            "filters_applied": len(conditions),
+            "query_time_ms": 0,
+        },
     }
 
 

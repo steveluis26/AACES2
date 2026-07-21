@@ -94,10 +94,10 @@ export function DataTable({ items, loading, onView, onDownload }: DataTableProps
                   {item.curso_nombre || "—"}
                 </TableCell>
                 <TableCell className="font-mono text-xs hidden md:table-cell">
-                  {item.codigo_validacion.slice(0, 8)}...
+                  {(item.codigo_validacion || "").slice(0, 8)}...
                 </TableCell>
                 <TableCell>
-                  <DocumentStatusBadge status={item.estatus} />
+                  <DocumentStatusBadge estado={item.estatus} />
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   {item.verificaciones_count > 0 ? (
@@ -157,11 +157,11 @@ export function DataTable({ items, loading, onView, onDownload }: DataTableProps
                   {item.curso_nombre || "—"}
                 </p>
               </div>
-              <DocumentStatusBadge status={item.estatus} />
+              <DocumentStatusBadge estado={item.estatus} />
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
               <span className="font-mono">
-                {item.codigo_validacion.slice(0, 8)}...
+                {(item.codigo_validacion || "").slice(0, 8)}...
               </span>
               <div className="flex gap-2">
                 <Button
