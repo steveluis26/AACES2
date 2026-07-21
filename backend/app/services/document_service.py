@@ -24,9 +24,14 @@ class DocumentService:
     ) -> DocumentResult:
         qr_svg = await qr_service.generate(qr_data)
 
+        # Inyectar el QR en el contexto de Jinja para que {{qr}} se resuelva
+        # dentro del template (el renderer también tiene fallback por si queda {{qr}}).
+        render_data = dict(data)
+        render_data["qr"] = qr_svg
+
         doc_def = await template_engine.render(
             html_template=html_template,
-            data=data,
+            data=render_data,
             recursos=recursos,
             config=config,
         )

@@ -131,7 +131,7 @@ class TemplateService:
                      html_template, creada_por)
                 VALUES
                     (:org_id, :group_id, :tipo,
-                     :version, :nombre, true, :recursos::jsonb, :config::jsonb,
+                     :version, :nombre, true, CAST(:recursos AS jsonb), CAST(:config AS jsonb),
                      :html, :creada_por)
                 RETURNING id, fecha_creacion
             """),
@@ -145,7 +145,7 @@ class TemplateService:
                 "config": str(config),
                 "html": html_template,
                 "creada_por": creada_por,
-            }
+            },
         )
         await db.commit()
         row = result.fetchone()
@@ -213,7 +213,7 @@ class TemplateService:
                 UPDATE aaces.templates SET activa = false
                 WHERE organizacion_id = :org_id AND template_group_id = :group_id AND activa = true
             """),
-            {"org_id": org_id, "group_id": template_group_id}
+            {"org_id": org_id, "group_id": template_group_id},
         )
 
         result = await db.execute(
@@ -224,7 +224,7 @@ class TemplateService:
                      html_template, creada_por)
                 VALUES
                     (:org_id, :group_id, :tipo,
-                     :version, :nombre, true, :recursos::jsonb, :config::jsonb,
+                     :version, :nombre, true, CAST(:recursos AS jsonb), CAST(:config AS jsonb),
                      :html, :creada_por)
                 RETURNING id, fecha_creacion
             """),
@@ -238,7 +238,7 @@ class TemplateService:
                 "config": str(config),
                 "html": html_template,
                 "creada_por": creada_por,
-            }
+            },
         )
         await db.commit()
         row = result.fetchone()
@@ -334,7 +334,7 @@ class TemplateService:
         result = await db.execute(
             text("""
                 UPDATE aaces.templates
-                SET recursos = :recursos::jsonb
+                SET recursos = CAST(:recursos AS jsonb)
                 WHERE id = :id AND organizacion_id = :org_id
                 RETURNING id
             """),

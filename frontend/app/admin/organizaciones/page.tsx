@@ -7,11 +7,11 @@ import { Input } from '@/components/ui/input'
 import {
   Card, CardHeader, CardTitle, CardContent,
 } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
 
 type Organizacion = {
   id: string
@@ -44,9 +44,12 @@ const estatusColors: Record<string, string> = {
 export default function AdminOrganizacionesPage() {
   const router = useRouter()
   const [orgs, setOrgs] = useState<Organizacion[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filtroEstatus, setFiltroEstatus] = useState('')
   const [planes, setPlanes] = useState<Plan[]>([])
+
+  // Activar dialog
   const [activarOpen, setActivarOpen] = useState(false)
   const [activarOrg, setActivarOrg] = useState<Organizacion | null>(null)
   const [activarForm, setActivarForm] = useState({
@@ -57,6 +60,16 @@ export default function AdminOrganizacionesPage() {
     notas_admin: '',
   })
 
+  // Suscripción dialog
+  const [suspOpen, setSuspOpen] = useState(false)
+  const [suspOrg, setSuspOrg] = useState<Organizacion | null>(null)
+  const [suspForm, setSuspForm] = useState({
+    plan: '',
+    estado: 'activa',
+    fecha_fin: '',
+  })
+  const [savingSusp, setSavingSusp] = useState(false)
+
   const token = typeof window !== 'undefined' ? localStorage.getItem('aaces_token') : null
   const headers = useMemo(() => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -65,6 +78,7 @@ export default function AdminOrganizacionesPage() {
   }, [token])
 
   const loadOrgs = useCallback(async () => {
+    setLoading(true)
     try {
       let url = '/api/v1/admin/organizaciones?per_page=100'
       if (filtroEstatus) url += `&estatus=${filtroEstatus}`
@@ -73,19 +87,20 @@ export default function AdminOrganizacionesPage() {
       setOrgs(data.data ?? [])
     } catch {
       setOrgs([])
+    } finally {
+      setLoading(false)
     }
   }, [headers, filtroEstatus])
 
   const loadPlanes = useCallback(async () => {
     try {
-      const adminR = await fetch('/api/v1/admin/clientes?limit=1', { headers })
       const r = await fetch('/api/v1/planes', { headers })
       if (r.ok) {
         const data = await r.json()
         setPlanes(data.data ?? [])
       }
     } catch {
-      // Will get planes from a direct API call if needed
+      // planes opcionales
     }
   }, [headers])
 
@@ -93,6 +108,8 @@ export default function AdminOrganizacionesPage() {
   useEffect(() => { loadPlanes() }, [loadPlanes])
 
   const pendientes = orgs.filter(o => o.estatus === 'pendiente').length
+  const activas = orgs.filter(o => o.estatus === 'activa').length
+  const suspendidas = orgs.filter(o => o.estatus === 'suspendida').length
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -127,10 +144,58 @@ export default function AdminOrganizacionesPage() {
         body: JSON.stringify(body),
       })
       if (!r.ok) throw new Error('Error al activar')
+      toast.success(`Organización ${activarOrg.razon_social} activada`)
       setActivarOpen(false)
       await loadOrgs()
     } catch {
-      alert('Error al activar la organización')
+      toast.error('Error al activar la organización')
+    }
+  }
+
+  const suspender = async (org: Organizacion) => {
+    if (!confirm(`¿Suspender "${org.razon_social}"? Sus usuarios no podrán acceder.`)) return
+    try {
+      const r = await fetch(`/api/v1/admin/organizaciones/${org.id}/suspender`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ notas_admin: 'Suspendido por administrador' }),
+      })
+      if (!r.ok) throw new Error('Error al suspender')
+      toast.success(`Organización ${org.razon_social} suspendida`)
+      await loadOrgs()
+    } catch {
+      toast.error('Error al suspender la organización')
+    }
+  }
+
+  const abrirSuscripcion = (org: Organizacion) => {
+    setSuspOrg(org)
+    setSuspForm({ plan: planes[0]?.codigo ?? '', estado: 'activa', fecha_fin: '' })
+    setSuspOpen(true)
+  }
+
+  const guardarSuscripcion = async () => {
+    if (!suspOrg) return
+    setSavingSusp(true)
+    try {
+      const body: Record<string, any> = {
+        estado: suspForm.estado,
+      }
+      if (suspForm.plan) body.plan = suspForm.plan
+      if (suspForm.fecha_fin) body.fecha_fin = suspForm.fecha_fin
+      const r = await fetch(`/api/v1/admin/organizaciones/${suspOrg.id}/suscripcion`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body),
+      })
+      if (!r.ok) throw new Error('Error al actualizar suscripción')
+      toast.success(`Suscripción de ${suspOrg.razon_social} actualizada`)
+      setSuspOpen(false)
+      await loadOrgs()
+    } catch {
+      toast.error('Error al actualizar la suscripción')
+    } finally {
+      setSavingSusp(false)
     }
   }
 
@@ -144,6 +209,10 @@ export default function AdminOrganizacionesPage() {
               {pendientes > 0
                 ? <span className="text-yellow-600 font-medium">{pendientes} pendiente(s) de activación</span>
                 : 'Todas activas'}
+              {' · '}
+              <span className="text-green-600">{activas} activas</span>
+              {' · '}
+              <span className="text-red-600">{suspendidas} suspendidas</span>
             </p>
           </div>
           <div className="flex gap-2">
@@ -167,7 +236,9 @@ export default function AdminOrganizacionesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <p className="text-center py-8 text-muted-foreground">Cargando organizaciones...</p>
+          ) : filtered.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No hay organizaciones registradas</p>
           ) : (
             <div className="space-y-2">
@@ -192,12 +263,20 @@ export default function AdminOrganizacionesPage() {
                       {org.num_usuarios} usuario(s) · {org.suscripciones_activas} suscripción(es) activa(s)
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                  <div className="flex items-center gap-2 shrink-0 ml-4 flex-wrap justify-end">
                     {org.estatus === 'pendiente' && (
                       <Button size="sm" onClick={(e) => { e.stopPropagation(); abrirActivar(org) }}>
                         Activar
                       </Button>
                     )}
+                    {org.estatus === 'activa' && (
+                      <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); suspender(org) }}>
+                        Suspender
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); abrirSuscripcion(org) }}>
+                      Suscripción
+                    </Button>
                     <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); router.push(`/admin/organizaciones/${org.id}`) }}>
                       Ver detalle
                     </Button>
@@ -209,7 +288,8 @@ export default function AdminOrganizacionesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={activarOpen} onOpenChange={setActivarOpen}>
+      {/* Activar */}
+      <Dialog open={activarOpen} onClose={() => setActivarOpen(false)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Activar organización</DialogTitle>
@@ -261,6 +341,59 @@ export default function AdminOrganizacionesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setActivarOpen(false)}>Cancelar</Button>
             <Button onClick={activarOrgSubmit}>Activar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Suscripción */}
+      <Dialog open={suspOpen} onClose={() => setSuspOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gestionar suscripción</DialogTitle>
+          </DialogHeader>
+          {suspOrg && (
+            <div className="space-y-4">
+              <div className="text-sm">
+                <strong>{suspOrg.razon_social}</strong> · RFC: {suspOrg.rfc}
+              </div>
+              <div>
+                <Label>Plan</Label>
+                <select
+                  value={suspForm.plan}
+                  onChange={(e) => setSuspForm(s => ({ ...s, plan: e.target.value }))}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Sin plan</option>
+                  {planes.map(p => (
+                    <option key={p.id} value={p.codigo}>{p.nombre} ({p.codigo})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Estado</Label>
+                  <select
+                    value={suspForm.estado}
+                    onChange={(e) => setSuspForm(s => ({ ...s, estado: e.target.value }))}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="activa">activa</option>
+                    <option value="suspendida">suspendida</option>
+                    <option value="cancelada">cancelada</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>Fecha fin</Label>
+                  <Input type="date" value={suspForm.fecha_fin} onChange={(e) => setSuspForm(s => ({ ...s, fecha_fin: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuspOpen(false)}>Cancelar</Button>
+            <Button onClick={guardarSuscripcion} disabled={savingSusp}>
+              {savingSusp ? 'Guardando...' : 'Guardar suscripción'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

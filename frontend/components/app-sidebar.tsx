@@ -4,7 +4,6 @@ import {
   ArrowUpCircleIcon,
   BarChartIcon,
   DatabaseIcon,
-  FileTextIcon,
   FolderIcon,
   HelpCircleIcon,
   LayoutDashboardIcon,
@@ -50,7 +49,7 @@ const MENU_CLIENTE = [
   { title: "Plantillas", url: "/cliente/templates",    icon: StampIcon },
   { title: "Constancias",url: "/cliente/constancias",  icon: ScrollTextIcon },
   { title: "Pagos",      url: "/cliente/pagos",        icon: CreditCardIcon },
-  { title: "Reportes",   url: "/analytics",            icon: BarChartIcon },
+  { title: "Reportes",   url: "/cliente/reportes",     icon: BarChartIcon },
   { title: "Gestión",    url: "/cliente/gestion",      icon: FolderIcon },
   { title: "Calendario", url: "/cliente/cursos?view=calendar", icon: CalendarIcon },
 ]

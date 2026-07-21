@@ -1,4 +1,5 @@
 import uuid
+import json
 import logging
 import time
 from typing import List, Optional, Dict, Any
@@ -139,7 +140,7 @@ class ConstanciasService:
         )
 
         doc_id = str(uuid.uuid4())
-        metadata_val = str({
+        metadata_val = json.dumps({
             "curso_participante_id": curso_participante_id,
             "curso_id": str(cp.curso_id),
             "participante_id": str(cp.participante_id),
@@ -175,21 +176,28 @@ class ConstanciasService:
                 UPDATE aaces.curso_participante
                 SET codigo_validacion = :codigo,
                     certificado_url = :url,
-                    fecha_emision_certificado = :fecha_emision,
-                    fecha_expiracion = CASE
-                        WHEN :fecha_exp IS NOT NULL THEN :fecha_exp::date
-                        ELSE fecha_expiracion
-                    END
+                    fecha_emision_certificado = :fecha_emision
                 WHERE id = :cp_id
             """),
             {
                 "codigo": codigo_validacion,
                 "url": storage_url,
                 "fecha_emision": now,
-                "fecha_exp": cp.fecha_expiracion.isoformat() if cp.fecha_expiracion else None,
                 "cp_id": curso_participante_id,
             }
         )
+        if cp.fecha_expiracion is not None:
+            await db.execute(
+                text("""
+                    UPDATE aaces.curso_participante
+                    SET fecha_expiracion = :fecha_exp
+                    WHERE id = :cp_id
+                """),
+                {
+                    "fecha_exp": cp.fecha_expiracion.isoformat(),
+                    "cp_id": curso_participante_id,
+                }
+            )
 
         await db.commit()
 

@@ -35,9 +35,10 @@ backend/app.db
 # Next.js
 frontend/.next/
 frontend/out/
+frontend/tsconfig.tsbuildinfo
 
-# IDE
-.vscode/
+# Storage local (PDFs de prueba generados en runtime)
+backend/storage/
 
 # Local env / virtualenv
 .venv/
@@ -45,4 +46,4 @@ backend/.venv/
 .env
 backend/.env
 __pycache__/
-*.pyc
+*.pyc/
