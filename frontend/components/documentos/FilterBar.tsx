@@ -21,14 +21,14 @@ interface FilterBarProps {
 }
 
 const STATUSES: { value: string; label: string }[] = [
-  { value: "", label: "Todos los estados" },
+  { value: "all", label: "Todos los estados" },
   { value: "emitido", label: "Emitido" },
   { value: "cancelado", label: "Cancelado" },
   { value: "reemitido", label: "Reemitido" },
 ]
 
 const VERIFIED_OPTS: { value: string; label: string }[] = [
-  { value: "", label: "Todas" },
+  { value: "all", label: "Todas" },
   { value: "true", label: "Verificadas" },
   { value: "false", label: "No verificadas" },
 ]
@@ -45,7 +45,7 @@ export function FilterBar({
 }: FilterBarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Select value={estado} onValueChange={onChangeEstado}>
+      <Select value={estado || "all"} onValueChange={(v) => onChangeEstado(v === "all" ? "" : v)}>
         <SelectTrigger className="w-[150px]">
           <SelectValue placeholder="Estado" />
         </SelectTrigger>
@@ -58,7 +58,7 @@ export function FilterBar({
         </SelectContent>
       </Select>
 
-      <Select value={verificada} onValueChange={onChangeVerificada}>
+      <Select value={verificada || "all"} onValueChange={(v) => onChangeVerificada(v === "all" ? "" : v)}>
         <SelectTrigger className="w-[150px]">
           <SelectValue placeholder="Verificación" />
         </SelectTrigger>
