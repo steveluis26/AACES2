@@ -171,7 +171,7 @@ class CursoParticipante(Base):
     fecha_inicio_vigencia = Column(Date)
     fecha_expiracion = Column(Date)
     id_certificado = Column(String(50), unique=True)
-    codigo_validacion = Column(String(20), unique=True)
+    codigo_validacion = Column(String(64), unique=True)
     estado_acreditacion = Column(Boolean, default=False)
     calificacion = Column(Numeric(5, 2))
     asistencia = Column(Numeric(5, 2), default=0)
@@ -238,7 +238,7 @@ class ValidacionPublica(Base):
     __tablename__ = "validaciones_publicas"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    codigo_validacion = Column(String(20), ForeignKey("curso_participante.codigo_validacion"))
+    codigo_validacion = Column(String(64), ForeignKey("curso_participante.codigo_validacion"))
     fecha_validacion = Column(DateTime(timezone=True), server_default=func.now())
     ip_validacion = Column(INET)
     user_agent = Column(Text)

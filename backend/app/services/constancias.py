@@ -46,7 +46,7 @@ class ConstanciasService:
     ) -> Dict[str, Any]:
         cp_row = await db.execute(
             text("""
-                SELECT cp.id, cp.curso_id, cp.participante_id, cp.estado_acreditacion,
+                SELECT cp.id, cp.codigo_validacion, cp.curso_id, cp.participante_id, cp.estado_acreditacion,
                        cp.calificacion, cp.asistencia,
                        cp.fecha_inicio_vigencia, cp.fecha_expiracion,
                        c.nombre as curso_nombre,
@@ -73,7 +73,10 @@ class ConstanciasService:
         if not cp.estado_acreditacion:
             raise ValueError("El participante no está acreditado en este curso")
 
-        codigo_validacion = str(uuid.uuid4())
+        # Reusar el codigo de validacion ya emitido (si existe) para no regenerarlo
+        # en cada re-emision. validaciones_publicas es FK a curso_participante.codigo_validacion,
+        # asi que cambiarlo romperia las validaciones previas del mismo participante.
+        codigo_validacion = cp.codigo_validacion if cp.codigo_validacion else str(uuid.uuid4())
         now = datetime.utcnow()
 
         participante_nombre = f"{cp.part_nombre or ''} {cp.part_apellido or ''}".strip()
