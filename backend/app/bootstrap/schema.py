@@ -325,6 +325,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_registro_intentos,
         create_documentos_emitidos,
         create_verificaciones,
+        create_metadata_tables,
         create_legacy_fixes,
     ]:
         try:

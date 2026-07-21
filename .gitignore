@@ -38,3 +38,11 @@ frontend/out/
 
 # IDE
 .vscode/
+
+# Local env / virtualenv
+.venv/
+backend/.venv/
+.env
+backend/.env
+__pycache__/
+*.pyc

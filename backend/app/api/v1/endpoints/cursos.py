@@ -218,13 +218,14 @@ async def add_participante(
         pid = row_mail[0]
 
     if not pid:
+        pax_id = f"PAX-{uuid.uuid4().hex[:8].upper()}"
         ins = await db.execute(
             text("""
-                INSERT INTO aaces.participantes (id, nombre, correo, pais)
-                VALUES (gen_random_uuid(), :nombre, :correo, 'Mexico')
+                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, pais)
+                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, 'Mexico')
                 RETURNING id
             """),
-            {"nombre": nombre, "correo": correo},
+            {"pax_id": pax_id, "nombre": nombre, "correo": correo},
         )
         pid = ins.scalar()
 
