@@ -355,7 +355,7 @@ class PasswordResetConfirm(BaseSchema):
 
 # Validation schemas
 class ValidacionRequest(BaseSchema):
-    codigo_validacion: str = Field(..., min_length=1, max_length=20)
+    codigo_validacion: str = Field(..., min_length=1, max_length=64)
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
 

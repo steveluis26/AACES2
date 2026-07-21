@@ -161,17 +161,21 @@ async def validar_certificado(
         empresa = emp_row[0] if emp_row else None
         constancias: List[str] = []
         normas: List[str] = []
-        const_res = await db.execute(text(
-            """
-            SELECT nombre, COALESCE(norma, '')
-            FROM constancias_curso
-            WHERE curso_id = :curso
-            ORDER BY nombre
-            """
-        ), {"curso": cp.curso_id})
-        rows = const_res.fetchall()
-        constancias = [ (f"{r[0]} ({r[1]})" if r[1] else r[0]) for r in rows ]
-        normas = [ r[1] for r in rows if r[1] ]
+        try:
+            const_res = await db.execute(text(
+                """
+                SELECT nombre, COALESCE(norma, '')
+                FROM constancias_curso
+                WHERE curso_id = :curso
+                ORDER BY nombre
+                """
+            ), {"curso": cp.curso_id})
+            rows = const_res.fetchall()
+            constancias = [ (f"{r[0]} ({r[1]})" if r[1] else r[0]) for r in rows ]
+            normas = [ r[1] for r in rows if r[1] ]
+        except Exception:
+            # Tabla constancias_curso opcional: si no existe, continuamos sin esos datos
+            constancias, normas = [], []
         from datetime import date
         today = date.today()
         fi = c_row[2] if c_row else None
