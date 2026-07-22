@@ -935,6 +935,7 @@ export default function CursosClientePage() {
               <div className="grid grid-cols-1 md:grid-cols-11 gap-2">
                 <div className="md:col-span-11"><Input placeholder="Nombres" value={String(nuevoPart.nombres ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, nombres: e.target.value }))} /></div>
                 <div className="md:col-span-11"><Input placeholder="Apellido paterno" value={String(nuevoPart.apellido_paterno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_paterno: e.target.value }))} /></div>
+                <div className="md:col-span-11"><Input placeholder="Apellido materno" value={String(nuevoPart.apellido_materno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_materno: e.target.value }))} /></div>
                 
                 <Input placeholder="Correo" value={nuevoPart.correo} onChange={(e) => setNuevoPart(s => ({ ...s, correo: e.target.value }))} />
                 <Input placeholder="Ciudad" value={nuevoPart.ciudad_origen} onChange={(e) => setNuevoPart(s => ({ ...s, ciudad_origen: e.target.value }))} />
@@ -1082,6 +1083,7 @@ export default function CursosClientePage() {
                                     <div className="grid grid-cols-1 gap-2">
                                       <Input placeholder="Nombres" value={String(p.nombres ?? p.nombre ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], nombres: e.target.value }; return a })} />
                                       <Input placeholder="Apellido paterno" value={String(p.apellido_paterno ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], apellido_paterno: e.target.value }; return a })} />
+                                      <Input placeholder="Apellido materno" value={String(p.apellido_materno ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], apellido_materno: e.target.value }; return a })} />
                                       
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
