@@ -50,7 +50,7 @@ async def participantes_proximos_a_vencer(
                       cp.fecha_expiracion,
                       CASE
                         WHEN cp.fecha_expiracion < CURRENT_DATE THEN 'vencido'
-                        WHEN cp.fecha_expiracion <= CURRENT_DATE + :dias THEN 'por_vencer'
+                        WHEN cp.fecha_expiracion <= CURRENT_DATE + (:dias * INTERVAL '1 day') THEN 'por_vencer'
                         ELSE 'vigente'
                       END AS estado_vigencia,
                       c.id AS curso_id
@@ -59,11 +59,11 @@ async def participantes_proximos_a_vencer(
                     JOIN aaces.participantes p ON p.id = cp.participante_id
                     WHERE c.cliente_id = :cid
                       AND cp.fecha_expiracion IS NOT NULL
-                      AND cp.fecha_expiracion <= CURRENT_DATE + :dias
+                      AND cp.fecha_expiracion <= CURRENT_DATE + (:dias * INTERVAL '1 day')
                       AND COALESCE(cp.empresa_participacion, p.empresa) ILIKE :emp
                     ORDER BY cp.fecha_expiracion ASC
                 """),
-                {"cid": cid, "dias": timedelta(days=dias), "emp": f"%{empresa}%"},
+                {"cid": cid, "dias": dias, "emp": f"%{empresa}%"},
             )
         ).fetchall()
     else:
@@ -77,7 +77,7 @@ async def participantes_proximos_a_vencer(
                       cp.fecha_expiracion,
                       CASE
                         WHEN cp.fecha_expiracion < CURRENT_DATE THEN 'vencido'
-                        WHEN cp.fecha_expiracion <= CURRENT_DATE + :dias THEN 'por_vencer'
+                        WHEN cp.fecha_expiracion <= CURRENT_DATE + (:dias * INTERVAL '1 day') THEN 'por_vencer'
                         ELSE 'vigente'
                       END AS estado_vigencia,
                       c.id AS curso_id
@@ -86,10 +86,10 @@ async def participantes_proximos_a_vencer(
                     JOIN aaces.participantes p ON p.id = cp.participante_id
                     WHERE c.cliente_id = :cid
                       AND cp.fecha_expiracion IS NOT NULL
-                      AND cp.fecha_expiracion <= CURRENT_DATE + :dias
+                      AND cp.fecha_expiracion <= CURRENT_DATE + (:dias * INTERVAL '1 day')
                     ORDER BY cp.fecha_expiracion ASC
                 """),
-                {"cid": cid, "dias": timedelta(days=dias)},
+                {"cid": cid, "dias": dias},
             )
         ).fetchall()
 
@@ -134,7 +134,7 @@ async def vencimientos_por_empresa(
                 JOIN aaces.cursos c ON c.id = cp.curso_id
                 JOIN aaces.participantes p ON p.id = cp.participante_id
                 WHERE c.cliente_id = :cid
-                GROUP BY empresa
+                GROUP BY COALESCE(cp.empresa_participacion, p.empresa)
                 ORDER BY por_vencer DESC, vencidos DESC
             """),
             {"cid": cid},
