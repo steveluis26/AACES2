@@ -121,7 +121,7 @@ async def emitir_constancia(
             db=db,
             organizacion_id=organizacion_id,
             curso_participante_id=payload.curso_participante_id,
-            emitido_por=user_data.get("sub"),
+            emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
             template_id=payload.template_id,
         )
         audit_logger.log_user_action(
