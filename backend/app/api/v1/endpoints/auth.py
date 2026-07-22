@@ -492,7 +492,7 @@ async def register(
         org_id_res = await db.execute(
             text("""
                 INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus)
-                VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, 'pendiente')
+                VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, 'activa')
                 RETURNING id
             """),
             {
@@ -504,7 +504,7 @@ async def register(
         )
         org_id = str(org_id_res.scalar())
 
-        # Create admin user
+        # Create admin user (gestión de plataforma)
         password_hash = auth_service.get_password_hash(admin_password)
         await db.execute(
             text("""
@@ -514,11 +514,24 @@ async def register(
             {"org_id": org_id, "nombre": admin_nombre, "correo": admin_correo, "ph": password_hash}
         )
 
-        # Create pending subscription
+        # Create operational cliente (el dominio operativo espera clientes, no usuarios).
+        # Sin esto, el admin recién registrado no puede crear su primer curso (onboarding roto).
+        cliente_id_res = await db.execute(
+            text("""
+                INSERT INTO aaces.clientes (id, organizacion_id, nombre, correo, password_hash, categoria, estado, fecha_creacion)
+                VALUES (gen_random_uuid(), :org_id, :nombre, :correo, :ph, 'basico', 'activo', now())
+                ON CONFLICT (correo) DO NOTHING
+                RETURNING id
+            """),
+            {"org_id": org_id, "nombre": admin_nombre, "correo": admin_correo, "ph": password_hash}
+        )
+        cliente_id = str(cliente_id_res.scalar() or org_id)
+
+        # Create active subscription (beta: trial activo automáticamente)
         await db.execute(
             text("""
                 INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus)
-                VALUES (:org_id, :plan_id, 'pendiente')
+                VALUES (:org_id, :plan_id, 'activa')
             """),
             {"org_id": org_id, "plan_id": plan_id}
         )
@@ -527,9 +540,25 @@ async def register(
 
         await _log_intento(db, rfc, admin_correo, request, "exito", f"Registro exitoso plan={plan_codigo}")
 
+        # Emitir token para onboarding fluido (el admin opera como clientes).
+        from types import SimpleNamespace
+        new_user = SimpleNamespace(
+            id=cliente_id,
+            organizacion_id=org_id,
+            rol="admin",
+            correo=admin_correo,
+            nombre=admin_nombre,
+            categoria="basico",
+            source="cliente",
+            org_name=razon_social,
+        )
+        token_data, _ = build_token(new_user)
+        access_token = auth_service.create_access_token(data=token_data)
+
         return {
             "success": True,
-            "message": "Registro exitoso. Recibirás un correo cuando tu cuenta sea activada.",
+            "message": "Registro exitoso. Tu organización está activa. Ya puedes crear cursos.",
+            "access_token": access_token,
             "organizacion_id": org_id,
             "plan": plan_codigo
         }

@@ -52,3 +52,8 @@ load_tok() {
   if [ -z "$t" ] || [ "$t" = "null" ]; then t=$(aaces_login); echo "$t" > "$TOK_FILE"; fi
   echo "$t"
 }
+
+# Decodificar el payload (segundo segmento) de un JWT sin dependencias.
+decode_jwt() {
+  echo "$1" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null
+}
