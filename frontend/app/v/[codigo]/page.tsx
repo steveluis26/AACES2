@@ -1,18 +1,23 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, XCircle, Shield, Loader2, QrCode } from "lucide-react"
+import { CheckCircle, XCircle, Shield, Loader2, QrCode, Hash } from "lucide-react"
 
 interface ParticipanteData {
   nombre: string
+  empresa?: string | null
 }
 
 interface CursoData {
   nombre: string
+  codigo_curso?: string | null
   fecha_inicio?: string | null
   fecha_fin?: string | null
   duracion_horas?: number
+  modalidad?: string | null
+  empresa_contratante?: string | null
   calificacion?: number | null
+  estado_acreditacion?: boolean
   inicio_vigencia?: string | null
   expiracion?: string | null
 }
@@ -25,9 +30,35 @@ interface VerifyData {
   fecha_emision?: string | null
   pdf_hash?: string | null
   organizacion?: string | null
+  nombre_comercial?: string | null
+  rfc?: string | null
+  org_estado?: string | null
+  org_ciudad?: string | null
+  folio?: string | null
   participante?: ParticipanteData | null
   curso?: CursoData | null
   verificaciones_count: number
+}
+
+function fmtFecha(iso?: string | null): string | null {
+  if (!iso) return null
+  try {
+    return new Date(iso).toLocaleDateString("es-MX", {
+      year: "numeric", month: "long", day: "numeric",
+    })
+  } catch {
+    return iso
+  }
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  if (value === null || value === undefined || value === "") return null
+  return (
+    <div className="bg-gray-50 rounded-xl p-4">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className="text-base font-semibold break-words">{value}</p>
+    </div>
+  )
 }
 
 export default function VerificarCodigoPage({ params }: { params: { codigo: string } }) {
@@ -80,14 +111,14 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
 
   const valida = data.valida
   const isConstancia = data.tipo_documento === "CONSTANCIA"
+  const curso = data.curso
+  const participante = data.participante
 
   return (
     <div className="flex min-h-svh items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-lg">
         <div className={`rounded-2xl border-2 p-8 shadow-lg ${
-          valida
-            ? "border-green-200 bg-white"
-            : "border-red-200 bg-white"
+          valida ? "border-green-200 bg-white" : "border-red-200 bg-white"
         }`}>
           <div className="text-center mb-6">
             <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
@@ -95,21 +126,17 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
             }`}>
               {valida
                 ? <CheckCircle className="h-8 w-8 text-green-600" />
-                : <XCircle className="h-8 w-8 text-red-600" />
-              }
+                : <XCircle className="h-8 w-8 text-red-600" />}
             </div>
-            <h1 className={`text-2xl font-bold ${
-              valida ? "text-green-800" : "text-red-800"
-            }`}>
-              Documento {valida ? "verificado" : "no válido"}
+            <h1 className={`text-2xl font-bold ${valida ? "text-green-800" : "text-red-800"}`}>
+              {valida ? "✅ CONSTANCIA VÁLIDA" : "Documento no válido"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {valida
-                ? "Esta constancia fue emitida por una organización registrada en la plataforma AACES."
+                ? "Documento emitido por una organización registrada en AACES."
                 : data.estatus === "cancelado"
                   ? "Este documento ha sido revocado por la organización emisora."
-                  : "El código de verificación no corresponde a ningún documento emitido."
-              }
+                  : "El código de verificación no corresponde a ningún documento emitido."}
             </p>
           </div>
 
@@ -118,59 +145,82 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
             <span>Verificado mediante AACES</span>
           </div>
 
-          {(isConstancia && data.participante && data.curso) ? (
-            <div className="space-y-4">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs text-muted-foreground mb-1">Participante</p>
-                <p className="text-lg font-semibold">{data.participante.nombre}</p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-xs text-muted-foreground mb-1">Curso</p>
-                <p className="text-lg font-semibold">{data.curso.nombre}</p>
-              </div>
-
-              {data.organizacion && (
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <p className="text-xs text-muted-foreground mb-1">Agencia capacitadora</p>
-                  <p className="text-base font-semibold">{data.organizacion}</p>
+          {valida ? (
+            <div className="space-y-5">
+              {/* Participante */}
+              {participante && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    Participante
+                  </p>
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-lg font-semibold">{participante.nombre}</p>
+                    {participante.empresa && (
+                      <p className="text-sm text-muted-foreground">{participante.empresa}</p>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                {data.fecha_emision && (
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-1">Fecha de emisión</p>
-                    <p className="text-sm font-semibold">
-                      {new Date(data.fecha_emision).toLocaleDateString("es-ES", {
-                        year: "numeric", month: "long", day: "numeric"
-                      })}
-                    </p>
+              {/* Curso */}
+              {curso && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    Curso
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gray-50 rounded-xl p-4 col-span-2">
+                      <p className="text-xs text-muted-foreground mb-1">Nombre</p>
+                      <p className="text-base font-semibold">{curso.nombre}</p>
+                    </div>
+                    <Field label="Duración" value={curso.duracion_horas ? `${curso.duracion_horas} horas` : null} />
+                    <Field label="Modalidad" value={curso.modalidad} />
+                    <Field label="Fecha de inicio" value={fmtFecha(curso.fecha_inicio)} />
+                    <Field label="Fecha de término" value={fmtFecha(curso.fecha_fin)} />
+                    <Field label="Calificación" value={curso.calificacion != null ? `${curso.calificacion}%` : null} />
+                    <Field label="Vigencia desde" value={fmtFecha(curso.inicio_vigencia)} />
+                    <Field label="Vigencia hasta" value={fmtFecha(curso.expiracion)} />
+                    <Field label="Empresa contratante" value={curso.empresa_contratante} />
                   </div>
-                )}
-                {data.curso.expiracion && (
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-1">Vigencia</p>
-                    <p className="text-sm font-semibold">
-                      {new Date(data.curso.expiracion).toLocaleDateString("es-ES", {
-                        year: "numeric", month: "long", day: "numeric"
-                      })}
-                    </p>
+                </div>
+              )}
+
+              {/* Capacitador / Organización emisora */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                  Capacitador
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 rounded-xl p-4 col-span-2">
+                    <p className="text-xs text-muted-foreground mb-1">Organización</p>
+                    <p className="text-base font-semibold">{data.organizacion || data.nombre_comercial}</p>
                   </div>
-                )}
-                {data.curso.duracion_horas ? (
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-1">Duración</p>
-                    <p className="text-sm font-semibold">{data.curso.duracion_horas} horas</p>
-                  </div>
-                ) : null}
-                {data.curso.calificacion != null ? (
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-1">Calificación</p>
-                    <p className="text-sm font-semibold">{data.curso.calificacion}%</p>
-                  </div>
-                ) : null}
+                  <Field label="RFC" value={data.rfc} />
+                  <Field label="Registro STPS" value={data.org_estado} />
+                  <Field label="Folio" value={data.folio} />
+                  <Field label="Ciudad" value={data.org_ciudad} />
+                </div>
               </div>
+
+              {/* Hash del documento */}
+              {data.pdf_hash && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                    Hash del documento
+                  </p>
+                  <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-2">
+                    <Hash className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                    <p className="text-xs font-mono break-all text-muted-foreground">{data.pdf_hash}</p>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    El hash SHA-256 garantiza que el documento no ha sido alterado.
+                  </p>
+                </div>
+              )}
+
+              {data.fecha_emision && (
+                <Field label="Fecha de emisión" value={fmtFecha(data.fecha_emision)} />
+              )}
             </div>
           ) : (
             <div className="bg-gray-50 rounded-xl p-4">

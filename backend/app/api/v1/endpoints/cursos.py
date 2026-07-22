@@ -19,6 +19,8 @@ class CursoCreateSchema(BaseModel):
     fecha_inicio: date
     fecha_fin: date
     duracion_horas: int = Field(..., ge=1)
+    duracion_validacion: int = Field(..., ge=1, description="Vigencia del certificado en meses (obligatoria)")
+    vigencia_meses: Optional[int] = Field(None, ge=1, description="Alias de duracion_validacion")
     costo_total: Optional[float] = None
     modalidad: str = Field("presencial", pattern="^(presencial|virtual|mixta)$")
     codigo_curso: str = Field(..., min_length=1, max_length=20)
@@ -47,7 +49,8 @@ async def crear_curso(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
+    uid = user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
 
@@ -58,19 +61,21 @@ async def crear_curso(
 
     code = payload.codigo_curso or f"CUR-{uuid.uuid4().hex[:8].upper()}"
     estado = payload.estado or "activo"
+    vigencia = payload.duracion_validacion or payload.vigencia_meses
 
     res = await db.execute(
-        text("""
-            INSERT INTO aaces.cursos (id, cliente_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, costo_total, creado_por, fecha_creacion)
-            VALUES (gen_random_uuid(), :cid, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :costo, :cid, now())
+        text(""" 
+            INSERT INTO aaces.cursos (id, cliente_id, organizacion_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, duracion_validacion, modalidad, estado, empresa_contratante, costo_total, creado_por, fecha_creacion)
+            VALUES (gen_random_uuid(), :cid, :org_id, :code, :nombre, :ciudad, :fi, :ff, :duracion, :vigencia, :modalidad, :estado, :empresa, :costo, :uid, now())
             RETURNING id, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, codigo_curso, estado, empresa_contratante, costo_total, fecha_creacion
         """),
         {
-            "cid": cid, "code": code, "nombre": payload.nombre,
+            "cid": cid, "org_id": cid, "code": code, "nombre": payload.nombre,
             "ciudad": payload.ciudad, "fi": payload.fecha_inicio,
             "ff": payload.fecha_fin, "duracion": payload.duracion_horas,
-            "modalidad": payload.modalidad, "estado": estado,
+            "vigencia": vigencia, "modalidad": payload.modalidad, "estado": estado,
             "empresa": payload.empresa_contratante, "costo": payload.costo_total,
+            "uid": uid,
         },
     )
     row = res.fetchone()
@@ -102,7 +107,8 @@ async def listar_cursos(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
+    uid = user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
 
@@ -143,7 +149,8 @@ async def obtener_curso(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
+    uid = user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
 
@@ -193,7 +200,8 @@ async def add_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
+    uid = user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
 

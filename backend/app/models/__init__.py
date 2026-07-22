@@ -81,9 +81,12 @@ class Capacitador(Base):
 
 class Curso(Base):
     __tablename__ = "cursos"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    cliente_id = Column(UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"))
+    # Ownership: la organización capacitadora es la dueña del curso (Sprint A).
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=True)
+    # cliente_id conserva compatibilidad pero apunta a organizaciones (dueño), no a usuario individual.
+    cliente_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"))
     codigo_curso = Column(String(20), unique=True, nullable=False)
     nombre = Column(String(200), nullable=False)
     ciudad = Column(String(100), nullable=False)
@@ -142,7 +145,10 @@ class Participante(Base):
     direccion = Column(Text)
     codigo_postal = Column(String(20))
     pais = Column(String(50), default='Mexico')
-    cliente_id = Column(UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="SET NULL"), nullable=True)
+    # Ownership: la organización capacitadora es la dueña del participante (Sprint A).
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="SET NULL"), nullable=True)
+    # cliente_id conserva compatibilidad pero apunta a organizaciones (dueño), no a usuario individual.
+    cliente_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="SET NULL"), nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -170,6 +176,7 @@ class CursoParticipante(Base):
     fecha_participacion = Column(Date)
     fecha_inicio_vigencia = Column(Date)
     fecha_expiracion = Column(Date)
+    fecha_acreditacion = Column(DateTime(timezone=True))  # Sprint A: trazabilidad de acreditación
     id_certificado = Column(String(50), unique=True)
     codigo_validacion = Column(String(64), unique=True)
     estado_acreditacion = Column(Boolean, default=False)
@@ -448,11 +455,15 @@ class DocumentoEmitido(Base):
     html_snapshot = Column(Text)
     documento_metadata = Column("documento_metadata", JSONB, default={})
     emitido_por = Column(UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"))
+    # FK real al curso-participante: fuente de verdad para resolver
+    # participante/curso en la verificacion publica (no depende de codigo_validacion).
+    curso_participante_id = Column(UUID(as_uuid=True), ForeignKey("curso_participante.id", ondelete="SET NULL"), nullable=True)
     fecha_emision = Column(DateTime(timezone=True), server_default=func.now())
     estatus = Column(String(20), default='emitido', nullable=False)
 
     organizacion = relationship("Organizacion")
     template = relationship("Template")
+    curso_participante = relationship("CursoParticipante")
 
     __table_args__ = (
         CheckConstraint("tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO')", name="check_tipo_documento_emitido"),

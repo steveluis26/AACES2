@@ -41,12 +41,13 @@ async def emitir_constancia_legacy(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
+    # Alias de /emitir: delega a la emision real (genera PDF + QR + hash).
+    # Eliminado el comportamiento legacy que no generaba PDF (deuda tecnica).
     cid = user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
-
     cp = await db.execute(
         text("""
             SELECT cp.id, cp.curso_id, cp.participante_id, c.cliente_id
@@ -63,42 +64,31 @@ async def emitir_constancia_legacy(
     if str(cp_row[3]) != cid:
         raise HTTPException(status_code=403, detail="No tienes permiso para emitir constancias de este curso")
 
-    org_res = await db.execute(
-        text("SELECT organizacion_id FROM aaces.clientes WHERE id = :cid"),
-        {"cid": cid},
-    )
-    org_row = org_res.fetchone()
-    org_id = str(org_row[0]) if org_row and org_row[0] else None
-    if not org_id:
-        org_res2 = await db.execute(
-            text("SELECT id FROM aaces.organizaciones ORDER BY fecha_creacion LIMIT 1")
+    organizacion_id = user_data.get("org_id")
+    if not organizacion_id:
+        row = await db.execute(
+            text("SELECT organizacion_id FROM aaces.clientes WHERE id=:cid"),
+            {"cid": cid},
         )
-        org_row2 = org_res2.fetchone()
-        org_id = str(org_row2[0]) if org_row2 else None
+        r = row.fetchone()
+        organizacion_id = str(r[0]) if r and r[0] else None
+    if not organizacion_id:
+        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
 
-    doc_id = str(uuid.uuid4())
-    codigo_validacion = str(uuid.uuid4())
-    folio = f"FOL-{uuid.uuid4().hex[:8].upper()}"
-    await db.execute(
-        text("""
-            INSERT INTO aaces.documentos_emitidos (id, organizacion_id, tipo_documento, codigo_validacion, folio, storage_provider, storage_key, pdf_hash, emitido_por, fecha_emision, estatus)
-            VALUES (:id, :org_id, :tipo, :codigo, :folio, 'local', :key, '', NULL, now(), 'emitido')
-        """),
-        {
-            "id": doc_id, "org_id": org_id, "tipo": payload.tipo_documento,
-            "codigo": codigo_validacion, "folio": folio,
-            "key": f"constancias/{doc_id}.pdf",
-        },
-    )
-
-    cp_id = payload.curso_participante_id
-    await db.execute(
-        text("UPDATE aaces.curso_participante SET codigo_validacion = :cv, fecha_emision_certificado = now() WHERE id = :cp_id"),
-        {"cv": codigo_validacion, "cp_id": cp_id},
-    )
-
-    await db.commit()
-    return {"id": doc_id, "codigo_validacion": codigo_validacion, "folio": folio}
+    try:
+        doc = await constancias_service.emitir(
+            db=db,
+            organizacion_id=organizacion_id,
+            curso_participante_id=payload.curso_participante_id,
+            emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
+            template_id=None,
+        )
+        return {"success": True, "documento": doc, "legacy_alias": True}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error emitiendo constancia (alias legacy): {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al emitir constancia")
 
 
 @router.post("/emitir")

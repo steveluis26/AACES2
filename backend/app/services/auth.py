@@ -153,9 +153,12 @@ class AuthService:
             result = await db.execute(
                 text(
                     """
-                    SELECT id, correo, nombre, categoria, estado, password_hash, bloqueado_hasta, intentos_fallidos
-                    FROM aaces.clientes
-                    WHERE correo = :email AND estado = 'activo'
+                    SELECT c.id, c.correo, c.nombre, c.categoria, c.estado, c.password_hash,
+                           c.bloqueado_hasta, c.intentos_fallidos, c.organizacion_id,
+                           o.razon_social
+                    FROM aaces.clientes c
+                    LEFT JOIN aaces.organizaciones o ON o.id = c.organizacion_id
+                    WHERE c.correo = :email AND c.estado = 'activo'
                     LIMIT 1
                     """
                 ),
@@ -168,7 +171,7 @@ class AuthService:
             user = SimpleNamespace(
                 id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4],
                 password_hash=row[5], bloqueado_hasta=row[6], intentos_fallidos=row[7],
-                source="cliente"
+                organizacion_id=row[8], org_name=row[9], source="cliente"
             )
 
             if not self.verify_password(password, user.password_hash):

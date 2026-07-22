@@ -162,7 +162,7 @@ async def empresas_top(
             FROM aaces.documentos_emitidos d
             JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion::varchar
             JOIN aaces.cursos c ON c.id = cp.curso_id
-            JOIN aaces.clientes cl ON cl.id = c.cliente_id
+            JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
             WHERE d.organizacion_id = :org_id
             GROUP BY cl.id, cl.nombre ORDER BY total DESC LIMIT :lim
         """),
@@ -191,7 +191,7 @@ async def proximos_a_vencer(
             FROM aaces.documentos_emitidos d
             JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion::varchar
             JOIN aaces.cursos c ON c.id = cp.curso_id
-            JOIN aaces.clientes cl ON cl.id = c.cliente_id
+            JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
             WHERE d.organizacion_id = :org_id
               AND cp.fecha_expiracion IS NOT NULL
               AND cp.fecha_expiracion BETWEEN CURRENT_DATE AND CURRENT_DATE + :dias * INTERVAL '1 day'

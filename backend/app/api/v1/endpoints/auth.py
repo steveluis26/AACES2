@@ -17,6 +17,57 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 security = HTTPBearer()
 
+# Contrato de token unificado para TODO AACES (Sprint A — dominio multiempresa).
+# Tanto la rama `usuarios` como `clientes` terminan en exactamente esta misma
+# estructura. Ningún endpoint debe preguntar de dónde vino el login.
+_ROLE_PERMISSIONS = {
+    "admin": ["org:read", "org:write", "curso:read", "curso:write",
+              "participante:read", "participante:write", "constancia:emitir",
+              "verificacion:read", "renovacion:read", "renovacion:write"],
+    "cliente": ["curso:read", "curso:write", "participante:read", "participante:write",
+                "constancia:emitir", "verificacion:read", "renovacion:read"],
+    "trainer": ["curso:read", "participante:read", "participante:write", "constancia:emitir"],
+    "public": [],
+}
+
+def build_token(user: Any) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Construye (access_payload, refresh_payload) con contrato único.
+
+    Ambas ramas (usuarios/clientes) llegan aquí con `organizacion_id` y
+    `org_name` resueltos por el servicio de auth.
+    """
+    source = getattr(user, "source", "cliente")
+    if source == "usuario":
+        role = user.rol
+        category = user.rol
+    else:
+        role = determine_user_role(user)
+        category = getattr(user, "categoria", "basico")
+
+    org_id = str(user.organizacion_id) if getattr(user, "organizacion_id", None) else None
+    org_name = getattr(user, "org_name", None)
+    perms = _ROLE_PERMISSIONS.get(role, _ROLE_PERMISSIONS["public"])
+
+    access = {
+        "sub": str(user.id),
+        "email": user.correo,
+        "role": role,
+        "name": user.nombre,
+        "org_id": org_id,
+        "org_name": org_name,
+        "category": category,
+        "permissions": perms,
+        "source": source,
+    }
+    refresh = {
+        "sub": str(user.id),
+        "email": user.correo,
+        "role": role,
+        "org_id": org_id,
+        "type": "refresh",
+    }
+    return access, refresh
+
 @router.post("/login", response_model=Token)
 async def login(
     request: LoginRequest,
@@ -68,46 +119,22 @@ async def login(
                 detail=f"Cuenta bloqueada hasta {user.bloqueado_hasta.strftime('%Y-%m-%d %H:%M')}"
             )
         
-        # Determinar rol del usuario (nuevo esquema vs viejo)
-        if getattr(user, "source", None) == "usuario":
-            role = user.rol
-            org_id = str(user.organizacion_id) if user.organizacion_id else None
-            category = user.rol
-        else:
-            role = determine_user_role(user)
-            org_id = str(user.organizacion_id) if getattr(user, "organizacion_id", None) else None
-            category = getattr(user, 'categoria', 'basico')
-        
-        # Crear tokens JWT
-        token_data = {
-            "sub": str(user.id),
-            "email": user.correo,
-            "role": role,
-            "name": user.nombre,
-        }
-        if org_id:
-            token_data["org_id"] = org_id
-        if category:
-            token_data["category"] = category
-        if getattr(user, "source", None) == "usuario":
-            token_data["source"] = "usuario"
+        # Contrato de token unificado (Sprint A — dominio multiempresa).
+        # Independientemente de si el login vino de `usuarios` o `clientes`,
+        # build_token produce SIEMPRE la misma estructura. Esto elimina la
+        # categoría de bugs "¿este token viene de clientes o de usuarios?".
+        token_data, refresh_data = build_token(user)
         
         access_token = auth_service.create_access_token(data=token_data)
         
-        refresh_token = auth_service.create_refresh_token(
-            data={
-                "sub": str(user.id),
-                "email": user.correo,
-                "role": role
-            }
-        )
+        refresh_token = auth_service.create_refresh_token(data=refresh_data)
         
         # Registrar login exitoso
         audit_logger.log_user_action(
             user_id=str(user.id),
             action="successful_login",
             resource="auth",
-            details={"email": user.correo, "role": role, "source": getattr(user, "source", "cliente")}
+            details={"email": user.correo, "role": token_data["role"], "source": getattr(user, "source", "cliente")}
         )
         
         return {

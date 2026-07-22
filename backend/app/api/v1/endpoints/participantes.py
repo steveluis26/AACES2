@@ -34,7 +34,7 @@ async def participantes_proximos_a_vencer(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -116,7 +116,7 @@ async def vencimientos_por_empresa(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -164,7 +164,7 @@ async def buscar_posibles_duplicados(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -214,7 +214,7 @@ async def list_participantes(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -269,7 +269,7 @@ async def get_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -377,7 +377,7 @@ async def create_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -391,13 +391,16 @@ async def create_participante(
 
     if not nombre:
         raise HTTPException(status_code=400, detail="El nombre es requerido")
+    # A2.4: teléfono obligatorio (el dinero de renovaciones vive en WhatsApp/teléfono)
+    if not telefono:
+        raise HTTPException(status_code=400, detail="El teléfono es requerido para registrar participantes")
 
     pax_id = _generate_pax_id()
     pid = (
         await db.execute(
-            text("""
-                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, pais)
-                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, 'Mexico')
+            text(""" 
+                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, organizacion_id, pais)
+                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, :org_id, 'Mexico')
                 RETURNING id
             """),
             {
@@ -409,6 +412,7 @@ async def create_participante(
                 "cargo": cargo or None,
                 "ciudad": ciudad_origen or None,
                 "cliente_id": cid,
+                "org_id": cid,
             },
         )
     ).scalar()
@@ -424,7 +428,7 @@ async def update_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -464,17 +468,17 @@ async def acreditar_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
+    cid = user_data.get("org_id") or user_data.get("sub")
     if not cid:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     cp = await db.execute(
-        text("""
+        text(""" 
             SELECT cp.id FROM aaces.curso_participante cp
             JOIN aaces.cursos c ON c.id = cp.curso_id
-            WHERE cp.participante_id = :pid AND c.cliente_id = :cid
+            WHERE cp.participante_id = :pid AND c.organizacion_id = :cid
             LIMIT 1
         """),
         {"pid": participante_id, "cid": cid},
@@ -484,8 +488,8 @@ async def acreditar_participante(
         raise HTTPException(status_code=404, detail="Participante no encontrado en tus cursos")
 
     await db.execute(
-        text("UPDATE aaces.curso_participante SET estado_acreditacion = true, calificacion = :cal WHERE id = :id"),
+        text("UPDATE aaces.curso_participante SET estado_acreditacion = true, calificacion = :cal, fecha_acreditacion = NOW() WHERE id = :id"),
         {"cal": payload.calificacion, "id": cp_row[0]},
     )
     await db.commit()
-    return {"status": "acreditado", "calificacion": payload.calificacion}
+    return {"status": "acreditado", "calificacion": payload.calificacion, "fecha_acreditacion": "NOW()"}

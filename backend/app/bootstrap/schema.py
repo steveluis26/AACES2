@@ -293,11 +293,46 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES grupos_curso(id) ON DELETE SET NULL",
         "ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0",
         "ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0",
-        "ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE",
-        "ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE",
-        "ALTER TABLE IF EXISTS clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false",
-        "ALTER TABLE aaces.clientes ALTER COLUMN id SET DEFAULT gen_random_uuid()",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS vigencia_desde DATE",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS vigencia_hasta DATE",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false",
+        # --- Sprint A: ownership por organización (idempotente + backfill seguro) ---
         "ALTER TABLE aaces.curso_participante ALTER COLUMN codigo_validacion TYPE VARCHAR(36)",
+        "ALTER TABLE aaces.clientes ALTER COLUMN id SET DEFAULT gen_random_uuid()",
+        # --- Sprint A: ownership por organización (idempotente + backfill seguro) ---
+        # 1) Añadir organizacion_id donde falte (no rompe si ya existe).
+        "ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE CASCADE",
+        "ALTER TABLE IF EXISTS participantes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL",
+        "ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS fecha_acreditacion TIMESTAMP WITH TIME ZONE",
+        # 2) Migrar cliente_id (que apuntaba a clientes) hacia la org del cliente,
+        #    y reorientar la FK para que apunte a organizaciones (dueño).
+        """
+        DO $$
+        BEGIN
+            -- Backfill: donde cliente_id siga siendo un clientes.id, llevarlo a su organización.
+            UPDATE cursos c SET cliente_id = cl.organizacion_id
+            FROM aaces.clientes cl
+            WHERE c.cliente_id = cl.id AND c.cliente_id NOT IN (SELECT id FROM aaces.organizaciones);
+            UPDATE participantes p SET cliente_id = cl.organizacion_id
+            FROM aaces.clientes cl
+            WHERE p.cliente_id = cl.id AND p.cliente_id NOT IN (SELECT id FROM aaces.organizaciones);
+            -- Reorientar FKs cliente_id -> organizaciones (idempotente).
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cursos_cliente_id_fkey') THEN
+                ALTER TABLE cursos DROP CONSTRAINT cursos_cliente_id_fkey;
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'participantes_cliente_id_fkey') THEN
+                ALTER TABLE participantes DROP CONSTRAINT participantes_cliente_id_fkey;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cursos_cliente_id_fkey') THEN
+                ALTER TABLE cursos ADD CONSTRAINT cursos_cliente_id_fkey
+                    FOREIGN KEY (cliente_id) REFERENCES aaces.organizaciones(id) ON DELETE CASCADE;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'participantes_cliente_id_fkey') THEN
+                ALTER TABLE participantes ADD CONSTRAINT participantes_cliente_id_fkey
+                    FOREIGN KEY (cliente_id) REFERENCES aaces.organizaciones(id) ON DELETE SET NULL;
+            END IF;
+        END $$;
+        """,
         "UPDATE aaces.planes SET activo = true WHERE activo IS NULL",
         "UPDATE aaces.usuarios SET activo = true WHERE activo IS NULL",
     ]:
@@ -312,14 +347,16 @@ async def ensure_schema(conn: AsyncConnection) -> None:
     logger.info("Ensuring database schema...")
     await create_aaces_schema(conn)
     await create_extensions(conn)
+    # Orden importa: organizaciones debe existir antes que clientes/usuarios
+    # (FK organizacion_id). create_metadata_tables crea el resto vía modelos SQLAlchemy.
     for fn in [
+        create_organizaciones,
         create_clientes,
+        create_usuarios,
         create_tipos_curso,
         create_grupos_curso,
         create_contactos,
         create_planes,
-        create_organizaciones,
-        create_usuarios,
         create_suscripciones,
         create_templates,
         create_registro_intentos,

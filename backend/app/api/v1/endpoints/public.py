@@ -41,7 +41,7 @@ async def public_participant_profile(
                   cl.nombre AS org_nombre
                 FROM aaces.curso_participante cp
                 JOIN aaces.cursos c ON c.id = cp.curso_id
-                JOIN aaces.clientes cl ON cl.id = c.cliente_id
+                JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
                 WHERE cp.participante_id = :pid
                 ORDER BY c.fecha_inicio DESC NULLS LAST
             """),

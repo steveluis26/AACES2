@@ -21,19 +21,23 @@ class VerificationService:
         user_agent: str,
         tipo: str = VerificationType.QR,
     ) -> VerificacionPublicResponse:
-        documento = await db.execute(
+        # 1) Localizar el documento emitido por codigo_validacion (string o uuid).
+        doc_row = await db.execute(
             text("""
                 SELECT d.id, d.tipo_documento, d.estatus, d.fecha_emision,
                        d.pdf_hash, d.codigo_validacion, d.documento_metadata,
-                       o.razon_social, d.folio
+                       d.curso_participante_id,
+                       o.razon_social, o.rfc, o.nombre_comercial,
+                       o.estado, o.ciudad,
+                       d.folio
                 FROM aaces.documentos_emitidos d
                 JOIN aaces.organizaciones o ON o.id = d.organizacion_id
-                WHERE d.codigo_validacion = :codigo
+                WHERE d.codigo_validacion::text = :codigo
                 LIMIT 1
             """),
-            {"codigo": codigo}
+            {"codigo": str(codigo)},
         )
-        row = documento.fetchone()
+        row = doc_row.fetchone()
 
         if not row:
             await self._registrar(
@@ -47,8 +51,11 @@ class VerificationService:
                 verificaciones_count=0,
             )
 
-        doc_id, tipo_doc, estatus, fecha_emision, pdf_hash, codigo_val, metadata, razon_social, folio = row
+        (doc_id, tipo_doc, estatus, fecha_emision, pdf_hash, codigo_val,
+         metadata, cp_id, razon_social, rfc, nombre_comercial,
+         org_estado, org_ciudad, folio) = row
 
+        # 2) Revocada / cancelada -> respuesta negativa pero con datos de la org.
         if estatus == "cancelado":
             await self._registrar(
                 db=db, documento_id=doc_id, codigo=codigo,
@@ -56,10 +63,10 @@ class VerificationService:
                 resultado=VerificationResult.REVOCADA
             )
             return VerificacionPublicResponse(
-                valida=False, codigo_validacion=codigo,
+                valida=False, codigo_validacion=str(codigo_val),
                 tipo_documento=tipo_doc, estatus=estatus,
                 pdf_hash=pdf_hash, organizacion=razon_social,
-                verificaciones_count=0,
+                rfc=rfc, folio=folio, verificaciones_count=0,
             )
 
         await self._registrar(
@@ -68,62 +75,62 @@ class VerificationService:
             resultado=VerificationResult.VALIDA
         )
 
+        # 3) Resolver participante + curso.
+        #    Fuente de verdad: FK curso_participante_id. Fallback: por codigo_validacion.
         participante_data = None
         curso_data = None
 
-        if tipo_doc == "CONSTANCIA":
-            meta = metadata or {}
-            cp_id = meta.get("curso_participante_id") if isinstance(meta, dict) else None
-            if not cp_id:
-                cp_row = await db.execute(
-                    text("""
-                        SELECT cp.id FROM aaces.curso_participante cp
-                        WHERE cp.codigo_validacion = :codigo
-                        LIMIT 1
-                    """),
-                    {"codigo": codigo}
-                )
-                cp_r = cp_row.fetchone()
-                if cp_r:
-                    cp_id = str(cp_r[0])
+        cp_lookup_sql = """
+            SELECT cp.id, cp.participante_id, cp.curso_id,
+                   cp.estado_acreditacion, cp.calificacion,
+                   cp.fecha_inicio_vigencia, cp.fecha_expiracion,
+                   p.nombre, p.apellido, p.empresa AS emp_participante,
+                   c.nombre AS curso_nombre, c.fecha_inicio, c.fecha_fin,
+                   c.duracion_horas, c.modalidad, c.empresa_contratante,
+                   c.codigo_curso
+            FROM aaces.curso_participante cp
+            JOIN aaces.participantes p ON p.id = cp.participante_id
+            JOIN aaces.cursos c ON c.id = cp.curso_id
+            WHERE {where}
+            LIMIT 1
+        """
 
-            if cp_id:
-                p_row = await db.execute(
-                    text("""
-                        SELECT p.nombre, p.apellido,
-                               c.nombre as curso_nombre,
-                               c.fecha_inicio, c.fecha_fin, c.duracion_horas,
-                               cp.calificacion, cp.fecha_inicio_vigencia,
-                               cp.fecha_expiracion
-                        FROM aaces.curso_participante cp
-                        JOIN aaces.participantes p ON p.id = cp.participante_id
-                        JOIN aaces.cursos c ON c.id = cp.curso_id
-                        WHERE cp.id = :cp_id
-                        LIMIT 1
-                    """),
-                    {"cp_id": cp_id}
-                )
-                pr = p_row.fetchone()
-                if pr:
-                    participante_data = {
-                        "nombre": f"{pr[0] or ''} {pr[1] or ''}".strip(),
-                    }
-                    curso_data = {
-                        "nombre": pr[2] or "",
-                        "fecha_inicio": pr[3].isoformat() if pr[3] else None,
-                        "fecha_fin": pr[4].isoformat() if pr[4] else None,
-                        "duracion_horas": pr[5] or 0,
-                        "calificacion": float(pr[6]) if pr[6] else None,
-                        "inicio_vigencia": pr[7].isoformat() if pr[7] else None,
-                        "expiracion": pr[8].isoformat() if pr[8] else None,
-                    }
+        if cp_id:
+            cp_r = (await db.execute(
+                text(cp_lookup_sql.format(where="cp.id = :cp_id")),
+                {"cp_id": str(cp_id)},
+            )).fetchone()
+        else:
+            cp_r = (await db.execute(
+                text(cp_lookup_sql.format(where="cp.codigo_validacion = :codigo")),
+                {"codigo": str(codigo_val)},
+            )).fetchone()
+
+        if cp_r:
+            participante_data = {
+                "nombre": f"{(cp_r[7] or '')} {(cp_r[8] or '')}".strip(),
+                "empresa": cp_r[9] or None,
+            }
+            curso_data = {
+                "nombre": cp_r[10] or "",
+                "codigo_curso": cp_r[16] or None,
+                "fecha_inicio": cp_r[11].isoformat() if cp_r[11] else None,
+                "fecha_fin": cp_r[12].isoformat() if cp_r[12] else None,
+                "duracion_horas": cp_r[13] or 0,
+                "modalidad": cp_r[14] or None,
+                "empresa_contratante": cp_r[15] or None,
+                "calificacion": float(cp_r[4]) if cp_r[4] else None,
+                "estado_acreditacion": bool(cp_r[3]) if cp_r[3] is not None else False,
+                "inicio_vigencia": cp_r[5].isoformat() if cp_r[5] else None,
+                "expiracion": cp_r[6].isoformat() if cp_r[6] else None,
+            }
 
         count_row = await db.execute(
             text("""
                 SELECT count(*) FROM aaces.verificaciones
                 WHERE codigo = :codigo AND resultado = 'VALIDA'
             """),
-            {"codigo": codigo}
+            {"codigo": str(codigo_val)},
         )
         verificaciones_count = count_row.scalar() or 0
 
@@ -135,6 +142,11 @@ class VerificationService:
             fecha_emision=fecha_emision.isoformat() if fecha_emision else None,
             pdf_hash=pdf_hash,
             organizacion=razon_social,
+            nombre_comercial=nombre_comercial,
+            rfc=rfc,
+            org_estado=org_estado,
+            org_ciudad=org_ciudad,
+            folio=folio,
             participante=participante_data,
             curso=curso_data,
             verificaciones_count=verificaciones_count,

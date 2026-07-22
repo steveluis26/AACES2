@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from app.db.errors import is_undefined_table
 from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
 
 from app.services.document_service import DocumentService
 from app.services.storage_provider import LocalStorageProvider, StorageProvider
@@ -50,13 +51,13 @@ class ConstanciasService:
                        cp.calificacion, cp.asistencia,
                        cp.fecha_inicio_vigencia, cp.fecha_expiracion,
                        c.nombre as curso_nombre,
-                       c.fecha_inicio, c.fecha_fin, c.duracion_horas,
-                       c.cliente_id, cl.organizacion_id,
+                       c.fecha_inicio, c.fecha_fin, c.duracion_horas, c.duracion_validacion,
+                       c.cliente_id, c.organizacion_id,
                        p.nombre as part_nombre, p.apellido as part_apellido,
                        p.correo as part_correo
                 FROM aaces.curso_participante cp
                 JOIN aaces.cursos c ON c.id = cp.curso_id
-                JOIN aaces.clientes cl ON cl.id = c.cliente_id
+                JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
                 JOIN aaces.participantes p ON p.id = cp.participante_id
                 WHERE cp.id = :cp_id
                 LIMIT 1
@@ -73,13 +74,48 @@ class ConstanciasService:
         if not cp.estado_acreditacion:
             raise ValueError("El participante no está acreditado en este curso")
 
+        now = datetime.utcnow()
+        participante_nombre = f"{cp.part_nombre or ''} {cp.part_apellido or ''}".strip()
+
+        # Idempotencia: si ya existe una constancia EMITIDA para este
+        # curso_participante, regresarla sin crear otra fila (nunca dos).
+        existente = await db.execute(
+            text("""
+                SELECT id, codigo_validacion FROM aaces.documentos_emitidos
+                WHERE curso_participante_id = :cp_id AND estatus = 'emitido'
+                ORDER BY fecha_emision DESC LIMIT 1
+            """),
+            {"cp_id": curso_participante_id},
+        )
+        ex_row = existente.fetchone()
+        if ex_row:
+            doc_id_existente = str(ex_row[0])
+            cv_existente = str(ex_row[1])
+            # Asegurar que el curso_participante tenga su codigo_validacion poblado.
+            await db.execute(
+                text("UPDATE aaces.curso_participante SET codigo_validacion = :cv WHERE id = :cp_id AND codigo_validacion IS NULL"),
+                {"cv": cv_existente, "cp_id": curso_participante_id},
+            )
+            await db.commit()
+            storage_url = await self._storage.url(
+                f"{organizacion_id}/CONSTANCIA/{cv_existente}.pdf"
+            )
+            return {
+                "id": doc_id_existente,
+                "codigo_validacion": cv_existente,
+                "pdf_hash": None,
+                "descarga_url": storage_url,
+                "participante_nombre": participante_nombre,
+                "curso_nombre": cp.curso_nombre,
+                "fecha_emision": now.isoformat(),
+                "idempotente": True,
+            }
+
         # Reusar el codigo de validacion ya emitido (si existe) para no regenerarlo
         # en cada re-emision. validaciones_publicas es FK a curso_participante.codigo_validacion,
         # asi que cambiarlo romperia las validaciones previas del mismo participante.
         codigo_validacion = cp.codigo_validacion if cp.codigo_validacion else str(uuid.uuid4())
-        now = datetime.utcnow()
 
-        participante_nombre = f"{cp.part_nombre or ''} {cp.part_apellido or ''}".strip()
         fecha_inicio_str = cp.fecha_inicio.isoformat() if cp.fecha_inicio else ""
         fecha_fin_str = cp.fecha_fin.isoformat() if cp.fecha_fin else ""
 
@@ -98,6 +134,28 @@ class ConstanciasService:
             "fecha_inicio_vigencia": cp.fecha_inicio_vigencia.isoformat() if cp.fecha_inicio_vigencia else "",
             "fecha_expiracion": cp.fecha_expiracion.isoformat() if cp.fecha_expiracion else "",
         }
+
+        # A2.3: derivar vigencia automática desde duracion_validacion del curso
+        if cp.fecha_inicio_vigencia and cp.fecha_expiracion:
+            inicio_vig = cp.fecha_inicio_vigencia
+            fin_vig = cp.fecha_expiracion
+        else:
+            meses = int(cp.duracion_validacion) if cp.duracion_validacion else 12
+            inicio_vig = now
+            fin_vig = now + relativedelta(months=meses)
+            # persistir en curso_participante para renovaciones
+            await db.execute(
+                text("UPDATE aaces.curso_participante SET fecha_inicio_vigencia = :iv, fecha_expiracion = :fv WHERE id = :cp_id"),
+                {"iv": inicio_vig, "fv": fin_vig, "cp_id": curso_participante_id},
+            )
+
+        # Folio secuencial por organización (A2.3)
+        folio_row = await db.execute(
+            text("SELECT count(*) + 1 FROM aaces.documentos_emitidos WHERE organizacion_id = :org AND estatus = 'emitido'"),
+            {"org": organizacion_id},
+        )
+        n_folio = folio_row.scalar() or 1
+        folio = f"AAC-{now.year}-{n_folio:05d}"
 
         if template_id:
             tpl = await db.execute(
@@ -150,26 +208,28 @@ class ConstanciasService:
         })
 
         await db.execute(
-            text("""
+            text(""" 
                 INSERT INTO aaces.documentos_emitidos
                     (id, organizacion_id, template_id, template_version, tipo_documento,
-                     codigo_validacion, storage_provider, storage_key, pdf_hash,
-                     html_snapshot, documento_metadata, emitido_por, estatus)
+                     codigo_validacion, folio, storage_provider, storage_key, pdf_hash,
+                     html_snapshot, documento_metadata, emitido_por, estatus, curso_participante_id)
                 VALUES
                     (:id, :org_id, :template_id, :version, 'CONSTANCIA',
-                     :codigo, :provider, :skey, :hash,
-                     :snapshot, :meta, :emitido_por, 'emitido')
+                     :codigo, :folio, :provider, :skey, :hash,
+                     :snapshot, :meta, :emitido_por, 'emitido', :cp_id)
             """),
             {
                 "id": doc_id, "org_id": organizacion_id,
                 "template_id": t_id, "version": t_version,
                 "codigo": codigo_validacion,
+                "folio": folio,
                 "provider": result.storage_provider,
                 "skey": result.storage_key,
                 "hash": result.pdf_hash,
                 "snapshot": result.html_snapshot,
                 "meta": metadata_val,
                 "emitido_por": emitido_por,
+                "cp_id": curso_participante_id,
             }
         )
 
@@ -189,29 +249,19 @@ class ConstanciasService:
                 "cp_id": curso_participante_id,
             }
         )
-        if cp.fecha_expiracion is not None:
-            await db.execute(
-                text("""
-                    UPDATE aaces.curso_participante
-                    SET fecha_expiracion = :fecha_exp
-                    WHERE id = :cp_id
-                """),
-                {
-                    "fecha_exp": cp.fecha_expiracion.isoformat(),
-                    "cp_id": curso_participante_id,
-                }
-            )
-
+        # (La vigencia ya se derivó y persistió arriba; no sobrescribir con NULL)
         await db.commit()
 
         return {
             "id": doc_id,
             "codigo_validacion": codigo_validacion,
+            "folio": folio,
             "pdf_hash": result.pdf_hash,
             "descarga_url": storage_url,
             "participante_nombre": participante_nombre,
             "curso_nombre": cp.curso_nombre,
             "fecha_emision": now.isoformat(),
+            "idempotente": False,
         }
 
     def _build_filters(self, query: ConstanciaListQuery, organizacion_id: str):
@@ -405,8 +455,8 @@ class ConstanciasService:
                 text("""
                     SELECT COUNT(*) FROM aaces.curso_participante cp
                     JOIN aaces.cursos c ON c.id = cp.curso_id
-                    JOIN aaces.clientes cl ON cl.id = c.cliente_id
-                    WHERE cl.organizacion_id = :org_id
+                    JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
+                    WHERE c.organizacion_id = :org_id
                       AND cp.estado_acreditacion = true
                 """),
                 {"org_id": organizacion_id}
@@ -424,8 +474,8 @@ class ConstanciasService:
                     FROM aaces.documentos_emitidos d
                     JOIN aaces.curso_participante cp ON cp.codigo_validacion::text = d.codigo_validacion::text
                     JOIN aaces.cursos c ON c.id = cp.curso_id
-                    JOIN aaces.clientes cl ON cl.id = c.cliente_id
-                    WHERE cl.organizacion_id = :org_id
+                    JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
+                    WHERE c.organizacion_id = :org_id
                       AND d.tipo_documento = 'CONSTANCIA'
                       AND cp.fecha_emision_certificado IS NOT NULL
                 """),
