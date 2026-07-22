@@ -33,6 +33,21 @@ engine = create_async_engine(
     connect_args={"server_settings": {"search_path": "aaces"}},
 )
 
+# Fija el search_path a 'aaces' en cada conexion fisica. Neon/Render no aplican
+# fiablemente server_settings para search_path, y sin esto los queries sin
+# esquema calificado (FROM cursos, FROM participantes, ...) fallan en prod con
+# "relation X does not exist". Se hace a nivel de conexion (no por request) para
+# no romper transacciones, y es tolerante si el rol no tiene permiso.
+# Nota: los eventos sync deben registrarse en engine.sync_engine (AsyncEngine
+# no soporta eventos asincronos).
+@event.listens_for(engine.sync_engine, "connect")
+def _set_search_path(dbapi_conn, conn_record):
+    try:
+        cur = dbapi_conn.cursor()
+        cur.execute("SET search_path TO aaces")
+    except Exception as e:
+        logger.warning(f"No se pudo fijar search_path en la conexion: {e}")
+
 # Create async session factory
 AsyncSessionLocal = async_sessionmaker(
     engine,

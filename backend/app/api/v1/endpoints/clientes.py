@@ -1652,8 +1652,27 @@ async def add_participante_curso(
             import uuid
             cod_val = uuid.uuid4().hex[:8].upper()
         acreditado = True
-        emision = payload.get("fecha_emision_certificado") or None
-        expiracion = payload.get("fecha_expiracion_certificado") or payload.get("fecha_expiracion") or None
+        emision_raw = payload.get("fecha_emision_certificado") or None
+        expiracion_raw = payload.get("fecha_expiracion_certificado") or payload.get("fecha_expiracion") or None
+
+        def _parse_date(v):
+            if v is None or v == "":
+                return None
+            if isinstance(v, (date, datetime)):
+                return v
+            s = str(v).strip()
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    return datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
+            try:
+                return date.fromisoformat(s[:10])
+            except ValueError:
+                return None
+
+        emision = _parse_date(emision_raw)
+        expiracion = _parse_date(expiracion_raw)
         sets = []
         params = {"cp": cp_id, "curso": curso_id}
         if id_cert is not None:
@@ -1878,7 +1897,22 @@ async def update_participante_curso(
             val = payload.get("fecha_emision_certificado") or None
             sets_cp.append("fecha_emision_certificado = :fecha_emision_certificado"); params_cp["fecha_emision_certificado"] = val
         if ("fecha_expiracion_certificado" in payload) or ("fecha_expiracion" in payload):
-            val = payload.get("fecha_expiracion_certificado") or payload.get("fecha_expiracion") or None
+            raw = payload.get("fecha_expiracion_certificado") or payload.get("fecha_expiracion") or None
+            val = None
+            if raw not in (None, ""):
+                s = str(raw).strip()
+                val = None
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        val = datetime.strptime(s, fmt).date()
+                        break
+                    except ValueError:
+                        continue
+                if val is None:
+                    try:
+                        val = date.fromisoformat(s[:10])
+                    except ValueError:
+                        val = None
             sets_cp.append("fecha_expiracion = :fecha_expiracion"); params_cp["fecha_expiracion"] = val
         # Enable validation: generate codes and set vigencia dates
         habilitar = bool(payload.get("habilitar_validacion"))
