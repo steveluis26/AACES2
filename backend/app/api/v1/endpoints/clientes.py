@@ -1347,9 +1347,9 @@ async def list_participantes_curso(
               p.id,
               p.nombre,
               p.apellido,
-              NULL::VARCHAR AS nombres,
-              NULL::VARCHAR AS apellido_paterno,
-              NULL::VARCHAR AS apellido_materno,
+              p.apellido_paterno AS nombres,
+              p.apellido_paterno,
+              p.apellido_materno,
               p.correo,
               p.ciudad_origen,
               p.telefono,
@@ -1450,9 +1450,9 @@ async def export_participantes_curso(
               p.id,
               p.nombre,
               p.apellido,
-              NULL::VARCHAR AS nombres,
-              NULL::VARCHAR AS apellido_paterno,
-              NULL::VARCHAR AS apellido_materno,
+              p.apellido_paterno AS nombres,
+              p.apellido_paterno,
+              p.apellido_materno,
               p.correo,
               p.ciudad_origen,
               p.telefono,
@@ -1500,6 +1500,7 @@ async def export_participantes_curso(
         )
         rows = (await db.execute(q, {"cid": curso_id})).fetchall()
         buf = io.StringIO()
+        buf.write("\ufeff")  # BOM UTF-8-SIG para que Excel lea acentos correctamente
         writer = csv.writer(buf)
         writer.writerow(["Participante", "Correo", "Ciudad", "Teléfono", "Empresa", "Cargo", "Estado Pago", "ID Certificado", "Código Validación", "Emisión", "Expira", "Costo", "Descuento", "Pagado", "Saldo"])
         for r in rows:
@@ -1524,7 +1525,7 @@ async def export_participantes_curso(
             writer.writerow([nombre_completo, correo, ciudad, telefono, empresa, cargo, estado_pago, id_cert, codigo_val, str(emision)[:10] if emision else "", str(expira)[:10] if expira else "", f"{costo_asignado:.2f}", f"{descuento:.2f}", f"{valor_pagado:.2f}", f"{saldo:.2f}"])
         filename = f"participantes_{curso_id}.csv"
         headers = {"Content-Disposition": f"attachment; filename={filename}"}
-        return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv", headers=headers)
+        return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv; charset=utf-8", headers=headers)
     except HTTPException:
         raise
     except Exception as e:
@@ -1882,6 +1883,12 @@ async def update_participante_curso(
         params_cp = {"cp": cp_id, "curso": curso_id}
         if "estado_pago" in payload:
             sets_cp.append("estado_pago = :estado_pago"); params_cp["estado_pago"] = (payload.get("estado_pago") or "").strip() or "pendiente"
+        if "valor_pagado" in payload:
+            try:
+                val_pagado = float(payload.get("valor_pagado") or 0)
+            except (TypeError, ValueError):
+                val_pagado = 0.0
+            sets_cp.append("valor_pagado = :valor_pagado"); params_cp["valor_pagado"] = val_pagado
         if "id_certificado" in payload:
             val = (payload.get("id_certificado") or "").strip() or None
             sets_cp.append("id_certificado = :id_certificado"); params_cp["id_certificado"] = val
