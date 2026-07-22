@@ -181,6 +181,9 @@ class ParticipanteCreateSchema(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=100)
     curp: Optional[str] = None
     correo: str = Field(..., max_length=255)
+    telefono: Optional[str] = None
+    empresa: Optional[str] = None
+    cargo: Optional[str] = None
 
 
 @router.post("/{curso_id}/participantes", status_code=status.HTTP_201_CREATED)
@@ -221,11 +224,19 @@ async def add_participante(
         pax_id = f"PAX-{uuid.uuid4().hex[:8].upper()}"
         ins = await db.execute(
             text("""
-                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, pais)
-                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, 'Mexico')
+                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, pais, cliente_id, telefono, empresa, cargo)
+                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, 'Mexico', :cid, :telefono, :empresa, :cargo)
                 RETURNING id
             """),
-            {"pax_id": pax_id, "nombre": nombre, "correo": correo},
+            {
+                "pax_id": pax_id,
+                "nombre": nombre,
+                "correo": correo,
+                "cid": cid,
+                "telefono": payload.telefono,
+                "empresa": payload.empresa,
+                "cargo": payload.cargo,
+            },
         )
         pid = ins.scalar()
 
