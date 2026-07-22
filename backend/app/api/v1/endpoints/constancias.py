@@ -101,10 +101,21 @@ async def emitir_constancia_legacy(
 @router.post("/emitir")
 async def emitir_constancia(
     payload: EmitirConstanciaRequest,
-    user_data: dict = Depends(require_org_admin),
+    user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data["org_id"]
+    organizacion_id = user_data.get("org_id")
+    if not organizacion_id:
+        cid = user_data.get("sub")
+        if cid:
+            row = await db.execute(
+                text("SELECT organizacion_id FROM aaces.clientes WHERE id=:cid"),
+                {"cid": cid},
+            )
+            r = row.fetchone()
+            organizacion_id = str(r[0]) if r and r[0] else None
+    if not organizacion_id:
+        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
     try:
         doc = await constancias_service.emitir(
             db=db,

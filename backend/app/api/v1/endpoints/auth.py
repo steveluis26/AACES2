@@ -75,7 +75,7 @@ async def login(
             category = user.rol
         else:
             role = determine_user_role(user)
-            org_id = None
+            org_id = str(user.organizacion_id) if getattr(user, "organizacion_id", None) else None
             category = getattr(user, 'categoria', 'basico')
         
         # Crear tokens JWT

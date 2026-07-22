@@ -484,7 +484,7 @@ async def acreditar_participante(
         raise HTTPException(status_code=404, detail="Participante no encontrado en tus cursos")
 
     await db.execute(
-        text("UPDATE aaces.curso_participante SET estado_acreditacion = true, calificacion = :cal WHERE id = :id"),
+        text("UPDATE aaces.curso_participante SET acreditado = true, estado_acreditacion = true, calificacion = :cal WHERE id = :id"),
         {"cal": payload.calificacion, "id": cp_row[0]},
     )
     await db.commit()
