@@ -45,6 +45,18 @@ VACÍA (simula el peor escenario: instalación limpia / Neon nuevo).
 - [ ] Tag de versión creado (ej. `v0.4.0-rc1` antes del merge).
 - [ ] Push AUTORIZADO solo tras aprobar todo lo anterior.
 
+### Onboarding (beta)
+- [ ] `/register` devuelve `access_token` (no espera activación manual).
+- [ ] Admin recién registrado puede crear su PRIMER curso con ese token.
+- [ ] Organización se crea `activa` y suscripción `trial` `activa` (beta).
+- [ ] `clientes` operativo + `usuarios` admin vinculados a la misma org.
+
+### Infra pendiente (no bloquea release)
+- [ ] `tests/rc/multi_tenant_validation.sh` tiene bug de heredoc/SQL — reescribir en Python
+      como regresión permanente (heredocs+SQL+JWT+UUID son frágiles en Bash).
+- [ ] Unificar modelo de identidad `usuarios`/`clientes` a largo plazo (hoy el dominio
+      operativo usa `clientes`; `usuarios` es gestión de plataforma).
+
 ---
 
 ## Versionado por hitos (disciplina SaaS)
