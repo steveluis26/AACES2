@@ -57,6 +57,24 @@ VACÍA (simula el peor escenario: instalación limpia / Neon nuevo).
 - [ ] Unificar modelo de identidad `usuarios`/`clientes` a largo plazo (hoy el dominio
       operativo usa `clientes`; `usuarios` es gestión de plataforma).
 
+### Smoke Test Producción (post-push, <10 min, requisito permanente)
+Correr contra la URL de producción (Render/Vercel), NO contra local:
+- [ ] Login con cuenta demo de producción (HTTP 200, JWT con `org_id`).
+- [ ] Registrar una organización NUEVA vía `/register` (recibe `access_token`).
+- [ ] Con ese token: crear un curso (HTTP 201).
+- [ ] Registrar un participante (HTTP 201).
+- [ ] Emitir una constancia (HTTP 200, PDF + QR + hash + folio).
+- [ ] Escanear el QR (apunta a la URL pública de producción).
+- [ ] Abrir la verificación pública desde la URL de producción (`valida:true`).
+- [ ] Confirmar que el PDF se consulta/descarga correctamente desde producción.
+- [ ] Confirmar que el dashboard de la org nueva muestra SÓLO sus datos (aislamiento).
+
+### Observación post-despliegue (24-48h antes de cerrar Sprint A)
+- [ ] Logs de Render sin errores inesperados.
+- [ ] Consumo de Neon estable (sin queries absurdas / conexiones colgadas).
+- [ ] Vercel sirve el frontend sin error de build/deploy.
+- [ ] Sin regresiones: el E2E local sigue verde tras el deploy.
+
 ---
 
 ## Versionado por hitos (disciplina SaaS)
