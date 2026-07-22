@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import Request
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
@@ -10,6 +11,8 @@ import uuid
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import require_org_admin, get_current_user_data
 from app.services.constancias import constancias_service
+from app.services.storage_provider import LocalStorageProvider
+from app.core.config import settings
 from app.schemas import (
     EmitirConstanciaRequest, ConstanciaDetalleResponse,
     ConstanciaListResponse,
@@ -274,6 +277,7 @@ async def resumen_constancias(
 @router.get("/{constancia_id}")
 async def detalle_constancia(
     constancia_id: str,
+    request: Request,
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
@@ -296,7 +300,8 @@ async def detalle_constancia(
     if not row:
         raise HTTPException(status_code=404, detail="Constancia no encontrada")
 
-    pdf_url = f"/constancias/{constancia_id}/pdf"
+    base = str(request.base_url).rstrip("/")
+    pdf_url = f"{base}/api/v1/constancias/{constancia_id}/pdf"
 
     return {
         "id": str(row[0]),
@@ -329,11 +334,18 @@ async def descargar_pdf_constancia(
     if not row:
         raise HTTPException(status_code=404, detail="Constancia no encontrada")
 
-    minimal_pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n190\n%%EOF"
+    storage_key = row[0]
+    if not storage_key:
+        raise HTTPException(status_code=404, detail="Constancia sin archivo PDF")
 
-    filename = row[0] or f"constancia-{constancia_id}.pdf"
+    provider = LocalStorageProvider(base_dir=settings.STORAGE_DIR)
+    if not await provider.exists(storage_key):
+        raise HTTPException(status_code=404, detail="Archivo PDF no encontrado en storage")
+
+    pdf_bytes = await provider.read(storage_key)
+    filename = storage_key.split("/")[-1] or f"constancia-{constancia_id}.pdf"
     return Response(
-        content=minimal_pdf,
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
