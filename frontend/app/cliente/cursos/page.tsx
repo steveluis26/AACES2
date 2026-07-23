@@ -15,6 +15,7 @@ import { ColumnDef, SortingState, flexRender, getCoreRowModel, getFilteredRowMod
 import { Checkbox } from '@/components/ui/checkbox'
 import { ChevronDownIcon, ChevronUpIcon, ChevronLeftIcon, ChevronRightIcon, Loader2 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 
 type SubCurso = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string }
 type CursoProximo = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string; grupo_id?: string; precio_base?: number; precio_promocional?: number | null; subcursos?: (SubCurso & { precio_base?: number; precio_promocional?: number | null })[] }
@@ -530,7 +531,15 @@ export default function CursosClientePage() {
 
   const crearParticipante = async () => {
     if (!selected) return
+    // El backend espera `nombre` (texto completo) + apellido_paterno/apellido_materno.
+    // El formulario separa nombres/apellidos, así que componemos `nombre`.
+    const nombreCompleto = [
+      String(nuevoPart.nombres || '').trim(),
+      String(nuevoPart.apellido_paterno || '').trim(),
+      String(nuevoPart.apellido_materno || '').trim(),
+    ].filter(Boolean).join(' ')
     const payload: Record<string, string | boolean> = {
+      nombre: nombreCompleto,
       nombres: String(nuevoPart.nombres || '').trim(),
       apellido_paterno: String(nuevoPart.apellido_paterno || '').trim(),
       apellido_materno: String(nuevoPart.apellido_materno || '').trim(),
@@ -570,7 +579,14 @@ export default function CursosClientePage() {
 
   const saveParticipante = async (p: CursoParticipante) => {
     if (!selected) return
+    // Backend espera `nombre` (texto completo); el formulario separa nombres/apellidos.
+    const nombreCompleto = [
+      String(p.nombres || '').trim(),
+      String(p.apellido_paterno || '').trim(),
+      String(p.apellido_materno || '').trim(),
+    ].filter(Boolean).join(' ')
     const payload: Record<string, unknown> = {
+      nombre: nombreCompleto,
       nombres: String(p.nombres || '').trim(),
       apellido_paterno: String(p.apellido_paterno || '').trim(),
       apellido_materno: String(p.apellido_materno || '').trim(),
@@ -580,7 +596,7 @@ export default function CursosClientePage() {
       empresa: String(p.empresa || '').trim(),
       cargo: String(p.cargo || '').trim(),
       profesion: String(p.profesion || '').trim(),
-      estado_pago: (p.estado_pago || 'pendiente')
+      estado_pago: (p.estado_pago || 'pendiente'),
     }
     const idCert = String(p.id_certificado || '').trim()
     const codVal = String(p.codigo_validacion || '').trim()
