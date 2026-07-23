@@ -65,9 +65,11 @@ Los contratos y reglas están en `CONTRACTS.md` y `ARCHITECTURE_RULES.md`.
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_schema.py`
 - [ ] `backend/scripts/audit_sql_refs.py` — queries SQL crudas vs columnas BD (detecta `column does not exist`).
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_sql_refs.py`
-- [ ] `backend/scripts/audit_contract.py` — contrato de identidad (ningún endpoint lee JWT directo ni usa campos no canónicos).
+- [ ] `backend/scripts/audit_contract.py` — ningún endpoint lee el JWT directo ni usa campos no canónicos.
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_contract.py`
-- [ ] `tests/e2e/flujo_completo.sh` — E2E por HTTP (login→curso→participante→acreditar→emitir→verificar).
+- [ ] `backend/scripts/audit_tenant.py` — ningún GET de datos de negocio filtra sin `organizacion_id` (multi-tenant).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_tenant.py`
+- [ ] `tests/e2e/flujo_completo.sh` — regresión extremo a extremo (login→curso→participante→acreditar→constancia→QR→verificación).
 - [ ] `tests/e2e/sprint_a_check.sh` — checks de reglas de negocio Sprint A.
 - [ ] `tests/acceptance/core_operativo.py` — Prueba de Aceptación del Core (5 flujos:
       onboarding, operación normal, diferenciador QR/verificación, multiusuario, persistencia).

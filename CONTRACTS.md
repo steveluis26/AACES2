@@ -70,5 +70,36 @@ valor proviene de `CurrentUser.organizacion_id`, nunca de `sub`.
 ## Verificación del contrato
 - `backend/scripts/audit_sql_refs.py`: detecta queries SQL crudas que referencien
   columnas inexistentes (ej. `organizaciones.nombre` en vez de `razon_social`).
+- `backend/scripts/audit_contract.py`: ningún endpoint lee el JWT directo ni usa
+  campos no canónicos de identidad.
+- `backend/scripts/audit_tenant.py`: ningún GET de datos de negocio filtra sin
+  `organizacion_id` (multi-tenant).
 - Para añadir un campo a `CurrentUser`: editar `get_current_user_data()`, documentar
   aquí, y correr la prueba de aceptación (`tests/acceptance/core_operativo.py`).
+
+---
+
+## Dominio: Cursos (regla de flujo único)
+Un SaaS maduro tiene UN flujo CRUD por concepto. AACES hoy tiene implementaciones
+dispersas (deuda de crecimiento). Regla objetivo:
+
+- `POST   /api/v1/clientes/cursos`        → crear
+- `GET    /api/v1/clientes/cursos`        → listar (YA filtra por organizacion_id)
+- `GET    /api/v1/clientes/cursos/{id}`   → detalle
+- `PUT    /api/v1/clientes/cursos/{id}`   → editar
+- `DELETE /api/v1/clientes/cursos/{id}`   → eliminar
+
+"Próximos cursos" NO es otro endpoint con su propio SQL. Es un filtro del listado:
+`GET /api/v1/clientes/cursos?estado=proximo` o `?fecha_desde=YYYY-MM-DD`.
+Hoy existe `GET /api/v1/clientes/agenda/proximos` (SQL propio) — debe converger.
+
+Ningún endpoint escribe SQL de negocio directo. Todo va por `CourseService`
+(create/update/delete/list/get/upcoming) con `organizacion_id` obligatorio.
+Estado: pendiente de Sprint B (hardening). RC-1 solo garantiza que los endpoints
+existentes filtran por tenant y usan el contrato de identidad.
+
+## Dominio: Participantes / Constancias
+Misma regla: un servicio por concepto, filtro `organizacion_id` obligatorio.
+Los endpoints de VERIFICACIÓN PÚBLICA (`/verificar/{codigo}`, `/constancias/.../codigo`)
+son la excepción legítima: se consultan por código de validación, no por tenant
+(ese es el diferenciador comercial: cualquiera puede verificar un certificado).

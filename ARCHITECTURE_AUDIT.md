@@ -98,13 +98,42 @@ la tabla quedaba sin el curso nuevo. Fix: `cid = organizacion_id or sub` (commit
 Lección: al debuggear "no aparece", ver SIEMPRE qué GET exacto hace el frontend
 (`grep` en page.tsx), no asumir la ruta del POST.
 
-## Riesgo de seguridad PENDIENTE (no bloquea RC-1, parche post-RC)
-`get_cursos` (clientes.py:341, GET /clientes/cursos) hace `select(Curso)` SIN
-`WHERE organizacion_id = ...` -> devuelve cursos de TODAS las orgs (filtración
-multi-tenant). Usa `Depends(get_current_user)` (tiene organizacion_id). Hay que
-añadir `query = query.where(Curso.organizacion_id == current_user["organizacion_id"])`.
-No se tocó en RC-1 para no afectar la UI de `cursos/page.tsx` sin verificar primero
-qué ruta usa. Documentado para parche de seguridad inmediato post-RC-1.
+## AUDITORÍA DE FILTRACIÓN MULTI-TENANT (blocker de release)
+Script: `backend/scripts/audit_tenant.py`. Resultado: 7 GET de negocio sin filtro
+de tenant. Tras cerrar `get_cursos` (select(Curso) -> WHERE organizacion_id), quedan 6:
+
+CERRADO:
+- `get_cursos` (clientes.py:342): select(Curso) sin WHERE -> DEVOLVÍA TODOS LOS
+  CURSOS DE TODAS LAS ORGS. Bloqueador. Fix: WHERE organizacion_id = current_user.
+
+LEGÍTIMOS (no son filtración de tenant):
+- `get_admin_dashboard_metrics` (admin.py:22): admin, ve todo por diseño.
+- `validar_certificado` (clientes.py:454) y `get_constancias_por_codigo`
+  (validaciones.py:311): endpoints PÚBLICOS de verificación por código -> no por tenant.
+
+PENDIENTES DE HARDENING (post-RC-1, no bloquean pero son riesgos):
+- `get_clientes` (clientes.py:72): select(Cliente) sin WHERE -> lista TODOS los
+  clientes. Revisar que sea admin-only (rol). Si un cliente autenticado lo llama,
+  ve datos de otros clientes.
+- `get_pagos_participante` (clientes.py:1153): filtra por cp_id del PATH sin verificar
+  que el cp pertenezca al tenant -> IDOR (ver pagos ajenos). Hardening: JOIN
+  curso_participante->curso->organizacion_id = current_user.
+- `listar_constancias` (constancias.py:135): select(Constancia) sin WHERE -> revisar
+  si join a curso/org.
+
+## FLUJO OFICIAL DE CURSOS (regla de arquitectura objetivo)
+Hoy existen implementaciones dispersas del mismo concepto:
+  POST /clientes/cursos        (crear - clientes.py)
+  GET  /clientes/cursos        (listar - clientes.py:342, YA filtra tenant)
+  GET  /clientes/agenda/proximos (listar "próximos" - clientes.py:642, SQL propio)
+  GET  /cursos                 (listar - cursos.py, SQL propio)
+  GET  /cursos/{id}            (detalle - cursos.py)
+  PUT/DELETE /clientes/cursos/{id}
+Regla objetivo (post-RC): UN endpoint oficial de listado GET /clientes/cursos.
+"Próximos" debe ser un filtro de ese (GET /clientes/cursos?estado=proximo o
+?fecha_desde=), NO un endpoint con su propio SQL. Sin SQL disperso: todo vía
+CourseService.create/update/delete/list/get/upcoming con filtro organizacion_id
+obligatorio. Ningún endpoint escribe SQL directo.
 
 ## Patrón 'cid' sobrecargado en clientes.py
 ~16 usos de `cid = user_data.get("sub")`. 'cid' se usa para DOS cosas:

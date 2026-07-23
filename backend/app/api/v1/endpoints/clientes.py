@@ -354,7 +354,10 @@ async def get_cursos(
     """Obtener lista de cursos con filtros avanzados."""
     try:
         query = select(Curso)
-        
+        # FILTRO MULTI-TENANT (bloqueador de release): un cliente solo ve sus cursos.
+        org_id = current_user.get("organizacion_id") or current_user.get("org_id") or current_user.get("sub")
+        if org_id:
+            query = query.where(Curso.organizacion_id == org_id)
         if search:
             query = query.where(
                 or_(
