@@ -25,6 +25,7 @@ from app.api.v1.endpoints.auth import get_current_user_data
 from app.api.v1.endpoints.auth import require_client, get_current_user_data
 from app.services import curso_service as CursoService
 from app.services import constancia_service as ConstanciaService
+from app.services import participante_service as ParticipanteService
 from sqlalchemy import text
 from app.services.security import security_service
 from app.services.email import email_service
