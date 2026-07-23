@@ -320,11 +320,16 @@ async def get_current_user_data(
             detail="Token inválido o expirado"
         )
     
-    # Resolución robusta de org_id: si el JWT no trae org_id (tokens viejos
-    # emitidos antes de incluir org_id), lo resolvemos desde la BD para no
-    # depender de que el usuario relegee la sesión. Esto evita que endpoints
-    # como crear_curso rompan con FK violation al usar sub como cliente_id.
-    if not payload.get("org_id") and payload.get("source") == "cliente":
+    # Normalización de identidad de organización.
+    # El JWT usa la clave corta "org_id"; varios endpoints (clientes.py, etc.)
+    # leen "organizacion_id". Para evitar la ambigüedad que causaba FK violation
+    # (cliente_id = sub en lugar de organizacion_id), garantizamos SIEMPRE que el
+    # payload traiga organizacion_id resuelto, de 3 fuentes en orden:
+    #   1) org_id ya presente en el JWT (login moderno)
+    #   2) organizacion_id ya presente en el JWT
+    #   3) resolución desde BD (clientes.organizacion_id) para tokens viejos
+    org = payload.get("organizacion_id") or payload.get("org_id")
+    if not org and payload.get("source") == "cliente":
         from sqlalchemy import text as _text
         try:
             res = await db.execute(
@@ -333,9 +338,11 @@ async def get_current_user_data(
             )
             row = res.fetchone()
             if row and row[0]:
-                payload = {**payload, "org_id": str(row[0])}
+                org = str(row[0])
         except Exception:
             pass
+    if org:
+        payload = {**payload, "org_id": str(org), "organizacion_id": str(org)}
     
     return payload
 
