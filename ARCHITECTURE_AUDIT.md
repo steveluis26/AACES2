@@ -121,19 +121,34 @@ PENDIENTES DE HARDENING (post-RC-1, no bloquean pero son riesgos):
 - `listar_constancias` (constancias.py:135): select(Constancia) sin WHERE -> revisar
   si join a curso/org.
 
-## FLUJO OFICIAL DE CURSOS (regla de arquitectura objetivo)
-Hoy existen implementaciones dispersas del mismo concepto:
-  POST /clientes/cursos        (crear - clientes.py)
-  GET  /clientes/cursos        (listar - clientes.py:342, YA filtra tenant)
-  GET  /clientes/agenda/proximos (listar "próximos" - clientes.py:642, SQL propio)
-  GET  /cursos                 (listar - cursos.py, SQL propio)
-  GET  /cursos/{id}            (detalle - cursos.py)
-  PUT/DELETE /clientes/cursos/{id}
-Regla objetivo (post-RC): UN endpoint oficial de listado GET /clientes/cursos.
-"Próximos" debe ser un filtro de ese (GET /clientes/cursos?estado=proximo o
-?fecha_desde=), NO un endpoint con su propio SQL. Sin SQL disperso: todo vía
-CourseService.create/update/delete/list/get/upcoming con filtro organizacion_id
-obligatorio. Ningún endpoint escribe SQL directo.
+## SPRINT S (Stabilization) — en progreso
+Decisión: antes del merge v0.4.0, consolidar cada operación de negocio en UN
+servicio (no funcionalidad nueva; reducir superficie de bugs).
+
+FASE 1 (hecha, commit 27a8faa): CursoService.
+- app/services/curso_service.py: crear/listar/obtener/proximos (única fuente).
+- clientes.py y cursos.py delegan (sin SQL inline). Se eliminó la duplicación
+  de crear/listar/obtener/agenda que causó los incendios previos.
+- Verificado: Aceptación Core 13/13; audit_tenant y audit_contract sin regresión.
+
+PENDIENTE (post-RC-1, no bloquea el merge de v0.4.0):
+- ParticipanteService (hoy add_participante está duplicado en cursos.py y
+  clientes.py; acreditar/emitar en participantes.py con SQL propio).
+- DocumentoService / ConstanciaService (emitir constancia, verificar).
+- CursoService.update / delete (hoy update_curso en clientes.py tiene SQL propio;
+  delete en otra funcion).
+- Unificar dashboard/reportes/public para que usen los servicios (no SQL suelto).
+
+Regla de arquitectura resultante: un servicio por dominio; los endpoints solo
+delegan. Ningún endpoint escribe SQL de negocio directo. Esto es lo que detiene
+la cascada de "bug -> parche -> otro endpoint igual pero distinto -> otro parche".
+
+## Respuesta a la pregunta del merge
+"¿Existe una única implementación para cada operación?" — Parcial:
+- Curso: SÍ (CursoService, Fase 1).
+- Participante/Constancia/Documento: AÚN NO (pendientes de Fase 2+ post-RC).
+Por eso v0.4.0 se libera con Curso consolidado y los demás en hardening
+documentado, no como incógnita.
 
 ## Patrón 'cid' sobrecargado en clientes.py
 ~16 usos de `cid = user_data.get("sub")`. 'cid' se usa para DOS cosas:
