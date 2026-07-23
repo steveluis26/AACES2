@@ -33,10 +33,18 @@ class Cliente(Base):
     cursos_creados = Column(Integer, default=0, nullable=False)
     cursos_max = Column(Integer, default=10, nullable=False)
     descuento_pct = Column(Integer, default=0, nullable=False)
+    # Sprint A: el cliente pertenece a una organización (ownership por org).
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=True)
     
     # Relationships
+    # NOTA Sprint A: cursos.cliente_id ahora apunta a organizaciones.id (no a clientes.id).
+    # La relación se resuelve vía organizacion_id del cliente (ambos son el org_id).
     capacitadores = relationship("Capacitador", back_populates="cliente", foreign_keys="Capacitador.cliente_id")
-    cursos = relationship("Curso", primaryjoin="Cliente.id == Curso.cliente_id")
+    # viewonly=True + foreign_keys explicito evita el error de mapper init.
+    cursos = relationship("Curso",
+        primaryjoin="Cliente.organizacion_id == Curso.cliente_id",
+        foreign_keys="Curso.cliente_id",
+        viewonly=True)
     
     __table_args__ = (
         CheckConstraint("categoria IN ('basico', 'premium', 'enterprise')", name="check_categoria"),
@@ -109,7 +117,8 @@ class Curso(Base):
     actualizado_por = Column(UUID(as_uuid=True), ForeignKey("clientes.id"))
     
     # Relationships
-    cliente = relationship("Cliente", foreign_keys=[cliente_id])
+    # Sprint A: cursos.cliente_id ahora apunta a organizaciones.id (no a clientes.id).
+    organizacion = relationship("Organizacion", foreign_keys=[cliente_id], viewonly=True)
     capacitador = relationship("Capacitador", back_populates="cursos")
     participantes = relationship("CursoParticipante", back_populates="curso")
     
