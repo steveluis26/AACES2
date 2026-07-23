@@ -57,7 +57,23 @@ VACÍA (simula el peor escenario: instalación limpia / Neon nuevo).
 - [ ] Unificar modelo de identidad `usuarios`/`clientes` a largo plazo (hoy el dominio
       operativo usa `clientes`; `usuarios` es gestión de plataforma).
 
-### Smoke Test Producción (post-push, <10 min, requisito permanente)
+### Herramientas permanentes de regresión (correr ANTES de cada liberación)
+Estas herramientas evitan que una modificación futura desalinee:
+modelos SQLAlchemy ↔ bootstrap ↔ esquema real ↔ SQL crudo.
+- [ ] `backend/scripts/audit_schema.py` — modelo SQLAlchemy vs BD real (columnas/tablas).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_schema.py`
+- [ ] `backend/scripts/audit_sql_refs.py` — queries SQL crudas vs columnas BD (detecta `column does not exist`).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_sql_refs.py`
+- [ ] `tests/e2e/flujo_completo.sh` — E2E por HTTP (login→curso→participante→acreditar→emitir→verificar).
+- [ ] `tests/e2e/sprint_a_check.sh` — checks de reglas de negocio Sprint A.
+- [ ] `tests/acceptance/core_operativo.py` — Prueba de Aceptación del Core (5 flujos:
+      onboarding, operación normal, diferenciador QR/verificación, multiusuario, persistencia).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python ../tests/acceptance/core_operativo.py`
+- [ ] Smoke test navegador (manual, Flujo 3 diferenciador es el corazón comercial):
+      curso → participante → constancia → QR → página pública de verificación debe
+      mostrar datos coherentes (participante/curso/org/vigencia), no solo `valida:true`.
+
+
 Correr contra la URL de producción (Render/Vercel), NO contra local:
 - [ ] Login con cuenta demo de producción (HTTP 200, JWT con `org_id`).
 - [ ] Registrar una organización NUEVA vía `/register` (recibe `access_token`).

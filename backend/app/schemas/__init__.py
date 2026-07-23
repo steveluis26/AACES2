@@ -91,7 +91,7 @@ class CursoBase(BaseSchema):
     descripcion: Optional[str] = Field(None, max_length=1000)
     categoria: str = Field("general", max_length=100)
     duracion_horas: int = Field(..., ge=1)
-    duracion_validacion: int = Field(..., ge=1, description="Vigencia del certificado en meses (obligatoria)")
+    duracion_validacion: Optional[int] = Field(None, ge=1, description="Vigencia del certificado en meses (opcional en respuesta; puede ser NULL en BD)")
     vigencia_meses: Optional[int] = Field(None, ge=1, description="Alias de duracion_validacion")
     costo_total: Optional[float] = Field(None, ge=0)
     fecha_inicio: date
