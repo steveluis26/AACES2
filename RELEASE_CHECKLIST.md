@@ -69,6 +69,8 @@ Los contratos y reglas están en `CONTRACTS.md` y `ARCHITECTURE_RULES.md`.
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_contract.py`
 - [ ] `backend/scripts/audit_tenant.py` — ningún GET de datos de negocio filtra sin `organizacion_id` (multi-tenant).
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_tenant.py`
+- [ ] `backend/scripts/audit_sql_in_routers.py` — inventario final Sprint S: 0 endpoints con SQL de negocio propio para dominios ya servicializados (Curso/Participante/Constancia).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_sql_in_routers.py`
 - [ ] `tests/e2e/flujo_completo.sh` — regresión extremo a extremo (login→curso→participante→acreditar→constancia→QR→verificación).
 - [ ] `tests/e2e/sprint_a_check.sh` — checks de reglas de negocio Sprint A.
 - [ ] `tests/acceptance/core_operativo.py` — Prueba de Aceptación del Core (5 flujos:
