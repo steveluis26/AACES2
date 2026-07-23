@@ -92,6 +92,17 @@ code, resp = req("GET", f"/api/v1/cursos/{CID}", TOK)
 readable = (code == "200") and (jget(resp, "id") == CID)
 log("F2", "curso creado es consultable por id", code, readable, f"readable={'SI' if readable else 'NO'}")
 
+# Tabla "Mis cursos" del frontend gestion: carga GET /clientes/agenda/proximos
+# (NO /clientes/cursos). Este era el endpoint que filtraba por sub y dejaba el
+# curso nuevo invisible tras crearlo. Assert de que aparece ahí.
+code, resp = req("GET", "/api/v1/clientes/agenda/proximos", TOK)
+try:
+    _ag = json.loads(resp)
+    _ag_ids = [it.get("id") for it in _ag] if isinstance(_ag, list) else []
+except: _ag_ids = []
+in_agenda = CID in _ag_ids
+log("F2", "curso aparece en agenda/proximos (tabla gestion)", code, code=="200" and in_agenda, f"en_agenda={'SI' if in_agenda else 'NO'} n={len(_ag_ids)}")
+
 # enroll participante (crea curso_participante)
 code, resp = req("POST", f"/api/v1/cursos/{CID}/participantes", TOK, {
     "nombre":"Juan Perez","correo":f"juan{rnd2}@test.mx","telefono":"2291234567",

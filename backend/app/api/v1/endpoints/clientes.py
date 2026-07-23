@@ -646,7 +646,7 @@ async def get_proximos_cursos(
 ):
     """Lista de cursos próximos del cliente, ordenados por fecha de inicio"""
     try:
-        cid = user_data.get("sub")
+        cid = user_data.get("organizacion_id") or user_data.get("sub")
         await db.execute(text("SET LOCAL search_path TO aaces"))
         parents_q = text(
             """
