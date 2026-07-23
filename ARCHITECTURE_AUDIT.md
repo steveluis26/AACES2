@@ -143,12 +143,34 @@ Regla de arquitectura resultante: un servicio por dominio; los endpoints solo
 delegan. Ningún endpoint escribe SQL de negocio directo. Esto es lo que detiene
 la cascada de "bug -> parche -> otro endpoint igual pero distinto -> otro parche".
 
-## Respuesta a la pregunta del merge
+## Bug funcional localizado post-Sprint S (commit 0a52175)
+No era arquitectura: al abrir el detalle de curso, GET /clientes/cursos/{id}/participantes
+(404), /constancias (500), /constancias/asignadas (500) fallaban con "Curso no encontrado".
+Causa: esos endpoints (clientes.py) validaban tenencia con `cid = user_data.get("sub")`
+(UUID del USUARIO) contra `cursos.cliente_id`, pero el curso se guarda con
+`cliente_id = organizacion_id` (UUID de la ORG). CursoService ya usa
+`cliente_id = organizacion_id`, por eso el listado funcionaba y el detalle no.
+Mismo patron de siempre: la verificacion de tenencia vivia en 2 lugares con
+criterios distintos. Fix: las 12 funciones de detalle de curso usan ahora
+`CursoService._org_id_of(user_data)` (normaliza organizacion_id).
+
+LECCION PARA S5: el criterio de tenencia debe ser UNO (organizacion_id). Los
+endpoints de detalle de curso en clientes.py aun tienen SQL propio de listar
+participantes/constancias (no delegan en ParticipanteService/ConstanciaService).
+Eso es la fase S5 (eliminar SQL de routers). El criterio YA es consistente;
+lo que queda es mover la logica de listado al servicio para cumplir regla #2
+al 100% en el dominio Curso/Participante/Constancia.
+
+## Respuesta a la pregunta del merge (revisada)
 "¿Existe una única implementación para cada operación?" — Parcial:
-- Curso: SÍ (CursoService, Fase 1).
-- Participante/Constancia/Documento: AÚN NO (pendientes de Fase 2+ post-RC).
-Por eso v0.4.0 se libera con Curso consolidado y los demás en hardening
-documentado, no como incógnita.
+- Curso: SÍ (CursoService crear/listar/obtener/agenda; detalle de curso ahora
+  usa el mismo criterio de tenencia, aunque el LISTADO de participantes/constancias
+  dentro del detalle aun es SQL propio en clientes.py -> S5).
+- Participante/Constancia: SÍ para crear/acreditar/emitir; el LISTADO dentro del
+  detalle de curso (clientes.py) aun es SQL propio -> S5.
+Por eso v0.4.0 se libera con Curso/Participante/Constancia consolidados en
+crear/acreditar/emitir y el criterio de tenencia unificado; el listado interno
+del detalle queda documentado como S5 (no bloquea el merge, no es incógnita).
 
 ## Patrón 'cid' sobrecargado en clientes.py
 ~16 usos de `cid = user_data.get("sub")`. 'cid' se usa para DOS cosas:
