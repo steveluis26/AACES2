@@ -579,7 +579,7 @@ async def get_mis_cursos(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = user_data.get("organizacion_id") or user_data.get("sub")
         await db.execute(text("SET LOCAL search_path TO aaces"))
         cursos = await db.execute(text("SELECT id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, estado, empresa_contratante FROM cursos WHERE cliente_id = :cid ORDER BY fecha_inicio DESC"), {"cid": cid})
         cursos_rows = cursos.fetchall()
@@ -901,8 +901,8 @@ async def crear_curso(
 
         q = text(
             """
-            INSERT INTO cursos (id, cliente_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
-            VALUES (gen_random_uuid(), :org_id, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
+            INSERT INTO cursos (id, cliente_id, organizacion_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
+            VALUES (gen_random_uuid(), :org_id, :org_id, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
             RETURNING id
             """
         )
@@ -956,12 +956,12 @@ async def crear_curso(
             sub_res = await db.execute(
                 text(
                     """
-                    INSERT INTO cursos (id, cliente_id, curso_padre_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
-                    VALUES (gen_random_uuid(), :cid, :pid, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
+                    INSERT INTO cursos (id, cliente_id, organizacion_id, curso_padre_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
+                    VALUES (gen_random_uuid(), :org_id, :org_id, :pid, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
                     RETURNING id
                 """
                 ),
-                {"cid": cid, "pid": parent_id, "code": f"CUR-{code_base}-{s_suffix}", "nombre": sn, "ciudad": s_ciudad, "fi": s_fi_dt, "ff": s_ff_dt, "empresa": s_emp, "grupo_id": grupo_id, "duracion": s_dur, "estado": s_estado, "precio_base": precio_base, "precio_promocional": precio_promocional, "vigencia_meses": vigm, "modalidad": modalidad_val}
+                {"cid": cid, "org_id": org_id or cid, "pid": parent_id, "code": f"CUR-{code_base}-{s_suffix}", "nombre": sn, "ciudad": s_ciudad, "fi": s_fi_dt, "ff": s_ff_dt, "empresa": s_emp, "grupo_id": grupo_id, "duracion": s_dur, "estado": s_estado, "precio_base": precio_base, "precio_promocional": precio_promocional, "vigencia_meses": vigm, "modalidad": modalidad_val}
             )
             sub_id = sub_res.scalar()
         # Constancias del curso (catálogo inicial)

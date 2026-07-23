@@ -70,12 +70,21 @@ code, resp = req("POST", "/api/v1/auth/login", body={"correo":"cliente.demo@aace
 TOK = jget(resp, "access_token")
 log("F2", "login cliente demo", code, code=="200" and bool(TOK), f"token={'SI' if TOK else 'NO'}")
 rnd2 = ''.join(random.choices(string.ascii_lowercase+string.digits, k=5))
-code, resp = req("POST", "/api/v1/cursos", TOK, {
+# RUTA REAL DEL FRONTEND: /clientes/cursos (gestion/page.tsx)
+code, resp = req("POST", "/api/v1/clientes/cursos", TOK, {
     "nombre":"Curso Operacion","modalidad":"virtual","ciudad":"Xalapa",
     "codigo_curso":f"OPR{rnd2.upper()}", "empresa_contratante":"Empresa Opr",
     "fecha_inicio":"2026-10-01","fecha_fin":"2026-10-03","duracion_horas":16,"duracion_validacion":6})
 CID = jget(resp, "id")
-log("F2", "crear curso", code, code in ("200","201") and bool(CID), f"curso_id={'SI' if CID else 'NO'}")
+log("F2", "crear curso (/clientes/cursos)", code, code in ("200","201") and bool(CID), f"curso_id={'SI' if CID else 'NO'}")
+
+# Ciclo crear -> listar (cubrir el bug "se crea pero no aparece")
+code, resp = req("GET", "/api/v1/clientes/cursos", TOK)
+try:
+    _items = json.loads(resp).get("items", []) if isinstance(json.loads(resp), dict) else json.loads(resp)
+except: _items = []
+appears = any(it.get("id") == CID for it in _items)
+log("F2", "curso creado aparece en listado", code, code=="200" and appears, f"aparece={'SI' if appears else 'NO'} n={len(_items)}")
 
 # enroll participante (crea curso_participante)
 code, resp = req("POST", f"/api/v1/cursos/{CID}/participantes", TOK, {
