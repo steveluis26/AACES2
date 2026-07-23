@@ -125,6 +125,7 @@ async def get_current_user(
             "nombre": user.nombre,
             "categoria": user.categoria,
             "estado": user.estado,
+            "organizacion_id": str(user.organizacion_id) if getattr(user, "organizacion_id", None) else None,
             "source": "cliente",
         }
     
