@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import get_current_user_data
+from app.services import participante_service as ParticipanteService
 
 router = APIRouter()
 
@@ -377,48 +378,20 @@ async def create_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("org_id") or user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-
-    nombre = (payload.get("nombre") or "").strip()
-    correo = (payload.get("correo") or "").strip()
-    telefono = (payload.get("telefono") or "").strip()
-    empresa = (payload.get("empresa") or "").strip()
-    cargo = (payload.get("cargo") or "").strip()
-    ciudad_origen = (payload.get("ciudad_origen") or "").strip()
-
-    if not nombre:
-        raise HTTPException(status_code=400, detail="El nombre es requerido")
-    # A2.4: teléfono obligatorio (el dinero de renovaciones vive en WhatsApp/teléfono)
-    if not telefono:
+    """Crear participante (DELEGA EN ParticipanteService.crear)."""
+    # Regla de negocio A2.4: teléfono obligatorio (renovaciones viven en WhatsApp/teléfono)
+    if not (payload.get("telefono") or "").strip():
         raise HTTPException(status_code=400, detail="El teléfono es requerido para registrar participantes")
-
-    pax_id = _generate_pax_id()
-    pid = (
-        await db.execute(
-            text(""" 
-                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, organizacion_id, pais)
-                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, :org_id, 'Mexico')
-                RETURNING id
-            """),
-            {
-                "pax_id": pax_id,
-                "nombre": nombre,
-                "correo": correo or None,
-                "telefono": telefono or None,
-                "empresa": empresa or None,
-                "cargo": cargo or None,
-                "ciudad": ciudad_origen or None,
-                "cliente_id": cid,
-                "org_id": cid,
-            },
-        )
-    ).scalar()
-    await db.commit()
-
-    return {"id": str(pid), "pax_id": pax_id, "nombre": nombre}
+    try:
+        result = await ParticipanteService.crear(db, user_data, payload, curso_id=None)
+        await db.commit()
+        # Mantener contrato de respuesta previo
+        return {"id": result["participante_id"], "pax_id": None, "nombre": (payload.get("nombre") or "").strip()}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creando participante: {str(e)}")
 
 
 @router.put("/{participante_id}")
@@ -468,28 +441,13 @@ async def acreditar_participante(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("org_id") or user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-
-    cp = await db.execute(
-        text(""" 
-            SELECT cp.id FROM aaces.curso_participante cp
-            JOIN aaces.cursos c ON c.id = cp.curso_id
-            WHERE cp.participante_id = :pid AND c.organizacion_id = :cid
-            LIMIT 1
-        """),
-        {"pid": participante_id, "cid": cid},
-    )
-    cp_row = cp.fetchone()
-    if not cp_row:
-        raise HTTPException(status_code=404, detail="Participante no encontrado en tus cursos")
-
-    await db.execute(
-        text("UPDATE aaces.curso_participante SET estado_acreditacion = true, calificacion = :cal, fecha_acreditacion = NOW() WHERE id = :id"),
-        {"cal": payload.calificacion, "id": cp_row[0]},
-    )
-    await db.commit()
-    return {"status": "acreditado", "calificacion": payload.calificacion, "fecha_acreditacion": "NOW()"}
+    """Marcar participante como acreditado (DELEGA EN ParticipanteService.acreditar)."""
+    try:
+        result = await ParticipanteService.acreditar(db, user_data, participante_id, payload.calificacion)
+        await db.commit()
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error acreditando participante: {str(e)}")
