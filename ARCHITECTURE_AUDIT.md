@@ -69,6 +69,20 @@ NO hay URLs hardcodeadas a otros hosts en el frontend (solo next.config.js refer
    grupo_id, vigencia_meses, costo_asignado, descuento): acuerdo de dejarlas fuera
    del RC (ver SCHEMA_AUDIT.md). No rompen.
 
+## Hallazgo adicional de la pausa (ciclo crear -> mostrar)
+El POST /clientes/cursos respondía 200 y el curso SÍ se insertaba, pero el
+GET /clientes/cursos no lo mostraba. Causa raíz confirmada con BD:
+- El GET filtraba `WHERE cliente_id = sub` (clientes.py:582) mientras el POST
+  inserta `cliente_id = organizacion_id` -> el listado no hallaba el curso.
+- El INSERT de clientes.py:904 (y subcursos :959) escribía solo `cliente_id`,
+  omitiendo `organizacion_id` (columna añadida en la migración) -> cursos con
+  `organizacion_id = NULL` -> endpoints que filtran/join por `organizacion_id`
+  (acreditar) daban 404.
+Fix: GET usa `organizacion_id`; ambos INSERT llenan `organizacion_id = :org_id`.
+Lección: "crear funciona, listar no" casi siempre es GET filtrando por `sub`
+mientras el POST usa el tenant canónico. Patrón a chequear en toda auditoría.
+
+
 ## Conclusión de la pausa técnica
 NO hay 2 backends. El error era una desalineación de nombres de campo entre el JWT
 (`org_id`) y el código (`organizacion_id`) en la ruta que usa el frontend. Reparado
