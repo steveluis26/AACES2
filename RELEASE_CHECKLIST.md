@@ -37,6 +37,11 @@ VACÍA (simula el peor escenario: instalación limpia / Neon nuevo).
 - [ ] Admin (JWT A) crea curso → Operador (JWT B, MISMA `organizacion_id`) lo ve en `GET /cursos`.
 - [ ] Dos organizaciones distintas NO comparten cursos/participantes.
 - [ ] `cursos.cliente_id` y `participantes.cliente_id` referencian `organizaciones(id)` (no usuarios).
+- [ ] **RC-1 (fuente única de tenant): las 4 vistas de cursos coinciden para el MISMO usuario** —
+      `GET /cursos` (Gestión), `GET /clientes/dashboard/resumen` (Dashboard `cursos_activos`),
+      `GET /clientes/dashboard/agenda` (Agenda) y `GET /reportes/cursos-top` muestran el mismo
+      conjunto bajo `organizacion_id`. Si Dashboard/Agenda dicen 0 y Gestión dice N, es bug de
+      resolución de tenant (ya no debe ocurrir: `app/core/tenant.py` es la única fuente).
 
 ### Cierre
 - [ ] `cleanup.sh` borra datos de prueba.
@@ -67,8 +72,8 @@ Los contratos y reglas están en `CONTRACTS.md` y `ARCHITECTURE_RULES.md`.
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_sql_refs.py`
 - [ ] `backend/scripts/audit_contract.py` — ningún endpoint lee el JWT directo ni usa campos no canónicos.
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_contract.py`
-- [ ] `backend/scripts/audit_tenant.py` — ningún GET de datos de negocio filtra sin `organizacion_id` (multi-tenant).
-      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_tenant.py`
+- [ ] `backend/scripts/audit_tenant.py` — ÚNICA fuente de verdad del tenant: ningún servicio/endpoint define `_resolve_org`/`_get_cliente_ids` ni filtra datos de negocio por `:sub` (debe usar `organizacion_id` ya normalizado por `get_current_user_data`).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_tenant.py`  (exit 0 = limpio)
 - [ ] `backend/scripts/audit_sql_in_routers.py` — inventario final Sprint S: 0 endpoints con SQL de negocio propio para dominios ya servicializados (Curso/Participante/Constancia).
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_sql_in_routers.py`
 - [ ] `tests/e2e/flujo_completo.sh` — regresión extremo a extremo (login→curso→participante→acreditar→constancia→QR→verificación).

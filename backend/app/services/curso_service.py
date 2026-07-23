@@ -23,10 +23,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 
+from app.core.tenant import organization_id as _organization_id
 
-def _org_id_of(user_data: dict) -> str:
-    """Tenant canónico. Nunca sub."""
-    return user_data.get("organizacion_id") or user_data.get("org_id") or user_data.get("sub")
+
+def _org_id_of(user_data: dict) -> Optional[str]:
+    """Tenant canónico. Delega a la ÚNICA fuente de verdad (tenant.organization_id)."""
+    return _organization_id(user_data)
 
 
 def _uid_of(user_data: dict) -> str:

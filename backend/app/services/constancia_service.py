@@ -17,13 +17,15 @@ from sqlalchemy import text
 from fastapi import HTTPException
 import uuid
 
+from app.core.tenant import organization_id as _organization_id
+
 # Servicio existente de emisión (PDF/QR/hash) — no se duplica.
 from app.services.constancias import constancias_service as _constancias_mod
 _emitir_interno = _constancias_mod.emitir
 
 
 def _org_id_of(user_data: dict) -> Optional[str]:
-    return user_data.get("organizacion_id") or user_data.get("org_id") or user_data.get("sub")
+    return _organization_id(user_data)
 
 
 async def emitir(db, user_data: dict, curso_participante_id: str, template_id=None) -> dict:

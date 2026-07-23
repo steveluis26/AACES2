@@ -17,9 +17,11 @@ from typing import Optional, Any
 from sqlalchemy import text
 from fastapi import HTTPException
 
+from app.core.tenant import organization_id as _organization_id
+
 
 def _org_id_of(user_data: dict) -> Optional[str]:
-    return user_data.get("organizacion_id") or user_data.get("org_id") or user_data.get("sub")
+    return _organization_id(user_data)
 
 
 def _to_dict(payload: Any) -> dict:

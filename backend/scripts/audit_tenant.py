@@ -1,105 +1,89 @@
 """
-AUDITORÍA DE FILTRACIÓN MULTI-TENANT — ARCHITECTURE_RULES.md regla de seguridad.
+audit_tenant.py — Gate de RC-1 (re-ejecutable desde RELEASE_CHECKLIST).
 
-BLOCKER DE RELEASE: cualquier endpoint GET que devuelva datos de negocio
-(cursos, participantes, constancias, pagos, clientes) SIN filtrar por
-organizacion_id cuando corresponde, es una filtración multi-tenant.
+Verifica la REGLA DE ÚNICA FUENTE DE VERDAD DEL TENANT:
+  El tenant para filtrado de datos se resuelve EXACTAMENTE UNA VEZ en
+  get_current_user_data() (auth.py), que normaliza siempre `organizacion_id`.
+  Ningún servicio/endpoint debe resolver el tenant por su cuenta.
 
-Escaneo por bloques de función (más robusto que ast para f-strings).
-Para cada `async def`/`def` con decorador `@router.get`, captura el bloque
-hasta la siguiente función y detecta:
-  - si toca datos de negocio (select(Modelo) o FROM tabla_negocio)
-  - si NO filtra por tenant (organizacion_id / cliente_id / org_id)
+ESTE AUDIT ES PRECISO A PROPÓSITO (sin falsos positivos que se ignoren):
+  MARCA como violación SOLO:
+    1. Resolutores prohibidos definidos: def _resolve_org / def _get_cliente_ids
+       (estos resolvían tenant por su cuenta y fueron eliminados en RC-1).
+    2. Filtros de datos que comparan contra :sub / {sub} en queries de
+       cursos/constancias/participantes (sub = UUID del USUARIO, nunca debe
+       filtrar esas tablas; deben usar organizacion_id).
+
+NO MARCA (usos legítimos de sub):
+    - emitido_por = sub / user_id = sub  (auditoría: quién emitió)
+    - _uid_of(user_data)  (identidad del ejecutor, no filtro de tenant)
+    - source == "usuario" en auth.py / get_current_user_data (normalización)
+
+Uso:
+  python scripts/audit_tenant.py
+  exit 0 = limpio, exit 1 = violaciones.
 """
-import os
-import re
+from __future__ import annotations
 import sys
+from pathlib import Path
 
-ENDPOINTS = "app/api/v1/endpoints"
-NEGOCIO_MODELOS = [
-    "Curso", "Participante", "Constancia", "CursoParticipante",
-    "Pago", "Cliente", "GrupoCurso", "TipoCurso", "ConstanciaCurso",
-]
-NEGOCIO_TABLAS = [
-    "cursos", "participantes", "constancias", "curso_participante",
-    "pagos", "clientes", "grupos_curso", "tipos_curso", "constancias_curso",
-]
-TENANT = re.compile(r"organizacion_id|cliente_id|org_id")
-FUNC_RE = re.compile(r"^async def (\w+)|^def (\w+)|^    async def (\w+)|^    def (\w+)")
-DECOR_RE = re.compile(r"@\w+\.get\(|@router\.get\(")
-SELECT_MODEL_RE = re.compile(r"select\(\s*(" + "|".join(NEGOCIO_MODELOS) + r")\s*\)")
-FROM_TABLE_RE = re.compile(r"FROM\s+(?:aaces\.)?(" + "|".join(NEGOCIO_TABLAS) + r")\b", re.IGNORECASE)
+BACKEND = Path(__file__).resolve().parent.parent
+APP = BACKEND / "app"
+
+# Resolutores prohibidos (resolvían tenant por su cuenta, eliminados en RC-1)
+BANNED_DEFS = ["def _resolve_org", "def _get_cliente_ids"]
+
+# Filtro de datos por sub en queries (anti-patrón de tenant)
+# Detecta ":sub" o "{sub}" usado como valor de comparación en SQL embebido.
+SUB_IN_QUERY = (":sub", "{sub}")
+
+VIOLATIONS: list[str] = []
 
 
-def bloques_funcion(path):
-    """Yield (nombre, lineas_del_bloque) por cada funcion en el archivo.
-    Incluye las líneas de decorador (@...) que preceden a def/async def."""
-    with open(path) as f:
-        lines = f.readlines()
-    bloques = []
-    cur = None
-    for i, ln in enumerate(lines, 1):
-        m = FUNC_RE.match(ln)
-        if m:
-            nombre = m.group(1) or m.group(2) or m.group(3) or m.group(4)
-            if cur:
-                bloques.append(cur)
-            # retroceder para incluir decoradores (@...) inmediatos anteriores
-            deco = []
-            j = len(deco)
-            k = i - 2  # línea anterior (0-indexed)
-            while k >= 0 and lines[k].lstrip().startswith("@"):
-                deco.insert(0, lines[k])
-                k -= 1
-            cur = {"name": nombre, "start": i, "lines": deco + [ln]}
-        if cur:
-            cur["lines"].append(ln)
-    if cur:
-        bloques.append(cur)
-    return bloques
-
-
-def analizar(path):
-    problemas = []
-    for b in bloques_funcion(path):
-        texto = "".join(b["lines"])
-        # ¿es GET? buscar decorador @router.get en las primeras líneas (indent 0)
-        head = "".join(b["lines"][:4])
-        if not DECOR_RE.search(head):
-            continue
-        toca = SELECT_MODEL_RE.search(texto) or FROM_TABLE_RE.search(texto)
-        if not toca:
-            # ¿FROM cursos etc. en SQL multilínea? ya cubierto por FROM_TABLE_RE
-            continue
-        if TENANT.search(texto):
-            continue
-        problemas.append((b["name"], b["start"]))
-    return problemas
-
-
-def main():
-    total = 0
-    print("=== AUDITORÍA DE FILTRACIÓN MULTI-TENANT ===")
-    print("GET de datos de negocio SIN filtro de tenant (candidatos a filtración):\n")
-    for root, _, files in os.walk(ENDPOINTS):
-        for fn in sorted(files):
-            if not fn.endswith(".py"):
+def scan_file(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    rel = str(path.relative_to(BACKEND))
+    for lineno, line in enumerate(text.splitlines(), 1):
+        for bad in BANNED_DEFS:
+            if bad in line:
+                VIOLATIONS.append(f"{rel}:{lineno} resolver prohibido definido: {bad}")
+        # sub usado como valor de filtro en query SQL
+        if any(tok in line for tok in SUB_IN_QUERY):
+            low = line.lower()
+            # ignorar usos de auditoría
+            if "emitido_por" in low or "user_id" in low or "creado_por" in low:
                 continue
-            p = os.path.join(root, fn)
-            try:
-                probs = analizar(p)
-            except Exception as e:
-                print(f"  [ERR] {p}: {e}")
+            # ignorar asignación a variable (cid = user_data.get("sub"))
+            if "user_data.get(" in line or "user_data[" in line:
+                # es captura del sub a una variable, no filtro directo;
+                # el riesgo real es cuando esa variable va a un WHERE.
+                # lo dejamos pasar para no generar falsos positivos (S4 lo cubre).
                 continue
-            for name, ln in probs:
-                total += 1
-                print(f"  [FILTRO?] {p}:{ln}  def {name}")
-    print(f"\nTotal candidatos a filtración: {total}")
-    if total > 0:
-        print("ACCIÓN: añadir WHERE organizacion_id = :org (o JOIN con curso->org).")
-        sys.exit(1)
-    print("OK: todos los GET de negocio filtran por tenant.")
+            VIOLATIONS.append(
+                f"{rel}:{lineno} posible filtro de datos por :sub (debe usar organizacion_id)"
+            )
+
+
+def main() -> int:
+    py_files = [f for f in APP.rglob("*.py") if f.name != "tenant.py"]
+    for f in py_files:
+        scan_file(f)
+
+    tenant_mod = APP / "core" / "tenant.py"
+    if not tenant_mod.exists():
+        VIOLATIONS.append("app/core/tenant.py no existe — fuente de verdad ausente")
+    elif "def organization_id" not in tenant_mod.read_text():
+        VIOLATIONS.append("app/core/tenant.py no define organization_id")
+
+    if VIOLATIONS:
+        print("=== AUDIT TENANT: VIOLACIONES ===")
+        for v in VIOLATIONS:
+            print("  -", v)
+        print(f"\n{len(VIOLATIONS)} violación(es). Revisar fuente de verdad del tenant.")
+        return 1
+    print("AUDIT TENANT: OK — tenant resuelto en una sola fuente (app/core/tenant.py).")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

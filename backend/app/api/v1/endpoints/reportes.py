@@ -8,25 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import get_current_user_data
 
+from app.core.tenant import organization_id
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-async def _resolve_org(db: AsyncSession, cid: str) -> str:
-    org_res = await db.execute(
-        text("SELECT organizacion_id FROM aaces.clientes WHERE id = :cid"),
-        {"cid": cid},
-    )
-    org_row = org_res.fetchone()
-    if org_row and org_row[0]:
-        return str(org_row[0])
-    org_res2 = await db.execute(
-        text("SELECT id FROM aaces.organizaciones ORDER BY fecha_creacion LIMIT 1")
-    )
-    org_row2 = org_res2.fetchone()
-    if org_row2:
-        return str(org_row2[0])
-    raise HTTPException(status_code=404, detail="No se encontró organización asociada")
 
 
 @router.get("/constancias-por-periodo")
@@ -37,11 +21,10 @@ async def constancias_por_periodo(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    org_id = organization_id(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
-    org_id = await _resolve_org(db, cid)
 
     trunc = {"month": "month", "quarter": "quarter", "year": "year"}[periodo]
     where = "AND d.fecha_emision >= :desde" if desde else ""
@@ -68,11 +51,10 @@ async def tiempo_promedio_emision(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    org_id = organization_id(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
-    org_id = await _resolve_org(db, cid)
 
     where = ""
     params: dict[str, Any] = {"org_id": org_id}
@@ -99,11 +81,10 @@ async def documentos_no_verificados(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    org_id = organization_id(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
-    org_id = await _resolve_org(db, cid)
 
     rows = (await db.execute(
         text("""
@@ -124,11 +105,10 @@ async def cursos_top(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    org_id = organization_id(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
-    org_id = await _resolve_org(db, cid)
 
     rows = (await db.execute(
         text("""
@@ -150,11 +130,10 @@ async def empresas_top(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    org_id = organization_id(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
-    org_id = await _resolve_org(db, cid)
 
     rows = (await db.execute(
         text("""
@@ -178,11 +157,10 @@ async def proximos_a_vencer(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    org_id = organization_id(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
     await db.execute(text("SET LOCAL search_path TO aaces"))
-    org_id = await _resolve_org(db, cid)
 
     rows = (await db.execute(
         text("""

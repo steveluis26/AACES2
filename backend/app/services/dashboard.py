@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from app.db.errors import is_undefined_table
+from app.core.tenant import organization_id
 from typing import Dict, Any
 import logging
 
@@ -9,30 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class DashboardService:
-    async def _get_cliente_ids(
-        self, db: AsyncSession, user_data: Dict[str, Any]
-    ) -> list[str]:
-        source = user_data.get("source")
-        if source == "usuario":
-            org_id = user_data.get("organizacion_id")
-            if not org_id:
-                return []
-            result = await db.execute(
-                text(
-                    "SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id"
-                ),
-                {"org_id": org_id},
-            )
-            rows = result.fetchall()
-            return [str(row[0]) for row in rows] if rows else []
-        cliente_id = user_data.get("id")
-        return [cliente_id] if cliente_id else []
-
     async def get_resumen(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> dict:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return {
                 "kpis": {
                     "cursos_activos": 0, "participantes": 0,
@@ -40,7 +22,7 @@ class DashboardService:
                     "alertas_criticas": 0,
                 }
             }
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
 
         result = await db.execute(
             text(f"""
@@ -143,10 +125,10 @@ class DashboardService:
     async def get_onboarding(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> dict:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return {"tiene_cursos": False, "tiene_participantes": False, "tiene_constancias": False, "progreso": 0}
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
 
         result = await db.execute(
             text(f"""
@@ -182,10 +164,10 @@ class DashboardService:
     async def get_alertas(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> list[dict]:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return []
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
 
         alertas = []
         vencimiento = await db.execute(
@@ -239,10 +221,10 @@ class DashboardService:
     async def get_agenda(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> list[dict]:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return []
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
         result = await db.execute(
             text(f"""
                 SELECT c.id, c.nombre, c.fecha_inicio, c.fecha_fin,
@@ -270,10 +252,10 @@ class DashboardService:
     async def get_actividad(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> list[dict]:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return []
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
         result = await db.execute(
             text(f"""
                 (SELECT 'constancia_emitida' AS tipo,
@@ -307,10 +289,10 @@ class DashboardService:
     async def get_graficas(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> dict:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return {"constancias_mes": [], "cursos_categoria": []}
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
 
         constancias_mes = await db.execute(
             text(f"""
@@ -349,10 +331,10 @@ class DashboardService:
     async def get_confianza(
         self, db: AsyncSession, user_data: Dict[str, Any]
     ) -> dict:
-        cliente_ids = await self._get_cliente_ids(db, user_data)
-        if not cliente_ids:
+        org_id = organization_id(user_data)
+        if not org_id:
             return {"emitidos": 0, "consultados": 0, "tasa": 0, "ciudades": 0}
-        cid_list = ",".join(f"'{c}'" for c in cliente_ids)
+        cid_list = f"'{org_id}'"
         result = await db.execute(
             text(f"""
                 SELECT
