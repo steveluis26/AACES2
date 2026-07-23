@@ -756,7 +756,7 @@ async def update_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         def ensure_date(value):
             if value is None:
                 return None
@@ -848,7 +848,7 @@ async def aplicar_precio_grupo(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         modo = str(payload.get("mode") or payload.get("aplicar_a") or "solo_vacios").strip()
         await db.execute(text("SET LOCAL search_path TO aaces"))
         row = await db.execute(text("SELECT grupo_id FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
@@ -1069,7 +1069,7 @@ async def list_participantes_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_base NUMERIC(10,2) DEFAULT 0"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
@@ -1181,7 +1181,7 @@ async def export_participantes_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
@@ -1451,7 +1451,7 @@ async def update_participante_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
@@ -1586,7 +1586,7 @@ async def delete_participante_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -1615,7 +1615,7 @@ async def list_constancias_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -1646,7 +1646,7 @@ async def create_constancia_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -1683,7 +1683,7 @@ async def list_constancias_asignadas_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -1747,7 +1747,7 @@ async def asignar_constancia_participante(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2150,7 +2150,7 @@ async def migrar_datos_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         own = await db.execute(text("SELECT 1 FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2312,7 +2312,7 @@ async def delete_curso(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = CursoService._org_id_of(user_data)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
