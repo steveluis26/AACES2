@@ -38,7 +38,7 @@ async def public_participant_profile(
                   c.duracion_horas, c.modalidad, c.ciudad,
                   cp.fecha_inicio_vigencia, cp.fecha_expiracion,
                   cp.estado_acreditacion,
-                  cl.nombre AS org_nombre
+                  cl.razon_social AS org_nombre
                 FROM aaces.curso_participante cp
                 JOIN aaces.cursos c ON c.id = cp.curso_id
                 JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
