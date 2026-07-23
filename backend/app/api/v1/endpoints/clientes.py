@@ -23,6 +23,7 @@ from app.schemas import (
 from app.core.security import get_current_user
 from app.api.v1.endpoints.auth import get_current_user_data
 from app.api.v1.endpoints.auth import require_client, get_current_user_data
+from app.services import curso_service as CursoService
 from sqlalchemy import text
 from app.services.security import security_service
 from app.services.email import email_service
@@ -337,7 +338,6 @@ async def create_capacitador(
 # =============================================================================
 # CURSOS ENDPOINTS
 # =============================================================================
-
 @router.get("/cursos", response_model=PaginatedResponse[CursoResponse])
 async def get_cursos(
     skip: int = Query(0, ge=0),
@@ -349,56 +349,24 @@ async def get_cursos(
     fecha_inicio_to: Optional[date] = Query(None),
     capacitador_id: Optional[UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ):
-    """Obtener lista de cursos con filtros avanzados."""
+    """Obtener lista de cursos con filtros avanzados.
+    DELEGA EN CursoService.listar (única implementación de listado)."""
     try:
-        query = select(Curso)
-        # FILTRO MULTI-TENANT (bloqueador de release): un cliente solo ve sus cursos.
         org_id = current_user.get("organizacion_id") or current_user.get("org_id") or current_user.get("sub")
-        if org_id:
-            query = query.where(Curso.organizacion_id == org_id)
-        if search:
-            query = query.where(
-                or_(
-                    Curso.nombre.ilike(f"%{search}%"),
-                    Curso.descripcion.ilike(f"%{search}%"),
-                )
-            )
-        
-        if modalidad:
-            query = query.where(Curso.modalidad == modalidad)
-        
-        if estado:
-            query = query.where(Curso.estado == estado)
-        
-        if fecha_inicio_from:
-            query = query.where(Curso.fecha_inicio >= fecha_inicio_from)
-        
-        if fecha_inicio_to:
-            query = query.where(Curso.fecha_inicio <= fecha_inicio_to)
-        
-        if capacitador_id:
-            query = query.where(Curso.capacitador_id == capacitador_id)
-        
-        total_query = select(func.count()).select_from(query.subquery())
-        total_result = await db.execute(total_query)
-        total = total_result.scalar()
-        
-        query = query.offset(skip).limit(limit)
-        result = await db.execute(query)
-        cursos = result.scalars().all()
-        
-        return PaginatedResponse(
-            items=list(cursos),
-            total=total,
-            skip=skip,
-            limit=limit
+        result = await CursoService.listar(
+            db, org_id, skip=skip, limit=limit, search=search,
+            estado=estado, modalidad=modalidad,
+            fecha_inicio_from=fecha_inicio_from, fecha_inicio_to=fecha_inicio_to,
         )
+        return PaginatedResponse(
+            items=result["items"], total=result["total"], skip=skip, limit=limit
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al obtener cursos: {str(e)}")
-
-# =============================================================================
 # PARTICIPANTES ENDPOINTS
 # =============================================================================
 
@@ -649,52 +617,29 @@ async def get_proximos_cursos(
 ):
     """Lista de cursos próximos del cliente, ordenados por fecha de inicio"""
     try:
-        cid = user_data.get("organizacion_id") or user_data.get("sub")
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        parents_q = text(
-            """
-            SELECT id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, estado, empresa_contratante,
-                   precio_base, precio_promocional
-            FROM cursos
-            WHERE cliente_id = :cid AND curso_padre_id IS NULL
-              AND (
-                (fecha_inicio IS NOT NULL AND fecha_inicio >= CURRENT_DATE)
-                OR (fecha_inicio IS NULL AND fecha_fin IS NOT NULL AND fecha_fin >= CURRENT_DATE)
-                OR (fecha_inicio IS NULL AND fecha_fin IS NULL AND estado = 'en_espera')
-              )
-            ORDER BY fecha_inicio NULLS LAST, fecha_fin ASC
-            """
-        )
-        parents = await db.execute(parents_q, {"cid": cid})
-        parent_rows = parents.fetchall()
+        org_id = user_data.get("organizacion_id") or user_data.get("sub")
+        # DELEGA EN CursoService.listar(proximos=True): única query de próximos,
+        # con filtro de tenant y criterio de fecha centralizado.
+        result = await CursoService.listar(db, org_id, limit=200, proximos=True)
+        parent_rows = result["items"]
         data = []
         for r in parent_rows:
-            pid = r[0]
-            children = await db.execute(text("SELECT id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, estado, empresa_contratante, precio_base, precio_promocional FROM cursos WHERE curso_padre_id = :pid ORDER BY fecha_inicio NULLS LAST, fecha_fin ASC"), {"pid": pid})
+            pid = r["id"]
+            children = await db.execute(text("SELECT id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, estado, empresa_contratante, precio_base, precio_promocional FROM aaces.cursos WHERE curso_padre_id = :pid ORDER BY fecha_inicio NULLS LAST, fecha_fin ASC"), {"pid": pid})
             child_rows = children.fetchall()
             data.append({
-                "id": r[0], "codigo_curso": r[1], "nombre": r[2], "ciudad": r[3],
-                "fecha_inicio": r[4], "fecha_fin": r[5], "estado": r[6], "empresa_contratante": r[7],
-                "precio_base": float(r[8] or 0), "precio_promocional": float(r[9] or 0) if r[9] is not None else None,
+                "id": r["id"], "codigo_curso": r.get("codigo_curso"), "nombre": r["nombre"], "ciudad": r["ciudad"],
+                "fecha_inicio": r.get("fecha_inicio"), "fecha_fin": r.get("fecha_fin"), "estado": r["estado"], "empresa_contratante": r.get("empresa_contratante"),
+                "precio_base": float(r["precio_base"] or 0) if r.get("precio_base") is not None else None,
+                "precio_promocional": float(r["precio_promocional"] or 0) if r.get("precio_promocional") is not None else None,
                 "subcursos": [
-                    {"id": c[0], "codigo_curso": c[1], "nombre": c[2], "ciudad": c[3], "fecha_inicio": c[4], "fecha_fin": c[5], "estado": c[6], "empresa_contratante": c[7], "precio_base": float(c[8] or 0), "precio_promocional": float(c[9] or 0) if c[9] is not None else None}
-                for c in child_rows
+                    {"id": c[0], "codigo_curso": c[1], "nombre": c[2], "ciudad": c[3], "fecha_inicio": c[4].isoformat() if c[4] else None, "fecha_fin": c[5].isoformat() if c[5] else None, "estado": c[6], "empresa_contratante": c[7], "precio_base": float(c[8] or 0), "precio_promocional": float(c[9] or 0) if c[9] is not None else None}
+                    for c in child_rows
                 ]
             })
         return data
     except Exception as e:
-        msg = str(e)
-        if "column \"curso_padre_id\" does not exist" in msg:
-            try:
-                await db.rollback()
-                await db.execute(text("SET LOCAL search_path TO aaces"))
-                await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID"))
-                await db.commit()
-                return await get_proximos_cursos(user_data, db)
-            except Exception as e2:
-                await db.rollback()
-                raise HTTPException(status_code=500, detail=f"Error agregando columna curso_padre_id: {str(e2)}")
-        raise HTTPException(status_code=500, detail=f"Error obteniendo próximos cursos: {msg}")
+        raise HTTPException(status_code=500, detail=f"Error obteniendo próximos cursos: {str(e)}")
 
 @router.get("/agenda/mes")
 async def get_agenda_mes(
@@ -770,231 +715,25 @@ async def get_agenda_mes(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo cursos del mes: {str(e)}")
 
+
 @router.post("/cursos")
 async def crear_curso(
     payload: CursoCreatePayload,
     user_data: dict = Depends(get_current_user_data),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
-    """Crear un nuevo curso para el cliente autenticado"""
+    """Crear un nuevo curso para el cliente autenticado.
+    DELEGA EN CursoService (única implementación de creación de curso)."""
     try:
-        cid = user_data.get("sub")
-        data = payload.dict(exclude_unset=True)
-        nombre = (data.get("nombre") or "").strip()
-        ciudad = (data.get("ciudad") or "").strip()
-        empresa = (data.get("empresa_contratante") or "").strip() or None
-        fi_raw = payload.fecha_inicio
-        ff_raw = payload.fecha_fin
-        precio_base = None
-        precio_promocional = None
-        try:
-            if payload.precio_base is not None:
-                precio_base = float(payload.precio_base)
-                if precio_base < 0:
-                    precio_base = 0.0
-        except Exception:
-            precio_base = None
-        try:
-            if payload.precio_promocional is not None:
-                precio_promocional = float(payload.precio_promocional)
-                if precio_promocional is not None and precio_promocional < 0:
-                    precio_promocional = 0.0
-        except Exception:
-            precio_promocional = None
-
-        if not (nombre and ciudad):
-            raise HTTPException(status_code=400, detail="Nombre y ciudad son requeridos")
-
-        # Trial check: límite de cursos según plan/suscripción
-        org_id = user_data.get("organizacion_id")
-        if org_id:
-            # New schema: check subscription limits
-            sub_res = await db.execute(
-                text("""
-                    SELECT s.cursos_max, p.codigo
-                    FROM aaces.suscripciones s
-                    JOIN aaces.planes p ON p.id = s.plan_id
-                    WHERE s.organizacion_id = :org_id AND s.estatus = 'activa'
-                    LIMIT 1
-                """),
-                {"org_id": org_id}
-            )
-            sub_row = sub_res.fetchone()
-            if sub_row:
-                cursos_max = int(sub_row[0] or 10)
-                plan_name = sub_row[1]
-                if plan_name == 'trial':
-                    cursos_count_res = await db.execute(
-                        text("SELECT count(*) FROM aaces.cursos WHERE cliente_id IN (SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id) AND estado IN ('activo', 'en_espera', 'finalizado')"),
-                        {"org_id": org_id}
-                    )
-                    cursos_actuales = int(cursos_count_res.scalar() or 0)
-                    if cursos_actuales >= cursos_max:
-                        raise HTTPException(
-                            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                            detail=f"Has alcanzado el límite de {cursos_max} cursos del plan trial. Actualiza tu plan para crear más cursos."
-                        )
-        else:
-            # Old schema: check clientes table
-            plan_res = await db.execute(
-                text("SELECT plan, cursos_max FROM clientes WHERE id = :cid"),
-                {"cid": cid}
-            )
-            plan_row = plan_res.fetchone()
-            if plan_row:
-                plan_name = plan_row[0]
-                cursos_max = int(plan_row[1] or 10)
-                if plan_name == 'trial':
-                    cursos_count_res = await db.execute(
-                        text("SELECT count(*) FROM cursos WHERE cliente_id = :cid AND estado IN ('activo', 'en_espera', 'finalizado')"),
-                        {"cid": cid}
-                    )
-                    cursos_actuales = int(cursos_count_res.scalar() or 0)
-                    if cursos_actuales >= cursos_max:
-                        raise HTTPException(
-                            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                            detail=f"Has alcanzado el límite de {cursos_max} cursos del plan trial. Actualiza tu plan para crear más cursos."
-                        )
-
-        # Parseo de fechas flexible
-        def parse_date(val):
-            if not val:
-                return None
-            if isinstance(val, date):
-                return val
-            s = str(val).strip()
-            if 'T' in s:
-                s = s.split('T')[0]
-            try:
-                return datetime.fromisoformat(s).date()
-            except Exception:
-                pass
-            for sep in ('/', '-', '.', ' '):
-                parts = s.split(sep)
-                if len(parts) == 3:
-                    try:
-                        if len(parts[0]) == 4:
-                            y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
-                        else:
-                            d, m, y = int(parts[0]), int(parts[1]), int(parts[2])
-                        return date(y, m, d)
-                    except Exception:
-                        continue
-            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
-
-        fi_dt = fi_raw if isinstance(fi_raw, date) else parse_date(fi_raw)
-        ff_dt = ff_raw if isinstance(ff_raw, date) else parse_date(ff_raw)
-        estado_ins = "en_espera"
-        if fi_dt or ff_dt:
-            if fi_dt and ff_dt and fi_dt > ff_dt:
-                raise HTTPException(status_code=400, detail="fecha_inicio no puede ser mayor que fecha_fin")
-            if fi_dt and not ff_dt:
-                ff_dt = fi_dt
-            estado_ins = "activo"
-        # Generar código
-        import uuid
-        code_base = datetime.utcnow().strftime("%Y%m%d")
-        suffix = uuid.uuid4().hex[:6].upper()
-        # Asegurar columnas de precio
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_base NUMERIC(10,2) DEFAULT 0"))
-        await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
-        await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS vigencia_meses INTEGER"))
-        await db.execute(text("ALTER TABLE IF EXISTS cursos ALTER COLUMN vigencia_meses DROP DEFAULT"))
-
-        q = text(
-            """
-            INSERT INTO cursos (id, cliente_id, organizacion_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
-            VALUES (gen_random_uuid(), :org_id, :org_id, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
-            RETURNING id
-            """
-        )
-        try:
-            duracion = int(data.get("duracion_horas", 8) or 8)
-        except Exception:
-            duracion = 8
-        grupo_id = (data.get("grupo_id") or None)
-        # vigencia opcional, sin default
-        vig_raw = data.get("vigencia_meses")
-        vigm = None
-        if vig_raw is not None:
-            try:
-                _v = int(vig_raw)
-                if _v > 0:
-                    vigm = _v
-            except Exception:
-                vigm = None
-        modalidad_in = str(data.get("modalidad") or "presencial").strip().lower()
-        modalidad_val = "virtual" if modalidad_in == "virtual" else "presencial"
-        res = await db.execute(q, {"cid": cid, "org_id": org_id or cid, "code": f"CUR-{code_base}-{suffix}", "nombre": nombre, "ciudad": ciudad, "fi": fi_dt, "ff": ff_dt, "empresa": empresa, "duracion": duracion, "estado": estado_ins, "grupo_id": grupo_id, "precio_base": precio_base, "precio_promocional": precio_promocional, "vigencia_meses": vigm, "modalidad": modalidad_val})
-        parent_id = res.scalar()
-
-        # Subcursos
-        subs = payload.subcursos or []
-        for sc in subs:
-            sn = (getattr(sc, "nombre", None) or "").strip()
-            s_ciudad = (getattr(sc, "ciudad", None) or "").strip()
-            s_fi_raw = getattr(sc, "fecha_inicio", None)
-            s_ff_raw = getattr(sc, "fecha_fin", None)
-            s_emp = (getattr(sc, "empresa_contratante", None) or "").strip() or None
-            if not (sn and s_ciudad):
-                continue
-            try:
-                s_fi_dt = parse_date(s_fi_raw)
-                s_ff_dt = parse_date(s_ff_raw)
-            except HTTPException:
-                continue
-            s_estado = "en_espera"
-            if s_fi_dt or s_ff_dt:
-                if s_fi_dt and s_ff_dt and s_fi_dt > s_ff_dt:
-                    continue
-                if s_fi_dt and not s_ff_dt:
-                    s_ff_dt = s_fi_dt
-                s_estado = "activo"
-            s_suffix = uuid.uuid4().hex[:6].upper()
-            try:
-                s_dur = int(getattr(sc, "duracion_horas", 8) or 8)
-            except Exception:
-                s_dur = 8
-            sub_res = await db.execute(
-                text(
-                    """
-                    INSERT INTO cursos (id, cliente_id, organizacion_id, curso_padre_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
-                    VALUES (gen_random_uuid(), :org_id, :org_id, :pid, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
-                    RETURNING id
-                """
-                ),
-                {"cid": cid, "org_id": org_id or cid, "pid": parent_id, "code": f"CUR-{code_base}-{s_suffix}", "nombre": sn, "ciudad": s_ciudad, "fi": s_fi_dt, "ff": s_ff_dt, "empresa": s_emp, "grupo_id": grupo_id, "duracion": s_dur, "estado": s_estado, "precio_base": precio_base, "precio_promocional": precio_promocional, "vigencia_meses": vigm, "modalidad": modalidad_val}
-            )
-            sub_id = sub_res.scalar()
-        # Constancias del curso (catálogo inicial)
-        consts = payload.constancias or []
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        await db.execute(text(
-            """
-            CREATE TABLE IF NOT EXISTS constancias_curso (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              curso_id UUID NOT NULL REFERENCES cursos(id) ON DELETE CASCADE,
-              nombre VARCHAR(200) NOT NULL,
-              norma VARCHAR(200),
-              fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-              UNIQUE(curso_id, nombre)
-            )
-            """
-        ))
-        for cc in consts:
-            n = (getattr(cc, "nombre", None) or "").strip()
-            norma = (getattr(cc, "norma", None) or "").strip() or None
-            if not n:
-                continue
-            await db.execute(text("INSERT INTO constancias_curso (curso_id, nombre, norma) VALUES (:curso, :n, :norma) ON CONFLICT (curso_id, nombre) DO UPDATE SET norma = EXCLUDED.norma"), {"curso": parent_id, "n": n, "norma": norma})
+        result = await CursoService.crear(db, user_data, payload)
         await db.commit()
-        return {"id": str(parent_id), "subcursos": len(subs), "constancias": len(consts)}
+        return result
     except HTTPException:
         raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error creando curso: {str(e)}")
+
 
 class CursoEditPayload(BaseModel):
     ciudad: Optional[str] = None

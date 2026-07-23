@@ -9,6 +9,7 @@ import uuid
 
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import get_current_user_data
+from app.services import curso_service as CursoService
 
 router = APIRouter()
 
@@ -49,55 +50,20 @@ async def crear_curso(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("org_id") or user_data.get("sub")
-    uid = user_data.get("sub")
-    if not cid:
+    """Crear curso (DELEGA EN CursoService - única implementación)."""
+    org_id = CursoService._org_id_of(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    if payload.fecha_inicio and payload.fecha_fin and payload.fecha_inicio > payload.fecha_fin:
-        raise HTTPException(status_code=400, detail="fecha_inicio no puede ser mayor que fecha_fin")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-
-    code = payload.codigo_curso or f"CUR-{uuid.uuid4().hex[:8].upper()}"
-    estado = payload.estado or "activo"
-    vigencia = payload.duracion_validacion or payload.vigencia_meses
-
-    res = await db.execute(
-        text(""" 
-            INSERT INTO aaces.cursos (id, cliente_id, organizacion_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, duracion_validacion, modalidad, estado, empresa_contratante, costo_total, creado_por, fecha_creacion)
-            VALUES (gen_random_uuid(), :cid, :org_id, :code, :nombre, :ciudad, :fi, :ff, :duracion, :vigencia, :modalidad, :estado, :empresa, :costo, :uid, now())
-            RETURNING id, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, codigo_curso, estado, empresa_contratante, costo_total, fecha_creacion
-        """),
-        {
-            "cid": cid, "org_id": cid, "code": code, "nombre": payload.nombre,
-            "ciudad": payload.ciudad, "fi": payload.fecha_inicio,
-            "ff": payload.fecha_fin, "duracion": payload.duracion_horas,
-            "vigencia": vigencia, "modalidad": payload.modalidad, "estado": estado,
-            "empresa": payload.empresa_contratante, "costo": payload.costo_total,
-            "uid": uid,
-        },
-    )
-    row = res.fetchone()
-    if not row:
-        raise HTTPException(status_code=500, detail="Error al crear curso")
-
-    await db.commit()
-
-    return {
-        "id": str(row[0]),
-        "nombre": row[1],
-        "ciudad": row[2],
-        "fecha_inicio": row[3],
-        "fecha_fin": row[4],
-        "duracion_horas": row[5],
-        "modalidad": row[6],
-        "codigo_curso": row[7],
-        "estado": row[8],
-        "empresa_contratante": row[9],
-        "costo_total": float(row[10]) if row[10] else None,
-        "fecha_creacion": row[11].isoformat() if row[11] else None,
-    }
+    try:
+        result = await CursoService.crear(db, user_data, payload)
+        await db.commit()
+        # Devolver el curso completo (compatible con CursoResponseSchema)
+        return await CursoService.obtener(db, result["id"], org_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creando curso: {str(e)}")
 
 
 @router.get("", response_model=List[CursoResponseSchema])
@@ -107,40 +73,12 @@ async def listar_cursos(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("org_id") or user_data.get("sub")
-    uid = user_data.get("sub")
-    if not cid:
+    """Listar cursos (DELEGA EN CursoService.listar)."""
+    org_id = CursoService._org_id_of(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-    res = await db.execute(
-        text("""
-            SELECT id, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, codigo_curso, estado, empresa_contratante, costo_total, fecha_creacion
-            FROM aaces.cursos
-            WHERE cliente_id = :cid
-            ORDER BY fecha_creacion DESC
-            LIMIT :limit OFFSET :skip
-        """),
-        {"cid": cid, "limit": limit, "skip": skip},
-    )
-    rows = res.fetchall()
-    return [
-        {
-            "id": str(r[0]),
-            "nombre": r[1],
-            "ciudad": r[2],
-            "fecha_inicio": r[3],
-            "fecha_fin": r[4],
-            "duracion_horas": r[5],
-            "modalidad": r[6],
-            "codigo_curso": r[7],
-            "estado": r[8],
-            "empresa_contratante": r[9],
-            "costo_total": float(r[10]) if r[10] else None,
-            "fecha_creacion": r[11].isoformat() if r[11] else None,
-        }
-        for r in rows
-    ]
+    result = await CursoService.listar(db, org_id, skip=skip, limit=limit)
+    return result["items"]
 
 
 @router.get("/{curso_id}", response_model=CursoResponseSchema)
@@ -149,39 +87,11 @@ async def obtener_curso(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("org_id") or user_data.get("sub")
-    uid = user_data.get("sub")
-    if not cid:
+    """Obtener curso (DELEGA EN CursoService.obtener)."""
+    org_id = CursoService._org_id_of(user_data)
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-    res = await db.execute(
-        text("""
-            SELECT id, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, codigo_curso, estado, empresa_contratante, costo_total, fecha_creacion
-            FROM aaces.cursos
-            WHERE id = :curso_id AND cliente_id = :cid
-            LIMIT 1
-        """),
-        {"curso_id": curso_id, "cid": cid},
-    )
-    row = res.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Curso no encontrado")
-
-    return {
-        "id": str(row[0]),
-        "nombre": row[1],
-        "ciudad": row[2],
-        "fecha_inicio": row[3],
-        "fecha_fin": row[4],
-        "duracion_horas": row[5],
-        "modalidad": row[6],
-        "codigo_curso": row[7],
-        "estado": row[8],
-        "empresa_contratante": row[9],
-        "costo_total": float(row[10]) if row[10] else None,
-        "fecha_creacion": row[11].isoformat() if row[11] else None,
-    }
+    return await CursoService.obtener(db, curso_id, org_id)
 
 
 class ParticipanteCreateSchema(BaseModel):
