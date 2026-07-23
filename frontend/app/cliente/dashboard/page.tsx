@@ -89,7 +89,7 @@ export default function ClienteDashboardPage() {
     { retry: 1 },
   )
   const vencimientos = useQuery(["dashboard", "vencimientos"], () =>
-    apiRequest("participantes/vencimientos-por-empresa"),
+    apiRequest("/participantes/vencimientos-por-empresa"),
     { refetchInterval: 60000, retry: 1 },
   )
 

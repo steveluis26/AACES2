@@ -158,13 +158,13 @@ async def empresas_top(
 
     rows = (await db.execute(
         text("""
-            SELECT cl.nombre, COUNT(d.id) AS total
+            SELECT cl.razon_social, COUNT(d.id) AS total
             FROM aaces.documentos_emitidos d
             JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion::varchar
             JOIN aaces.cursos c ON c.id = cp.curso_id
             JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
             WHERE d.organizacion_id = :org_id
-            GROUP BY cl.id, cl.nombre ORDER BY total DESC LIMIT :lim
+            GROUP BY cl.id, cl.razon_social ORDER BY total DESC LIMIT :lim
         """),
         {"org_id": org_id, "lim": limite},
     )).fetchall()
@@ -187,7 +187,7 @@ async def proximos_a_vencer(
     rows = (await db.execute(
         text("""
             SELECT d.id, d.folio, d.tipo_documento, d.fecha_emision, d.estatus,
-                   cp.fecha_expiracion, c.nombre AS curso, cl.nombre AS empresa
+                   cp.fecha_expiracion, c.nombre AS curso, cl.razon_social AS empresa
             FROM aaces.documentos_emitidos d
             JOIN aaces.curso_participante cp ON cp.codigo_validacion = d.codigo_validacion::varchar
             JOIN aaces.cursos c ON c.id = cp.curso_id
