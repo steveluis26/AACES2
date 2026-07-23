@@ -86,6 +86,32 @@ mientras el POST usa el tenant canónico. Patrón a chequear en toda auditoría.
 ## Conclusión de la pausa técnica
 NO hay 2 backends. El error era una desalineación de nombres de campo entre el JWT
 (`org_id`) y el código (`organizacion_id`) en la ruta que usa el frontend. Reparado
-en la raíz (normalización en `get_current_user_data`). El backend es uno solo, con
-punto de entrada único y frontend con una sola configuración de API.
-Aceptación Core: 11/11 OK tras el fix.
+centralmente en `get_current_user_data`; los endpoints que leen `organizacion_id`
+ahora funcionan. No se reescribió el sistema.
+
+## Hallazgo crítico: el frontend gestion NO usa /clientes/cursos
+El reporte "se guarda en BD pero no se muestra" se debía a que `gestion/page.tsx`
+carga la tabla "Mis cursos" con **GET /clientes/agenda/proximos**, no con
+GET /clientes/cursos. El endpoint `get_proximos_cursos` (clientes.py:649) filtraba
+`WHERE cliente_id = sub` -> como los cursos se guardan con `cliente_id = organizacion_id`,
+la tabla quedaba sin el curso nuevo. Fix: `cid = organizacion_id or sub` (commit b36e848).
+Lección: al debuggear "no aparece", ver SIEMPRE qué GET exacto hace el frontend
+(`grep` en page.tsx), no asumir la ruta del POST.
+
+## Riesgo de seguridad PENDIENTE (no bloquea RC-1, parche post-RC)
+`get_cursos` (clientes.py:341, GET /clientes/cursos) hace `select(Curso)` SIN
+`WHERE organizacion_id = ...` -> devuelve cursos de TODAS las orgs (filtración
+multi-tenant). Usa `Depends(get_current_user)` (tiene organizacion_id). Hay que
+añadir `query = query.where(Curso.organizacion_id == current_user["organizacion_id"])`.
+No se tocó en RC-1 para no afectar la UI de `cursos/page.tsx` sin verificar primero
+qué ruta usa. Documentado para parche de seguridad inmediato post-RC-1.
+
+## Patrón 'cid' sobrecargado en clientes.py
+~16 usos de `cid = user_data.get("sub")`. 'cid' se usa para DOS cosas:
+- En GETs: filtra por tenant -> debe ser `organizacion_id`.
+- En INSERTs: es `creado_por` (FK a usuarios/clientes) -> debe ser `sub`.
+Un `replace_all` ciego rompería las FK de `creado_por`. Por eso los fixes son
+quirúrgicos por endpoint. La limpieza (renombrar a `org_id`/`uid`) es trabajo de
+Sprint B, no RC-1.
+
+Aceptación Core: 13/13 OK (incluye el ciclo crear -> agenda/proximos del frontend).
