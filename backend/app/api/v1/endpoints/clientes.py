@@ -23,6 +23,7 @@ from app.schemas import (
 from app.core.security import get_current_user
 from app.api.v1.endpoints.auth import get_current_user_data
 from app.api.v1.endpoints.auth import require_client, get_current_user_data
+from app.core.tenant import organization_id
 from app.services import curso_service as CursoService
 from app.services import constancia_service as ConstanciaService
 from app.services import participante_service as ParticipanteService
@@ -654,7 +655,7 @@ async def get_agenda_mes(
     try:
         if month < 1 or month > 12:
             raise HTTPException(status_code=400, detail="Mes inválido")
-        cid = user_data.get("sub")
+        cid = organization_id(user_data)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         # Rango de mes [start, end] en tipos date nativos
         from datetime import date, timedelta
