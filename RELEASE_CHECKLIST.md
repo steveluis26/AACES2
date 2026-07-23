@@ -59,11 +59,14 @@ VACÍA (simula el peor escenario: instalación limpia / Neon nuevo).
 
 ### Herramientas permanentes de regresión (correr ANTES de cada liberación)
 Estas herramientas evitan que una modificación futura desalinee:
-modelos SQLAlchemy ↔ bootstrap ↔ esquema real ↔ SQL crudo.
+modelos SQLAlchemy ↔ bootstrap ↔ esquema real ↔ SQL crudo ↔ contrato de identidad.
+Los contratos y reglas están en `CONTRACTS.md` y `ARCHITECTURE_RULES.md`.
 - [ ] `backend/scripts/audit_schema.py` — modelo SQLAlchemy vs BD real (columnas/tablas).
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_schema.py`
 - [ ] `backend/scripts/audit_sql_refs.py` — queries SQL crudas vs columnas BD (detecta `column does not exist`).
       `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_sql_refs.py`
+- [ ] `backend/scripts/audit_contract.py` — contrato de identidad (ningún endpoint lee JWT directo ni usa campos no canónicos).
+      `cd backend && PYTHONPATH=. ./.venv/bin/python scripts/audit_contract.py`
 - [ ] `tests/e2e/flujo_completo.sh` — E2E por HTTP (login→curso→participante→acreditar→emitir→verificar).
 - [ ] `tests/e2e/sprint_a_check.sh` — checks de reglas de negocio Sprint A.
 - [ ] `tests/acceptance/core_operativo.py` — Prueba de Aceptación del Core (5 flujos:
