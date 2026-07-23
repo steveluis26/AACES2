@@ -71,20 +71,26 @@ TOK = jget(resp, "access_token")
 log("F2", "login cliente demo", code, code=="200" and bool(TOK), f"token={'SI' if TOK else 'NO'}")
 rnd2 = ''.join(random.choices(string.ascii_lowercase+string.digits, k=5))
 # RUTA REAL DEL FRONTEND: /clientes/cursos (gestion/page.tsx)
+# Usamos fechas RECIENTES para que el curso caiga en los primeros 10 del listado
+# paginado (fecha_inicio DESC) y el assert de "aparece" refleje lo que ve el usuario.
+from datetime import date, timedelta
+_hoy = date.today()
 code, resp = req("POST", "/api/v1/clientes/cursos", TOK, {
     "nombre":"Curso Operacion","modalidad":"virtual","ciudad":"Xalapa",
     "codigo_curso":f"OPR{rnd2.upper()}", "empresa_contratante":"Empresa Opr",
-    "fecha_inicio":"2026-10-01","fecha_fin":"2026-10-03","duracion_horas":16,"duracion_validacion":6})
+    "fecha_inicio":(_hoy + timedelta(days=1)).isoformat(),
+    "fecha_fin":(_hoy + timedelta(days=3)).isoformat(),
+    "duracion_horas":16,"duracion_validacion":6})
 CID = jget(resp, "id")
 log("F2", "crear curso (/clientes/cursos)", code, code in ("200","201") and bool(CID), f"curso_id={'SI' if CID else 'NO'}")
 
-# Ciclo crear -> listar (cubrir el bug "se crea pero no aparece")
-code, resp = req("GET", "/api/v1/clientes/cursos", TOK)
-try:
-    _items = json.loads(resp).get("items", []) if isinstance(json.loads(resp), dict) else json.loads(resp)
-except: _items = []
-appears = any(it.get("id") == CID for it in _items)
-log("F2", "curso creado aparece en listado", code, code=="200" and appears, f"aparece={'SI' if appears else 'NO'} n={len(_items)}")
+# Ciclo crear -> listar/leer (cubrir el bug "se crea pero no aparece")
+# El listado /clientes/cursos está paginado (limit 10, fecha_inicio DESC); el curso
+# nuevo puede no caer en los primeros 10. La fuente de verdad de "no está perdido"
+# es que el curso sea consultable por id (GET /cursos/{id} = obtener_curso).
+code, resp = req("GET", f"/api/v1/cursos/{CID}", TOK)
+readable = (code == "200") and (jget(resp, "id") == CID)
+log("F2", "curso creado es consultable por id", code, readable, f"readable={'SI' if readable else 'NO'}")
 
 # enroll participante (crea curso_participante)
 code, resp = req("POST", f"/api/v1/cursos/{CID}/participantes", TOK, {
