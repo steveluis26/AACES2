@@ -99,12 +99,12 @@ hace mucho más fácil encontrar errores y evita que un bug se duplique en 3 lug
 ---
 
 ## Plan Sprint S (Stabilization)
-- **S1 ✅ CursoService**: eliminar SQL duplicado de cursos (crear/listar/obtener/agenda). Hecho (commit 27a8faa).
-- **S2 ✅ ParticipanteService**: `crear` (enroll + vigencia/costo) + `acreditar`. Endpoints cursos.py:add_participante, participantes.py:create_participante, participantes.py:acreditar_participante delegan. Hecho (commit 0645460). PENDIENTE: clientes.py:add_participante_curso aún tiene SQL (crea participante + emite constancia); su lógica de constancia va a S3.
-- **S3** ConstanciaService: `emitir_constancia` (hoy en constancias.py:95 y embebido en clientes.py:add_participante_curso) + `verificar`. Al cerrar S3, clientes.py:add_participante_curso delega en ParticipanteService.crear + ConstanciaService.emitir.
-- **S4** DashboardService: métricas del panel (hoy admin.py / reportes.py con SQL suelto).
-- **S5** Eliminar SQL de routers: tras S2-S4, los routers son solo `return await service.metodo(...)`. clientes.py se divide por dominio.
+- **S1 ✅ CursoService** (commit 27a8faa): crear/listar/obtener/agenda.
+- **S2 ✅ ParticipanteService** (commit 0645460): crear (enroll+vigencia/costo) + acreditar.
+- **S3 ✅ ConstanciaService** (commit 2cea632): emitir (fachada PDF/QR) + listar/resumen/obtener/cancelar/reemitir. Cierra clientes.py:add_participante_curso (ya no hay SQL de constancia embebido).
+- **S4** DashboardService: métricas del panel (hoy admin.py / reportes.py / dashboard.py con SQL suelto). Al cerrar S4, esos endpoints delegan.
+- **S5** Eliminar SQL de routers + dividir clientes.py: tras S2-S4, los routers son solo `return await service.metodo(...)`. clientes.py se parte por dominio (cursos→ya en cursos.py; participantes→participantes.py; agenda/dashboard/pagos/perfil/empresas → sus módulos). No es "porque quede bonito": reduce superficie de bugs y hace trivial encontrar errores.
 
 Condición hasta el merge de v0.4.0: mantener la disciplina. No aceptar nuevas
-consultas SQL duplicadas ni nueva lógica de negocio en los routers. CursoService y
-ParticipanteService son el modelo; el resto del sistema los sigue.
+consultas SQL duplicadas ni nueva lógica de negocio en los routers. CursoService,
+ParticipanteService y ConstanciaService son el modelo; el resto lo sigue.
