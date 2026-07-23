@@ -11,6 +11,7 @@ import uuid
 from app.core.database import get_db
 from app.api.v1.endpoints.auth import require_org_admin, get_current_user_data
 from app.services.constancias import constancias_service
+from app.services import constancia_service as ConstanciaService
 from app.services.storage_provider import LocalStorageProvider
 from app.core.config import settings
 from app.schemas import (
@@ -41,49 +42,17 @@ async def emitir_constancia_legacy(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    # Alias de /emitir: delega a la emision real (genera PDF + QR + hash).
-    # Eliminado el comportamiento legacy que no generaba PDF (deuda tecnica).
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-    cp = await db.execute(
-        text("""
-            SELECT cp.id, cp.curso_id, cp.participante_id, c.cliente_id
-            FROM aaces.curso_participante cp
-            JOIN aaces.cursos c ON c.id = cp.curso_id
-            WHERE cp.id = :cp_id
-            LIMIT 1
-        """),
-        {"cp_id": payload.curso_participante_id},
-    )
-    cp_row = cp.fetchone()
-    if not cp_row:
-        raise HTTPException(status_code=404, detail="Curso-participante no encontrado")
-    if str(cp_row[3]) != cid:
-        raise HTTPException(status_code=403, detail="No tienes permiso para emitir constancias de este curso")
-
-    organizacion_id = user_data.get("org_id")
-    if not organizacion_id:
-        row = await db.execute(
-            text("SELECT organizacion_id FROM aaces.clientes WHERE id=:cid"),
-            {"cid": cid},
-        )
-        r = row.fetchone()
-        organizacion_id = str(r[0]) if r and r[0] else None
-    if not organizacion_id:
-        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
-
+    """Emitir constancia (DELEGA EN ConstanciaService.emitir)."""
     try:
-        doc = await constancias_service.emitir(
-            db=db,
-            organizacion_id=organizacion_id,
-            curso_participante_id=payload.curso_participante_id,
-            emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
-            template_id=None,
-        )
+        doc = await ConstanciaService.emitir(db, user_data, payload.curso_participante_id)
+        await db.commit()
         return {"success": True, "documento": doc, "legacy_alias": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.exception(f"Error emitiendo constancia (alias legacy): {e}")
+        raise HTTPException(status_code=500, detail="Error al emitir constancia")
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -97,26 +66,10 @@ async def emitir_constancia(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data.get("org_id")
-    if not organizacion_id:
-        cid = user_data.get("sub")
-        if cid:
-            row = await db.execute(
-                text("SELECT organizacion_id FROM aaces.clientes WHERE id=:cid"),
-                {"cid": cid},
-            )
-            r = row.fetchone()
-            organizacion_id = str(r[0]) if r and r[0] else None
-    if not organizacion_id:
-        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
+    """Emitir constancia (DELEGA EN ConstanciaService.emitir)."""
     try:
-        doc = await constancias_service.emitir(
-            db=db,
-            organizacion_id=organizacion_id,
-            curso_participante_id=payload.curso_participante_id,
-            emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
-            template_id=payload.template_id,
-        )
+        doc = await ConstanciaService.emitir(db, user_data, payload.curso_participante_id, template_id=payload.template_id)
+        await db.commit()
         audit_logger.log_user_action(
             user_id=user_data.get("sub"),
             action="constancia_emitida",
@@ -124,11 +77,12 @@ async def emitir_constancia(
             details={"doc_id": doc["id"], "codigo_validacion": doc["codigo_validacion"]},
         )
         return {"success": True, "documento": doc}
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        await db.rollback()
         logger.exception(f"Error emitiendo constancia: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al emitir constancia")
+        raise HTTPException(status_code=500, detail="Error al emitir constancia")
 
 
 @router.get("")
@@ -347,27 +301,10 @@ async def cancelar_constancia(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-    res = await db.execute(
-        text("SELECT estatus FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
-    )
-    row = res.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Constancia no encontrada")
-    if row[0] == "cancelado":
-        raise HTTPException(status_code=400, detail="La constancia ya está cancelada")
-
-    await db.execute(
-        text("UPDATE aaces.documentos_emitidos SET estatus = 'cancelado' WHERE id = :id"),
-        {"id": constancia_id},
-    )
+    """Cancelar constancia (DELEGA EN ConstanciaService.cancelar)."""
+    result = await ConstanciaService.cancelar(db, user_data, constancia_id)
     await db.commit()
-    return {"status": "cancelado"}
+    return result
 
 
 @router.post("/{constancia_id}/reemitir")
@@ -376,43 +313,10 @@ async def reemitir_constancia(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
-    await db.execute(text("SET LOCAL search_path TO aaces"))
-    res = await db.execute(
-        text("SELECT organizacion_id, tipo_documento FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
-    )
-    row = res.fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Constancia no encontrada")
-
-    org_id = str(row[0]) if row[0] else None
-    tipo_doc = row[1]
-
-    await db.execute(
-        text("UPDATE aaces.documentos_emitidos SET estatus = 'reemitido' WHERE id = :id"),
-        {"id": constancia_id},
-    )
-
-    doc_id = str(uuid.uuid4())
-    codigo_validacion = str(uuid.uuid4())
-    folio = f"FOL-{uuid.uuid4().hex[:8].upper()}"
-    await db.execute(
-        text("""
-            INSERT INTO aaces.documentos_emitidos (id, organizacion_id, tipo_documento, codigo_validacion, folio, storage_provider, storage_key, pdf_hash, emitido_por, fecha_emision, estatus)
-            VALUES (:id, :org_id, :tipo, :codigo, :folio, 'local', :key, '', NULL, now(), 'emitido')
-        """),
-        {
-            "id": doc_id, "org_id": org_id, "tipo": tipo_doc,
-            "codigo": codigo_validacion, "folio": folio,
-            "key": f"constancias/{doc_id}.pdf",
-        },
-    )
+    """Reemitir constancia (DELEGA EN ConstanciaService.reemitir)."""
+    result = await ConstanciaService.reemitir(db, user_data, constancia_id)
     await db.commit()
-    return {"id": doc_id, "codigo_validacion": codigo_validacion, "estatus": "emitido", "folio": folio}
+    return result
 
 
 @router.get("/{constancia_id}/timeline")
@@ -421,27 +325,23 @@ async def timeline_constancia(
     user_data: dict = Depends(get_current_user_data),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
+    """Timeline de constancia (DELEGA EN ConstanciaService - por ahora inline simple)."""
+    org_id = user_data.get("organizacion_id") or user_data.get("org_id") or user_data.get("sub")
+    if not org_id:
         raise HTTPException(status_code=401, detail="Usuario no autenticado")
-
     await db.execute(text("SET LOCAL search_path TO aaces"))
     res = await db.execute(
-        text("SELECT estatus, fecha_emision FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
+        text("SELECT estatus, fecha_emision FROM aaces.documentos_emitidos WHERE id = :id AND organizacion_id = :org LIMIT 1"),
+        {"id": constancia_id, "org": org_id},
     )
     row = res.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Constancia no encontrada")
-
-    eventos = [
-        {"tipo": "emitido", "fecha": row[1].isoformat() if row[1] else None},
-    ]
-    est = row[0]
+    eventos = [{"tipo": "emitido", "fecha": row[0].isoformat() if row[0] else None}]
+    est = row[1]
     if est == "cancelado":
         eventos.append({"tipo": "cancelado", "fecha": None})
     elif est == "reemitido":
         eventos.append({"tipo": "cancelado", "fecha": None})
         eventos.append({"tipo": "reemitido", "fecha": None})
-
     return {"eventos": eventos}

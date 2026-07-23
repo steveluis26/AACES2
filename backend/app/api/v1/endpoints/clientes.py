@@ -24,6 +24,7 @@ from app.core.security import get_current_user
 from app.api.v1.endpoints.auth import get_current_user_data
 from app.api.v1.endpoints.auth import require_client, get_current_user_data
 from app.services import curso_service as CursoService
+from app.services import constancia_service as ConstanciaService
 from sqlalchemy import text
 from app.services.security import security_service
 from app.services.email import email_service
@@ -1278,159 +1279,30 @@ async def add_participante_curso(
     curso_id: str,
     payload: dict,
     user_data: dict = Depends(get_current_user_data),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
+    """Registrar participante en curso y (opcional) emitir constancia.
+    DELEGA EN ParticipanteService.crear + ConstanciaService.emitir (única fuente)."""
     try:
-        cid = user_data.get("sub")
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
-        if own.scalar() is None:
-            raise HTTPException(status_code=404, detail="Curso no encontrado")
-        nombre = (payload.get("nombre") or "").strip()
-        apellido = (payload.get("apellido") or "").strip()
-        nombres = (payload.get("nombres") or nombre).strip()
-        apellido_paterno = (payload.get("apellido_paterno") or apellido).strip()
-        apellido_materno = (payload.get("apellido_materno") or "").strip()
-        correo = (payload.get("correo") or "").strip()
-        numero = ""
-        tipo_documento = ""
-        ciudad = (payload.get("ciudad_origen") or "").strip()
-        telefono = (payload.get("telefono") or "").strip()
-        empresa = (payload.get("empresa") or "").strip()
-        cargo = (payload.get("cargo") or "").strip()
-        profesion = (payload.get("profesion") or "").strip()
-        if not ((nombres or nombre) and correo):
-            raise HTTPException(status_code=400, detail="nombre y correo requeridos")
-        # Sin validación de documento; campos eliminados del esquema
-        # Buscar primero por numero_documento (único), luego por correo
-        pid = None
-        # Campo número_documento eliminado: no se usa para deduplicación
-        if not pid and correo:
-            ex_mail = await db.execute(text("SELECT id FROM aaces.participantes WHERE correo = :correo"), {"correo": correo})
-            row_mail = ex_mail.fetchone()
-            if row_mail:
-                pid = row_mail[0]
-        if pid:
-            # Actualizar datos opcionales si se proporcionan
-            sets = []
-            params = {"pid": pid}
-            if telefono:
-                sets.append("telefono = :telefono"); params["telefono"] = telefono
-            if empresa:
-                sets.append("empresa = :empresa"); params["empresa"] = empresa
-            if cargo:
-                sets.append("cargo = :cargo"); params["cargo"] = cargo
-            if profesion:
-                sets.append("nivel_educacion = :profesion"); params["profesion"] = profesion
-            if ciudad:
-                sets.append("ciudad_origen = :ciudad"); params["ciudad"] = ciudad
-            if correo:
-                sets.append("correo = :correo_upd"); params["correo_upd"] = correo
-            if sets:
-                await db.execute(text(f"UPDATE aaces.participantes SET {', '.join(sets)} WHERE id = :pid"), params)
-        else:
-            combined_apellido = apellido or (apellido_paterno + (" " + apellido_materno if apellido_materno else ""))
-            await db.execute(text("ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS apellido_paterno VARCHAR(100)"))
-            await db.execute(text("ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100)"))
-            ins = await db.execute(text("INSERT INTO aaces.participantes (id, nombre, apellido, apellido_paterno, apellido_materno, correo, ciudad_origen, telefono, empresa, cargo, nivel_educacion, pais) VALUES (gen_random_uuid(), :nombre, :apellido, :ap_pat, :ap_mat, :correo, :ciudad, :telefono, :empresa, :cargo, :profesion, 'Mexico') RETURNING id"), {"nombre": (nombre or nombres) or None, "apellido": combined_apellido or None, "ap_pat": (apellido_paterno or "").strip() or None, "ap_mat": (apellido_materno or "").strip() or None, "correo": correo, "ciudad": ciudad or None, "telefono": telefono or None, "empresa": empresa or None, "cargo": cargo or None, "profesion": profesion or None})
-            pid = ins.scalar()
-        # Evitar violación de UNIQUE: si ya existe la inscripción, reutilizar su id
-        ex_global = await db.execute(text("SELECT id FROM aaces.curso_participante WHERE curso_id = :curso AND participante_id = :pid"), {"curso": curso_id, "pid": pid})
-        global_id = ex_global.scalar()
-        cp_id = global_id
-        if not cp_id:
-            lnk = await db.execute(text(
-                """
-                INSERT INTO aaces.curso_participante (
-                  id, curso_id, participante_id,
-                  estado_pago, estado_acreditacion, fecha_inicio_vigencia, fecha_expiracion,
-                  valor_pagado, costo_asignado, descuento
-                )
-                VALUES (
-                  gen_random_uuid(), :curso, :pid,
-                  'pendiente', true,
-                  (
-                    SELECT COALESCE(c.fecha_fin, c.fecha_inicio, CURRENT_DATE)
-                    FROM aaces.cursos c WHERE c.id = :curso
-                  ),
-                  (
-                    SELECT CASE WHEN COALESCE(c.vigencia_meses, c.duracion_validacion) IS NULL OR COALESCE(c.vigencia_meses, c.duracion_validacion) <= 0
-                                THEN NULL
-                                ELSE (COALESCE(c.fecha_fin, c.fecha_inicio, CURRENT_DATE)::date + make_interval(months => CAST(COALESCE(c.vigencia_meses, c.duracion_validacion) AS integer)))::date
-                           END
-                    FROM aaces.cursos c WHERE c.id = :curso
-                  ),
-                  0,
-                  (
-                    SELECT COALESCE(
-                      (
-                        SELECT COALESCE(g.precio_base, g.precio_promocional)
-                        FROM aaces.grupos_curso g WHERE g.id = c.grupo_id
-                        LIMIT 1
-                      ),
-                      (
-                        SELECT tc.costo_por_persona
-                        FROM aaces.tipos_curso tc
-                        WHERE tc.cliente_id = c.cliente_id AND tc.nombre = c.nombre
-                        LIMIT 1
-                      ),
-                      COALESCE(c.costo_total, 0),
-                      0
-                    )
-                    FROM aaces.cursos c WHERE c.id = :curso
-                  ),
-                  0
-                )
-                RETURNING id
-                """
-            ), {"curso": curso_id, "pid": pid})
-            cp_id = lnk.scalar()
-        id_cert = (payload.get("id_certificado") or "").strip() or None
-        cod_val = (payload.get("codigo_validacion") or "").strip()
-        cod_val = cod_val.upper() if cod_val else None
-        if id_cert is None:
-            import uuid
-            id_cert = f"CERT-{uuid.uuid4().hex[:8].upper()}"
-        if cod_val is None:
-            import uuid
-            cod_val = uuid.uuid4().hex[:8].upper()
-        acreditado = True
-        emision_raw = payload.get("fecha_emision_certificado") or None
-        expiracion_raw = payload.get("fecha_expiracion_certificado") or payload.get("fecha_expiracion") or None
-
-        def _parse_date(v):
-            if v is None or v == "":
-                return None
-            if isinstance(v, (date, datetime)):
-                return v
-            s = str(v).strip()
-            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
-                try:
-                    return datetime.strptime(s, fmt).date()
-                except ValueError:
-                    continue
-            try:
-                return date.fromisoformat(s[:10])
-            except ValueError:
-                return None
-
-        emision = _parse_date(emision_raw)
-        expiracion = _parse_date(expiracion_raw)
-        sets = []
-        params = {"cp": cp_id, "curso": curso_id}
-        if id_cert is not None:
-            sets.append("id_certificado = :id_certificado"); params["id_certificado"] = id_cert
-        if cod_val is not None:
-            sets.append("codigo_validacion = :codigo_validacion"); params["codigo_validacion"] = cod_val
-        sets.append("estado_acreditacion = :estado_acreditacion"); params["estado_acreditacion"] = True
-        if emision is not None:
-            sets.append("fecha_emision_certificado = :fecha_emision_certificado"); params["fecha_emision_certificado"] = emision
-        if expiracion is not None:
-            sets.append("fecha_expiracion = :fecha_expiracion"); params["fecha_expiracion"] = expiracion
-        if sets:
-            await db.execute(text(f"UPDATE aaces.curso_participante SET {', '.join(sets)} WHERE id = :cp AND curso_id = :curso"), params)
+        result = await ParticipanteService.crear(db, user_data, payload, curso_id=curso_id)
         await db.commit()
-        return {"id": str(cp_id), "participante_id": str(pid)}
+        cp_id = result.get("curso_participante_id") or result.get("id")
+        constancia = None
+        # Si el payload pide certificar (frontend enrol+certifica), emitir constancia.
+        if cp_id and (payload.get("emitir_constancia") or payload.get("acreditado")):
+            constancia = await ConstanciaService.emitir(db, user_data, cp_id)
+            await db.commit()
+        return {
+            "id": cp_id,
+            "participante_id": result.get("participante_id"),
+            "curso_participante_id": cp_id,
+            "constancia": constancia,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error agregando participante: {str(e)}")
     except HTTPException:
         raise
     except Exception as e:

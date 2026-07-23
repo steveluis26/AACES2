@@ -100,11 +100,11 @@ hace mucho más fácil encontrar errores y evita que un bug se duplique en 3 lug
 
 ## Plan Sprint S (Stabilization)
 - **S1 ✅ CursoService**: eliminar SQL duplicado de cursos (crear/listar/obtener/agenda). Hecho (commit 27a8faa).
-- **S2** ParticipanteService: `add_participante` está duplicado (cursos.py + clientes.py); `acreditar`/`emitir` en participantes.py con SQL propio → consolidar.
-- **S3** ConstanciaService: emitir/verificar constancias.
-- **S4** DashboardService: métricas del panel.
-- **S5** Eliminar SQL de routers: tras S2-S4, los routers son solo `return await service.metodo(...)`.
+- **S2 ✅ ParticipanteService**: `crear` (enroll + vigencia/costo) + `acreditar`. Endpoints cursos.py:add_participante, participantes.py:create_participante, participantes.py:acreditar_participante delegan. Hecho (commit 0645460). PENDIENTE: clientes.py:add_participante_curso aún tiene SQL (crea participante + emite constancia); su lógica de constancia va a S3.
+- **S3** ConstanciaService: `emitir_constancia` (hoy en constancias.py:95 y embebido en clientes.py:add_participante_curso) + `verificar`. Al cerrar S3, clientes.py:add_participante_curso delega en ParticipanteService.crear + ConstanciaService.emitir.
+- **S4** DashboardService: métricas del panel (hoy admin.py / reportes.py con SQL suelto).
+- **S5** Eliminar SQL de routers: tras S2-S4, los routers son solo `return await service.metodo(...)`. clientes.py se divide por dominio.
 
 Condición hasta el merge de v0.4.0: mantener la disciplina. No aceptar nuevas
-consultas SQL duplicadas ni nueva lógica de negocio en los routers. CursoService
-es el modelo; el resto del sistema lo sigue.
+consultas SQL duplicadas ni nueva lógica de negocio en los routers. CursoService y
+ParticipanteService son el modelo; el resto del sistema los sigue.
