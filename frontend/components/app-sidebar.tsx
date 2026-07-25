@@ -51,7 +51,7 @@ const MENU_CLIENTE = [
   { title: "Pagos",      url: "/cliente/pagos",        icon: CreditCardIcon },
   { title: "Reportes",   url: "/cliente/reportes",     icon: BarChartIcon },
   { title: "Gestión",    url: "/cliente/gestion",      icon: FolderIcon },
-  { title: "Calendario", url: "/cliente/cursos?view=calendar", icon: CalendarIcon },
+  { title: "Calendario", url: "/cliente/calendario", icon: CalendarIcon },
 ]
 
 const data = {

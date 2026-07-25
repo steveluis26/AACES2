@@ -54,7 +54,7 @@ class ConstanciasService:
                        c.fecha_inicio, c.fecha_fin, c.duracion_horas, c.duracion_validacion,
                        c.cliente_id, c.organizacion_id,
                        p.nombre as part_nombre, p.apellido as part_apellido,
-                       p.correo as part_correo
+                       p.correo as part_correo, p.empresa as part_empresa
                 FROM aaces.curso_participante cp
                 JOIN aaces.cursos c ON c.id = cp.curso_id
                 JOIN aaces.organizaciones cl ON cl.id = c.organizacion_id
@@ -133,6 +133,7 @@ class ConstanciasService:
             "fecha_emision": now.isoformat(),
             "fecha_inicio_vigencia": cp.fecha_inicio_vigencia.isoformat() if cp.fecha_inicio_vigencia else "",
             "fecha_expiracion": cp.fecha_expiracion.isoformat() if cp.fecha_expiracion else "",
+            "participante_empresa": (cp.part_empresa or cp.curso_empresa_contratante or ""),
         }
 
         # A2.3: derivar vigencia automática desde duracion_validacion del curso
@@ -156,6 +157,7 @@ class ConstanciasService:
         )
         n_folio = folio_row.scalar() or 1
         folio = f"AAC-{now.year}-{n_folio:05d}"
+        data["folio"] = folio
 
         if template_id:
             tpl = await db.execute(

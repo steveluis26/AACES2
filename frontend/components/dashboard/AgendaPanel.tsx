@@ -43,12 +43,12 @@ export function AgendaPanel({ agenda }: { agenda: Curso[] }) {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-col h-[460px]">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">Próximos cursos</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {agenda.map((curso) => (
+      <CardContent className="space-y-3 overflow-y-auto flex-1">
+        {agenda.slice(0, 20).map((curso) => (
           <div
             key={curso.curso_id}
             className="flex items-center justify-between rounded-lg border p-3"

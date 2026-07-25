@@ -69,7 +69,16 @@ export type Curso = {
   empresa_contratante: string | null
 }
 export const cursosApi = {
-  listar: () => api<Curso[]>('/cursos'),
+  // Lista filtrada por la org del usuario (multitenancy) + búsqueda server-side.
+  listar: (skip = 0, limit = 10, q = '') =>
+    api<{ items: Curso[]; total: number; skip: number; limit: number }>(
+      `/clientes/cursos?skip=${skip}&limit=${limit}${q ? `&search=${encodeURIComponent(q)}` : ''}`
+    ),
+  // Para búsqueda global: el backend filtra por org + search, así que traemos el máximo.
+  listarTodos: (q = '') =>
+    api<{ items: Curso[]; total: number; skip: number; limit: number }>(
+      `/clientes/cursos?skip=0&limit=100${q ? `&search=${encodeURIComponent(q)}` : ''}`
+    ),
   crear: (p: any) => api<any>('/cursos', { method: 'POST', body: p }),
   detalle: (id: string) => api<any>(`/cursos/${id}`),
 }

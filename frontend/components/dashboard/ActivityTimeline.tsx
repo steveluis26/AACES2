@@ -43,13 +43,13 @@ export function ActivityTimeline({ actividad }: { actividad: Evento[] }) {
   }
 
   return (
-    <Card>
+    <Card className="flex flex-col h-[460px]">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">Actividad reciente</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="overflow-y-auto flex-1">
         <div className="space-y-0">
-          {actividad.map((ev, i) => {
+          {actividad.slice(0, 20).map((ev, i) => {
             const cfg = TIPO_CONFIG[ev.tipo] || { icon: Clock, label: ev.tipo }
             const Icon = cfg.icon
             return (

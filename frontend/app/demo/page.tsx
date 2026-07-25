@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ShieldCheck, QrCode, GraduationCap, Loader2 } from 'lucide-react'
 import { login, getUser, clearToken } from './lib/api'
+import { ErrorBeacon } from '@/components/error-beacon'
 
 export default function DemoEntryPage() {
   const router = useRouter()
@@ -32,6 +33,7 @@ export default function DemoEntryPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4">
+      <ErrorBeacon />
       <div className="w-full max-w-5xl grid md:grid-cols-2 gap-8 items-center">
         {/* Lado izquierdo: propuesta de valor */}
         <div className="hidden md:flex flex-col gap-6">

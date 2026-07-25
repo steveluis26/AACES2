@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, XCircle, Shield, Loader2, QrCode, Hash } from "lucide-react"
+import { XCircle, Shield, Loader2, QrCode, Hash } from "lucide-react"
 
 interface ParticipanteData {
   nombre: string
@@ -121,15 +121,11 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
           valida ? "border-green-200 bg-white" : "border-red-200 bg-white"
         }`}>
           <div className="text-center mb-6">
-            <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${
-              valida ? "bg-green-100" : "bg-red-100"
-            }`}>
-              {valida
-                ? <CheckCircle className="h-8 w-8 text-green-600" />
-                : <XCircle className="h-8 w-8 text-red-600" />}
+            <div className="flex justify-center mb-4">
+              <img src="/logo.png" alt="AACES" className="h-16 w-auto object-contain" />
             </div>
             <h1 className={`text-2xl font-bold ${valida ? "text-green-800" : "text-red-800"}`}>
-              {valida ? "✅ CONSTANCIA VÁLIDA" : "Documento no válido"}
+              {valida ? "CONSTANCIA VÁLIDA" : "Documento no válido"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {valida
@@ -177,7 +173,6 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
                     <Field label="Modalidad" value={curso.modalidad} />
                     <Field label="Fecha de inicio" value={fmtFecha(curso.fecha_inicio)} />
                     <Field label="Fecha de término" value={fmtFecha(curso.fecha_fin)} />
-                    <Field label="Calificación" value={curso.calificacion != null ? `${curso.calificacion}%` : null} />
                     <Field label="Vigencia desde" value={fmtFecha(curso.inicio_vigencia)} />
                     <Field label="Vigencia hasta" value={fmtFecha(curso.expiracion)} />
                     <Field label="Empresa contratante" value={curso.empresa_contratante} />

@@ -10,8 +10,9 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { ChevronLeft, Plus, FileCheck2, QrCode, Loader2, CheckCircle2, Award, Trash2 } from 'lucide-react'
 import {
-  cursosApi, Curso, participantesApi, ParticipanteCurso, constanciasApi, ConstanciaEmitida, pdfUrl,
+  cursosApi, Curso, participantesApi, ParticipanteCurso, constanciasApi, ConstanciaEmitida, getToken,
 } from '../../lib/api'
+import { ErrorBeacon } from '@/components/error-beacon'
 
 export default function CursoDetallePage() {
   const params = useParams<{ id: string }>()
@@ -34,6 +35,7 @@ export default function CursoDetallePage() {
   const [emitido, setEmitido] = useState<Record<string, ConstanciaEmitida>>({})
   const [emitiendo, setEmitiendo] = useState<string | null>(null)
   const [preview, setPreview] = useState<ConstanciaEmitida | null>(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -129,8 +131,33 @@ export default function CursoDetallePage() {
       const res = await constanciasApi.emitir(p.id)
       setEmitido((prev) => ({ ...prev, [p.id]: res.documento }))
       setParticipantes((prev) => prev.map((x) => x.id === p.id ? { ...x, codigo_validacion: res.documento.codigo_validacion } : x))
+      await openPreview(res.documento)
     } catch (e: any) { alert(e?.message || 'No se pudo emitir') }
     finally { setEmitiendo(null) }
+  }
+
+  const openPreview = async (c: ConstanciaEmitida) => {
+    setPreview(c)
+    try {
+      const t = getToken()
+      const res = await fetch(`/api/v1/constancias/${c.id}/pdf`, {
+        headers: t ? { Authorization: `Bearer ${t}` } : {},
+      })
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        setPdfBlobUrl(url)
+      } else {
+        setPdfBlobUrl(null)
+      }
+    } catch {
+      setPdfBlobUrl(null)
+    }
+  }
+
+  const closePreview = () => {
+    setPreview(null)
+    if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
   }
 
   const eliminar = async (p: ParticipanteCurso) => {
@@ -143,6 +170,7 @@ export default function CursoDetallePage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <ErrorBeacon />
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="mx-auto px-4 h-14 flex items-center justify-between max-w-5xl">
           <Button variant="ghost" size="sm" onClick={() => router.push('/cliente/cursos')}>
@@ -257,7 +285,7 @@ export default function CursoDetallePage() {
       </Dialog>
 
       {/* Preview constancia */}
-      <Dialog open={!!preview} onClose={() => setPreview(null)}>
+      <Dialog open={!!preview} onClose={closePreview}>
         <DialogHeader>
           <DialogTitle>
             <span className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" /> Constancia emitida</span>
@@ -276,13 +304,19 @@ export default function CursoDetallePage() {
                 <p className="text-xs text-muted-foreground mb-2">Código de validación</p>
                 <p className="font-mono text-[11px] break-all text-center mb-3">{preview.codigo_validacion}</p>
                 <QrCode className="h-28 w-28 text-slate-800" />
-                <a href={`/verificar/${preview.codigo_validacion}`} className="text-xs text-emerald-700 underline mt-3" target="_blank">Abrir verificación →</a>
+                <a href={`/v/${preview.codigo_validacion}`} className="text-xs text-emerald-700 underline mt-3" target="_blank">Abrir verificación →</a>
               </div>
             </div>
             <div className="border rounded-lg overflow-hidden bg-slate-100">
-              <iframe src={pdfUrl(preview.id)} className="w-full h-96" title="Vista previa" />
+              {pdfBlobUrl ? (
+                <iframe src={pdfBlobUrl} className="w-full h-96" title="Vista previa" />
+              ) : (
+                <p className="text-xs text-muted-foreground p-4 text-center">Cargando documento…</p>
+              )}
             </div>
-            <a href={pdfUrl(preview.id)} target="_blank" className="text-sm text-emerald-700 underline">Descargar PDF</a>
+            {pdfBlobUrl && (
+              <a href={pdfBlobUrl} download={`constancia-${preview.codigo_validacion}.pdf`} className="text-sm text-emerald-700 underline">Descargar PDF</a>
+            )}
           </DialogContent>
         )}
         <DialogFooter><Button onClick={() => setPreview(null)}>Cerrar</Button></DialogFooter>
