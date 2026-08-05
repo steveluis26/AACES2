@@ -47,3 +47,6 @@ backend/.venv/
 backend/.env
 __pycache__/
 *.pyc/
+
+# Real env files (never commit)
+config/.env.production
