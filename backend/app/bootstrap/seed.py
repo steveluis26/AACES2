@@ -47,16 +47,42 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
 
 
 async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
-    res = await conn.execute(text("SELECT COUNT(*) FROM aaces.clientes"))
+    # Check if admin exists in usuarios (new schema)
+    res = await conn.execute(text("SELECT COUNT(*) FROM aaces.usuarios WHERE correo = 'admin@aaces.com'"))
     if int(res.scalar() or 0) > 0:
         return
+    
+    # Check if admin exists in clientes (old schema) - migrate it
+    res = await conn.execute(text("SELECT id, nombre, correo, password_hash, categoria, estado, organizacion_id FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
+    row = res.fetchone()
+    if row is not None:
+        logger.info("Migrating existing admin from clientes to usuarios...")
+        # Insert into organizaciones first if needed
+        org_id = row[6]
+        if org_id is None:
+            org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
+            org_id = org_res.scalar()
+        
+        # Insert into usuarios
+        await conn.execute(
+            text(
+                "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (:id, :nombre, :correo, :ph, 'admin', true, :org_id, 0, NULL)"
+            ),
+            {"id": row[0], "nombre": row[1], "correo": row[2], "ph": row[3], "org_id": org_id},
+        )
+        logger.info("Admin migrated successfully from clientes to usuarios")
+        return
 
-    logger.info("No users found, seeding admin...")
+    logger.info("No users found, seeding admin in usuarios...")
     ph = hash_password_fn("admin123")
+    # Create organizacion
+    org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
+    org_id = org_res.scalar()
+    # Create usuario
     await conn.execute(
         text(
-            "INSERT INTO aaces.clientes (id, nombre, correo, password_hash, categoria, estado, acepta_terminos, plan, cursos_max, cursos_creados, descuento_pct) VALUES (:id, :nombre, :correo, :ph, 'enterprise', 'activo', true, 'ilimitado', 999999, 0, 0)"
+            "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (gen_random_uuid(), 'Administrador', 'admin@aaces.com', :ph, 'admin', true, :org_id, 0, NULL)"
         ),
-        {"id": str(uuid.uuid4()), "nombre": "Administrador", "correo": "admin@aaces.com", "ph": ph},
+        {"ph": ph, "org_id": org_id},
     )
-    logger.info("Admin seeded successfully")
+    logger.info("Admin seeded successfully in usuarios")
