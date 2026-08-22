@@ -147,3 +147,4 @@ Privado - Uso interno
 # force redeploy 4 - Sat Aug 22 01:35:31 CST 2026
 # force redeploy 5 - clean admin user
 # force redeploy 6 - Sat Aug 22 08:52:47 CST 2026
+# force redeploy 7 - seed UUID fix
