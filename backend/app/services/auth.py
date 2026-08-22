@@ -212,7 +212,7 @@ class AuthService:
                            u.ultimo_acceso, o.vigencia_desde, o.vigencia_hasta
                     FROM aaces.usuarios u
                     LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
-                    WHERE u.id = :id::uuid
+                    WHERE u.id = CAST(:id AS uuid)
                     LIMIT 1
                     """
                 ),
