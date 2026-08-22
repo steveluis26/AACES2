@@ -41,6 +41,38 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
 async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     PROBLEM_ID = "73d2bb00-cde6-4255-bd27-d1282c4e83ff"
     
+    # Check if admin already exists with a VALID (non-problem) ID
+    existing_valid = await conn.execute(
+        text("SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com' AND id != :pid LIMIT 1"),
+        {"pid": PROBLEM_ID}
+    )
+    if existing_valid.scalar():
+        logger.info("Admin already exists with valid ID, skipping seed")
+        return
+    
+    # Check if problematic admin exists
+    problematic = await conn.execute(
+        text("SELECT id FROM aaces.usuarios WHERE id = :pid"),
+        {"pid": PROBLEM_ID}
+    )
+    if not problematic.scalar():
+        # Also check clientes table
+        problematic = await conn.execute(
+            text("SELECT id FROM aaces.clientes WHERE id = :pid"),
+            {"pid": PROBLEM_ID}
+        )
+        if not problematic.scalar():
+            logger.info("No problematic admin found, checking if any admin exists...")
+            # Check if any admin exists at all
+            any_admin = await conn.execute(
+                text("SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com' LIMIT 1")
+            )
+            if any_admin.scalar():
+                logger.info("Admin exists with valid ID, skipping seed")
+                return
+            logger.info("No admin found at all, creating fresh admin")
+            # Continue to create fresh admin
+    
     # NUCLEAR: Delete ALL users with admin email in both tables, then recreate
     logger.info("Nuclear cleanup: deleting any admin@aaces.com from usuarios and clientes...")
     # First, capture org_ids that have admin@aaces.com users (before deleting them)
