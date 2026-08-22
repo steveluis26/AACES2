@@ -61,7 +61,7 @@ DEFAULT_CONSTANCIA_TEMPLATE = """
     </div>
     <div class="footer">
         <p>Documento generado automáticamente por AACES</p>
-        <p>Verifique en: {{ settings.PUBLIC_VERIFICATION_URL }}/{{ codigo_validacion }}</p>
+        <p>Verifique en: {{ verification_url }}/{{ codigo_validacion }}</p>
         {{ qr | safe }}
     </div>
 </body>
@@ -143,6 +143,8 @@ class ConstanciasService:
             "fecha_emision": now.isoformat(),
             "fecha_inicio_vigencia": cp.fecha_inicio_vigencia.isoformat() if cp.fecha_inicio_vigencia else "",
             "fecha_expiracion": cp.fecha_expiracion.isoformat() if cp.fecha_expiracion else "",
+            "verification_url": settings.PUBLIC_VERIFICATION_URL,
+            "folio": "",  # placeholder for template
         }
 
         if template_id:
