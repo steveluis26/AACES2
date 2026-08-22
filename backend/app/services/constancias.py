@@ -23,29 +23,24 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_CONSTANCIA_TEMPLATE = """
-<!DOCTYPE html>
+DEFAULT_CONSTANCIA_TEMPLATE = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <style>
-        @page { margin: 2cm; }
-        body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #333; }
+        body { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #333; }
         .header { text-align: center; margin-bottom: 30px; }
         .header h1 { margin: 0; color: #1a3c6e; font-size: 24pt; }
-        .header .subtitle { color: #666; font-size: 14pt; margin-top: 5px; }
         .content { margin-top: 30px; }
         .field { margin-bottom: 15px; }
         .field label { font-weight: bold; display: inline-block; width: 200px; }
         .field span { display: inline-block; }
         .footer { margin-top: 50px; text-align: center; font-size: 10pt; color: #999; }
-        .qr { position: fixed; bottom: 20px; right: 20px; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>CONSTANCIA DE PARTICIPACIÓN</h1>
-        <div class="subtitle">Folio: {{ folio | default('') }}</div>
     </div>
     <div class="content">
         <p>Por medio de la presente se hace constar que <strong>{{ participante_nombre }}</strong></p>
@@ -65,8 +60,7 @@ DEFAULT_CONSTANCIA_TEMPLATE = """
         {{ qr | safe }}
     </div>
 </body>
-</html>
-"""
+</html>"""
 
 
 def _get_storage() -> StorageProvider:
