@@ -216,7 +216,7 @@ class AuthService:
                     """
                     SELECT u.id, u.correo, u.nombre, u.rol as categoria, u.activo as estado,
                            u.organizacion_id, u.fecha_creacion, u.fecha_actualizacion,
-                           u.ultimo_acceso, o.vigencia_desde, o.vigencia_hasta
+                           u.ultimo_acceso, o.fecha_activacion as vigencia_desde, NULL as vigencia_hasta
                     FROM aaces.usuarios u
                     LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
                     WHERE u.id = :id
@@ -229,7 +229,8 @@ class AuthService:
             logger.info(f"usuarios query returned: {row}")
             if row is not None:
                 return SimpleNamespace(
-                    id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4] if row[4] else 'activo',
+                    id=row[0], correo=row[1], nombre=row[2], categoria=row[3], 
+                    estado='activo' if row[4] else 'inactivo',
                     organizacion_id=row[5], ciudad_base=None, fecha_creacion=row[6], fecha_actualizacion=row[7],
                     ultimo_acceso=row[8], vigencia_desde=row[9], vigencia_hasta=row[10]
                 )
