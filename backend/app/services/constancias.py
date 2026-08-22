@@ -155,26 +155,38 @@ class ConstanciasService:
             if not t:
                 raise ValueError("Plantilla de constancia no encontrada o inactiva")
         else:
-            tpl = await db.execute(
-                text("""
-                    SELECT id, version, html_template, recursos, config
-                    FROM aaces.templates
-                    WHERE organizacion_id = :org_id AND activa = true AND tipo_documento = 'CONSTANCIA'
-                    ORDER BY fecha_creacion DESC
-                    LIMIT 1
-                """),
-                {"org_id": organizacion_id}
-            )
-            t = tpl.fetchone()
-            if not t:
-                # Fallback: use a default inline HTML template when no DB template exists
-                html = DEFAULT_CONSTANCIA_TEMPLATE
-                recursos = {}
-                config = {}
-                t_id = None
-                t_version = 1
-            else:
-                t_id, t_version, html, recursos, config = t
+            try:
+                tpl = await db.execute(
+                    text("""
+                        SELECT id, version, html_template, recursos, config
+                        FROM aaces.templates
+                        WHERE organizacion_id = :org_id AND activa = true AND tipo_documento = 'CONSTANCIA'
+                        ORDER BY fecha_creacion DESC
+                        LIMIT 1
+                    """),
+                    {"org_id": organizacion_id}
+                )
+                t = tpl.fetchone()
+                if not t:
+                    # Fallback: use a default inline HTML template when no DB template exists
+                    html = DEFAULT_CONSTANCIA_TEMPLATE
+                    recursos = {}
+                    config = {}
+                    t_id = None
+                    t_version = 1
+                else:
+                    t_id, t_version, html, recursos, config = t
+            except ProgrammingError as e:
+                if is_undefined_table(e):
+                    # Table doesn't exist yet - use default template
+                    logger.warning("Templates table not found, using default template")
+                    html = DEFAULT_CONSTANCIA_TEMPLATE
+                    recursos = {}
+                    config = {}
+                    t_id = None
+                    t_version = 1
+                else:
+                    raise
 
         qr_data = f"{settings.PUBLIC_VERIFICATION_URL}/{codigo_validacion}"
 
