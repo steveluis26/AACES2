@@ -204,6 +204,11 @@ class AuthService:
         """Obtener usuario por ID (esquema aaces - usuarios y clientes)"""
         try:
             # Primero intentar en usuarios (nuevo esquema)
+            import uuid as uuid_lib
+            try:
+                uid = uuid_lib.UUID(user_id)
+            except ValueError:
+                uid = user_id
             result = await db.execute(
                 text(
                     """
@@ -212,11 +217,11 @@ class AuthService:
                            u.ultimo_acceso, o.vigencia_desde, o.vigencia_hasta
                     FROM aaces.usuarios u
                     LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
-                    WHERE u.id = CAST(:id AS uuid)
+                    WHERE u.id = :id
                     LIMIT 1
                     """
                 ),
-                {"id": user_id}
+                {"id": uid}
             )
             row = result.fetchone()
             if row is not None:
@@ -238,7 +243,7 @@ class AuthService:
                     LIMIT 1
                     """
                 ),
-                {"id": user_id}
+                {"id": uid}
             )
             row = result.fetchone()
             if row is None:
