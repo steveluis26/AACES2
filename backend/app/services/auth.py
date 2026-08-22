@@ -133,6 +133,10 @@ class AuthService:
                 raise OrganizationSuspendedError(
                     "Tu organización ha sido suspendida. Contacta al administrador."
                 )
+            if user.org_estatus == 'cancelada':
+                raise OrganizationSuspendedError(
+                    "Tu organización ha sido cancelada. Contacta al administrador."
+                )
 
             await db.execute(
                 text("UPDATE aaces.usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = :ua WHERE id = :id"),
