@@ -52,25 +52,25 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     if int(res.scalar() or 0) > 0:
         return
     
-    # Check if admin exists in clientes (old schema) - migrate it
-    res = await conn.execute(text("SELECT id, nombre, correo, password_hash, categoria, estado, organizacion_id FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
+    # Check if admin exists in clientes (old schema) - migrate it with NEW UUID
+    res = await conn.execute(text("SELECT nombre, correo, password_hash, categoria, estado, organizacion_id FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
     row = res.fetchone()
     if row is not None:
-        logger.info("Migrating existing admin from clientes to usuarios...")
+        logger.info("Migrating existing admin from clientes to usuarios with new UUID...")
         # Insert into organizaciones first if needed
-        org_id = row[6]
+        org_id = row[5]
         if org_id is None:
             org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
             org_id = org_res.scalar()
         
-        # Insert into usuarios
+        # Insert into usuarios with NEW UUID (not reusing old clientes ID)
         await conn.execute(
             text(
-                "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (:id, :nombre, :correo, :ph, 'admin', true, :org_id, 0, NULL)"
+                "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (gen_random_uuid(), :nombre, :correo, :ph, 'admin', true, :org_id, 0, NULL)"
             ),
-            {"id": row[0], "nombre": row[1], "correo": row[2], "ph": row[3], "org_id": org_id},
+            {"nombre": row[0], "correo": row[1], "ph": row[2], "org_id": org_id},
         )
-        logger.info("Admin migrated successfully from clientes to usuarios")
+        logger.info("Admin migrated successfully from clientes to usuarios with new UUID")
         return
 
     logger.info("No users found, seeding admin in usuarios...")
