@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-08-21T19:33:55.711480",
+  "timestamp": "2026-08-21T20:20:15.869477",
   "base_url": "https://aaces-backend-3hw1.onrender.com/api/v1",
   "total_pasos": 3,
   "pasados": 2,
@@ -10,7 +10,7 @@
       "descripcion": "Login como administrador",
       "resultado": "\u2705",
       "error": null,
-      "duracion_ms": 2994,
+      "duracion_ms": 1970,
       "evidence": {
         "token_prefix": "eyJhbGciOiJIUzI1NiIs..."
       }
@@ -20,9 +20,9 @@
       "descripcion": "Crear curso",
       "resultado": "\u2705",
       "error": null,
-      "duracion_ms": 188,
+      "duracion_ms": 236,
       "evidence": {
-        "curso_id": "58c0ecdc-a04d-479e-b957-e979ff1df17d"
+        "curso_id": "92603972-dbc6-4411-a5ef-0a0fdf157600"
       }
     },
     {
@@ -30,7 +30,7 @@
       "descripcion": "Registrar participante",
       "resultado": "\u274c",
       "error": "Expected 201, got 500: Internal Server Error",
-      "duracion_ms": 523,
+      "duracion_ms": 371,
       "evidence": {}
     }
   ]

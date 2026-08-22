@@ -224,15 +224,13 @@ async def add_participante(
         pax_id = f"PAX-{uuid.uuid4().hex[:8].upper()}"
         ins = await db.execute(
             text("""
-                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, pais, cliente_id, telefono, empresa, cargo)
-                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, 'Mexico', :cid, :telefono, :empresa, :cargo)
+                INSERT INTO aaces.participantes (id, nombre, correo, pais, telefono, empresa, cargo)
+                VALUES (gen_random_uuid(), :nombre, :correo, 'Mexico', :telefono, :empresa, :cargo)
                 RETURNING id
             """),
             {
-                "pax_id": pax_id,
                 "nombre": nombre,
                 "correo": correo,
-                "cid": cid,
                 "telefono": payload.telefono,
                 "empresa": payload.empresa,
                 "cargo": payload.cargo,
