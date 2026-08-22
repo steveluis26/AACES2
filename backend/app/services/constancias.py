@@ -23,6 +23,52 @@ from app.schemas import (
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_CONSTANCIA_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        @page { margin: 2cm; }
+        body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #333; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .header h1 { margin: 0; color: #1a3c6e; font-size: 24pt; }
+        .header .subtitle { color: #666; font-size: 14pt; margin-top: 5px; }
+        .content { margin-top: 30px; }
+        .field { margin-bottom: 15px; }
+        .field label { font-weight: bold; display: inline-block; width: 200px; }
+        .field span { display: inline-block; }
+        .footer { margin-top: 50px; text-align: center; font-size: 10pt; color: #999; }
+        .qr { position: fixed; bottom: 20px; right: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>CONSTANCIA DE PARTICIPACIÓN</h1>
+        <div class="subtitle">Folio: {{ folio | default('') }}</div>
+    </div>
+    <div class="content">
+        <p>Por medio de la presente se hace constar que <strong>{{ participante_nombre }}</strong></p>
+        <p>ha participado satisfactoriamente en el curso:</p>
+        <div class="field"><label>Curso:</label><span>{{ curso_nombre }}</span></div>
+        <div class="field"><label>Fecha inicio:</label><span>{{ curso_fecha_inicio }}</span></div>
+        <div class="field"><label>Fecha fin:</label><span>{{ curso_fecha_fin }}</span></div>
+        <div class="field"><label>Duración:</label><span>{{ curso_duracion_horas }} horas</span></div>
+        <div class="field"><label>Calificación:</label><span>{{ calificacion }}</span></div>
+        <div class="field"><label>Asistencia:</label><span>{{ asistencia }}%</span></div>
+        <div class="field"><label>Código de validación:</label><span>{{ codigo_validacion }}</span></div>
+        <div class="field"><label>Fecha de emisión:</label><span>{{ fecha_emision }}</span></div>
+    </div>
+    <div class="footer">
+        <p>Documento generado automáticamente por AACES</p>
+        <p>Verifique en: {{ settings.PUBLIC_VERIFICATION_URL }}/{{ codigo_validacion }}</p>
+        {{ qr | safe }}
+    </div>
+</body>
+</html>
+"""
+
+
 def _get_storage() -> StorageProvider:
     provider = settings.STORAGE_PROVIDER
     if provider == "local":
@@ -125,11 +171,14 @@ class ConstanciasService:
             )
             t = tpl.fetchone()
             if not t:
-                raise ValueError(
-                    "No tienes una plantilla de constancia activa. Crea una en Plantillas antes de emitir."
-                )
-
-        t_id, t_version, html, recursos, config = t
+                # Fallback: use a default inline HTML template when no DB template exists
+                html = DEFAULT_CONSTANCIA_TEMPLATE
+                recursos = {}
+                config = {}
+                t_id = None
+                t_version = 1
+            else:
+                t_id, t_version, html, recursos, config = t
 
         qr_data = f"{settings.PUBLIC_VERIFICATION_URL}/{codigo_validacion}"
 
