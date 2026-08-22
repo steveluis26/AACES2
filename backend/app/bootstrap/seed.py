@@ -8,16 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 async def ensure_seed_data(conn: AsyncConnection, hash_password_fn) -> None:
-    try:
-        async with conn.begin_nested():
-            await _ensure_plans(conn)
-    except Exception as e:
-        logger.warning(f"Failed to seed plans: {e}")
-    try:
-        async with conn.begin_nested():
-            await _ensure_admin(conn, hash_password_fn)
-    except Exception as e:
-        logger.warning(f"Failed to seed admin: {e}")
+    await _ensure_plans(conn)
+    await _ensure_admin(conn, hash_password_fn)
 
 
 async def _ensure_plans(conn: AsyncConnection) -> None:
