@@ -96,7 +96,7 @@ class AuthService:
                            o.estatus, o.razon_social
                     FROM aaces.usuarios u
                     LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
-                    WHERE u.correo = :email AND u.activo = true
+                    WHERE u.correo = :email AND u.activo = true AND (o.estatus IS NULL OR o.estatus = 'activa')
                     LIMIT 1
                     """
                 ),
