@@ -49,7 +49,7 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
         logger.info(f"Admin has problematic ID {PROBLEM_ID}, deleting and recreating with new UUID...")
         # Clear ALL FK references first
         await conn.execute(text("UPDATE aaces.plantillas SET creada_por = NULL WHERE creada_por = :id"), {"id": existing_id})
-        await conn.execute(text("UPDATE aaces.constancias SET emitido_por = NULL WHERE emitido_por = :id"), {"id": existing_id})
+        await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por = :id"), {"id": existing_id})
         await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = :id"), {"id": existing_id})
         await conn.execute(text("DELETE FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
         existing_id = None
