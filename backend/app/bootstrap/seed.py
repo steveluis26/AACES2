@@ -43,11 +43,16 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     
     # NUCLEAR: Delete ALL users with admin email in both tables, then recreate
     logger.info("Nuclear cleanup: deleting any admin@aaces.com from usuarios and clientes...")
-    await conn.execute(text("UPDATE aaces.plantillas SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE correo = 'admin@aaces.com')"))
-    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por IN (SELECT id FROM aaces.usuarios WHERE correo = 'admin@aaces.com')"))
-    await conn.execute(text("DELETE FROM aaces.usuarios WHERE correo = 'admin@aaces.com'"))
-    await conn.execute(text("DELETE FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
-    logger.info("Nuclear cleanup done")
+    # Also delete by the known problematic ID directly
+    await conn.execute(text("UPDATE aaces.plantillas SET creada_por = NULL WHERE creada_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
+    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
+    await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
+    await conn.execute(text("DELETE FROM aaces.clientes WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
+    await conn.execute(text("UPDATE aaces.plantillas SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
+    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
+    result_usuarios = await conn.execute(text("DELETE FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com'"))
+    result_clientes = await conn.execute(text("DELETE FROM aaces.clientes WHERE correo ILIKE 'admin@aaces.com'"))
+    logger.info(f"Nuclear cleanup done: usuarios deleted={result_usuarios.rowcount}, clientes deleted={result_clientes.rowcount}")
     
     # Create fresh admin with new UUID
     ph = hash_password_fn("admin123")
