@@ -40,17 +40,28 @@ async def lifespan(app: FastAPI):
             await conn.commit()
         async with engine.connect() as conn:
             await conn.execute(text("SET search_path TO aaces"))
-            await ensure_seed_data(conn, security_service.hash_password)
-            await conn.commit()
-        async with engine.connect() as conn:
-            await conn.execute(text("SET search_path TO aaces"))
-            await ensure_schema_version(conn)
-            await conn.commit()
-        async with engine.connect() as conn:
-            await conn.execute(text("SET search_path TO aaces"))
-            health = await check_schema_health(conn)
-            if health.status == "BROKEN":
-                logger.error("Schema health BROKEN: missing %s", health.missing_tables)
+            try:
+                await ensure_seed_data(conn, security_service.hash_password)
+                await conn.commit()
+                logger.info("Seed data completed successfully")
+            except Exception as e:
+                logger.error(f"Seed data failed: {e}")
+                await conn.rollback()
+                raise
+        # Ensure seed errors propagate - don't catch them in outer try/except
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SET search_path TO aaces"))
+                await ensure_schema_version(conn)
+                await conn.commit()
+            async with engine.connect() as conn:
+                await conn.execute(text("SET search_path TO aaces"))
+                health = await check_schema_health(conn)
+                if health.status == "BROKEN":
+                    logger.error("Schema health BROKEN: missing %s", health.missing_tables)
+        except Exception as e:
+            logger.error(f"Database init error: {e}")
+            raise
     except Exception as e:
         logger.warning(f"Could not connect to database: {e}")
         logger.info("Application starting without database connection")
