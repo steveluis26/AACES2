@@ -75,30 +75,19 @@ async def emitir_constancia_legacy(
         )
         org_row2 = org_res2.fetchone()
         org_id = str(org_row2[0]) if org_row2 else None
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
 
-    doc_id = str(uuid.uuid4())
-    codigo_validacion = str(uuid.uuid4())
-    folio = f"FOL-{uuid.uuid4().hex[:8].upper()}"
-    await db.execute(
-        text("""
-            INSERT INTO aaces.documentos_emitidos (id, organizacion_id, tipo_documento, codigo_validacion, folio, storage_provider, storage_key, pdf_hash, emitido_por, fecha_emision, estatus)
-            VALUES (:id, :org_id, :tipo, :codigo, :folio, 'local', :key, '', NULL, now(), 'emitido')
-        """),
-        {
-            "id": doc_id, "org_id": org_id, "tipo": payload.tipo_documento,
-            "codigo": codigo_validacion, "folio": folio,
-            "key": f"constancias/{doc_id}.pdf",
-        },
+    # Use the new constancias_service which generates PDF
+    doc = await constancias_service.emitir(
+        db=db,
+        organizacion_id=org_id,
+        curso_participante_id=payload.curso_participante_id,
+        emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
+        template_id=None,  # Will use default active template
     )
 
-    cp_id = payload.curso_participante_id
-    await db.execute(
-        text("UPDATE aaces.curso_participante SET codigo_validacion = :cv, fecha_emision_certificado = now() WHERE id = :cp_id"),
-        {"cv": codigo_validacion, "cp_id": cp_id},
-    )
-
-    await db.commit()
-    return {"id": doc_id, "codigo_validacion": codigo_validacion, "folio": folio}
+    return {"id": doc["id"], "codigo_validacion": doc["codigo_validacion"], "folio": doc.get("folio", "")}
 
 
 @router.post("/emitir")
