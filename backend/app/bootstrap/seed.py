@@ -48,9 +48,20 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
 
 async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     # Check if admin exists in usuarios (new schema)
-    res = await conn.execute(text("SELECT COUNT(*) FROM aaces.usuarios WHERE correo = 'admin@aaces.com'"))
-    if int(res.scalar() or 0) > 0:
-        return
+    res = await conn.execute(text("SELECT id FROM aaces.usuarios WHERE correo = 'admin@aaces.com'"))
+    existing_id = res.scalar()
+    PROBLEM_ID = "73d2bb00-cde6-4255-bd27-d1282c4e83ff"
+    
+    if existing_id:
+        if str(existing_id) == PROBLEM_ID:
+            logger.info(f"Admin has problematic ID {PROBLEM_ID}, deleting and recreating with new UUID...")
+            # Delete from usuarios (CASCADE will handle related records if any)
+            await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = :id"), {"id": existing_id})
+            # Also delete from clientes to clean up old schema
+            await conn.execute(text("DELETE FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
+        else:
+            logger.info("Admin already exists in usuarios with valid ID")
+            return
     
     # Check if admin exists in clientes (old schema) - migrate it with NEW UUID
     res = await conn.execute(text("SELECT nombre, correo, password_hash, categoria, estado, organizacion_id FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
