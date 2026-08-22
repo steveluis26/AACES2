@@ -95,7 +95,7 @@ class AuthService:
                            u.intentos_fallidos, u.bloqueado_hasta, u.organizacion_id,
                            o.estatus, o.razon_social
                     FROM aaces.usuarios u
-                    JOIN aaces.organizaciones o ON o.id = u.organizacion_id
+                    LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
                     WHERE u.correo = :email AND u.activo = true
                     LIMIT 1
                     """

@@ -22,6 +22,7 @@ RUN apt-get update \
         libffi-dev \
         libcairo2 \
         libgobject-2.0-0 \
+        shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
