@@ -47,11 +47,11 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     org_res = await conn.execute(text("SELECT DISTINCT organizacion_id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com'"))
     org_ids = [row[0] for row in org_res.fetchall()]
     # Also delete by the known problematic ID directly
-    await conn.execute(text("UPDATE aaces.plantillas SET creada_por = NULL WHERE creada_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
+    await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
     await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
     await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
     await conn.execute(text("DELETE FROM aaces.clientes WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
-    await conn.execute(text("UPDATE aaces.plantillas SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
+    await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
     await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
     result_usuarios = await conn.execute(text("DELETE FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com'"))
     result_clientes = await conn.execute(text("DELETE FROM aaces.clientes WHERE correo ILIKE 'admin@aaces.com'"))
