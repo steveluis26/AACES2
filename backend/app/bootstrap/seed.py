@@ -46,8 +46,9 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
         text("SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com' AND id != :pid LIMIT 1"),
         {"pid": PROBLEM_ID}
     )
-    if existing_valid.scalar():
-        logger.info("Admin already exists with valid ID, skipping seed")
+    existing_id = existing_valid.scalar()
+    if existing_id:
+        logger.info(f"Admin already exists with valid ID: {existing_id}, skipping seed")
         return
     
     # Check if problematic admin exists
@@ -67,8 +68,9 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
             any_admin = await conn.execute(
                 text("SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com' LIMIT 1")
             )
-            if any_admin.scalar():
-                logger.info("Admin exists with valid ID, skipping seed")
+            any_id = any_admin.scalar()
+            if any_id:
+                logger.info(f"Admin exists with valid ID: {any_id}, skipping seed")
                 return
             logger.info("No admin found at all, creating fresh admin")
             # Continue to create fresh admin
@@ -113,3 +115,7 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
         {"ph": ph, "org_id": org_id},
     )
     logger.info("Admin recreated successfully with new UUID")
+    # Get the newly created admin ID
+    new_admin = await conn.execute(text("SELECT id FROM aaces.usuarios WHERE correo = 'admin@aaces.com' LIMIT 1"))
+    new_id = new_admin.scalar()
+    logger.info(f"New admin UUID created: {new_id}")
