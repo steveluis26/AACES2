@@ -47,34 +47,31 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
 
 
 async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
+    PROBLEM_ID = "73d2bb00-cde6-4255-bd27-d1282c4e83ff"
+    
     # Check if admin exists in usuarios (new schema)
     res = await conn.execute(text("SELECT id FROM aaces.usuarios WHERE correo = 'admin@aaces.com'"))
     existing_id = res.scalar()
-    PROBLEM_ID = "73d2bb00-cde6-4255-bd27-d1282c4e83ff"
     
-    if existing_id:
-        if str(existing_id) == PROBLEM_ID:
-            logger.info(f"Admin has problematic ID {PROBLEM_ID}, deleting and recreating with new UUID...")
-            # Delete from usuarios (CASCADE will handle related records if any)
-            await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = :id"), {"id": existing_id})
-            # Also delete from clientes to clean up old schema
-            await conn.execute(text("DELETE FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
-        else:
-            logger.info("Admin already exists in usuarios with valid ID")
-            return
+    if existing_id and str(existing_id) == PROBLEM_ID:
+        logger.info(f"Admin has problematic ID {PROBLEM_ID}, deleting and recreating with new UUID...")
+        await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = :id"), {"id": existing_id})
+        await conn.execute(text("DELETE FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
+        existing_id = None
+    elif existing_id:
+        logger.info("Admin already exists in usuarios with valid ID")
+        return
     
     # Check if admin exists in clientes (old schema) - migrate it with NEW UUID
     res = await conn.execute(text("SELECT nombre, correo, password_hash, categoria, estado, organizacion_id FROM aaces.clientes WHERE correo = 'admin@aaces.com'"))
     row = res.fetchone()
     if row is not None:
         logger.info("Migrating existing admin from clientes to usuarios with new UUID...")
-        # Insert into organizaciones first if needed
         org_id = row[5]
         if org_id is None:
             org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
             org_id = org_res.scalar()
         
-        # Insert into usuarios with NEW UUID (not reusing old clientes ID)
         await conn.execute(
             text(
                 "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (gen_random_uuid(), :nombre, :correo, :ph, 'admin', true, :org_id, 0, NULL)"
@@ -83,13 +80,11 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
         )
         logger.info("Admin migrated successfully from clientes to usuarios with new UUID")
         return
-
+    
     logger.info("No users found, seeding admin in usuarios...")
     ph = hash_password_fn("admin123")
-    # Create organizacion
     org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
     org_id = org_res.scalar()
-    # Create usuario
     await conn.execute(
         text(
             "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (gen_random_uuid(), 'Administrador', 'admin@aaces.com', :ph, 'admin', true, :org_id, 0, NULL)"
