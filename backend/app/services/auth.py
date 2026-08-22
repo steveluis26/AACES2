@@ -153,7 +153,8 @@ class AuthService:
             result = await db.execute(
                 text(
                     """
-                    SELECT id, correo, nombre, categoria, estado, password_hash, bloqueado_hasta, intentos_fallidos
+                    SELECT id, correo, nombre, categoria, estado, password_hash, bloqueado_hasta, intentos_fallidos,
+                           organizacion_id
                     FROM aaces.clientes
                     WHERE correo = :email AND estado = 'activo'
                     LIMIT 1
@@ -168,6 +169,7 @@ class AuthService:
             user = SimpleNamespace(
                 id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4],
                 password_hash=row[5], bloqueado_hasta=row[6], intentos_fallidos=row[7],
+                organizacion_id=row[8],
                 source="cliente"
             )
 
@@ -195,8 +197,32 @@ class AuthService:
             return None
     
     async def get_user_by_id(self, db: AsyncSession, user_id: str) -> Optional[SimpleNamespace]:
-        """Obtener usuario por ID (solo esquema aaces)"""
+        """Obtener usuario por ID (esquema aaces - usuarios y clientes)"""
         try:
+            # Primero intentar en usuarios (nuevo esquema)
+            result = await db.execute(
+                text(
+                    """
+                    SELECT u.id, u.correo, u.nombre, u.rol as categoria, u.activo as estado,
+                           u.organizacion_id, u.fecha_creacion, u.fecha_actualizacion,
+                           u.ultimo_acceso, o.vigencia_desde, o.vigencia_hasta
+                    FROM aaces.usuarios u
+                    LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
+                    WHERE u.id = :id
+                    LIMIT 1
+                    """
+                ),
+                {"id": user_id}
+            )
+            row = result.fetchone()
+            if row is not None:
+                return SimpleNamespace(
+                    id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4] if row[4] else 'activo',
+                    organizacion_id=row[5], ciudad_base=None, fecha_creacion=row[6], fecha_actualizacion=row[7],
+                    ultimo_acceso=row[8], vigencia_desde=row[9], vigencia_hasta=row[10]
+                )
+            
+            # Fallback a clientes (viejo esquema)
             result = await db.execute(
                 text(
                     """
