@@ -203,12 +203,14 @@ class AuthService:
     async def get_user_by_id(self, db: AsyncSession, user_id: str) -> Optional[SimpleNamespace]:
         """Obtener usuario por ID (esquema aaces - usuarios y clientes)"""
         try:
+            logger.info(f"get_user_by_id called with user_id={user_id} (type={type(user_id)})")
             # Primero intentar en usuarios (nuevo esquema)
             import uuid as uuid_lib
             try:
                 uid = uuid_lib.UUID(user_id)
             except ValueError:
                 uid = user_id
+            logger.info(f"Parsed uid={uid} (type={type(uid)})")
             result = await db.execute(
                 text(
                     """
@@ -224,6 +226,7 @@ class AuthService:
                 {"id": uid}
             )
             row = result.fetchone()
+            logger.info(f"usuarios query returned: {row}")
             if row is not None:
                 return SimpleNamespace(
                     id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4] if row[4] else 'activo',
@@ -232,6 +235,7 @@ class AuthService:
                 )
             
             # Fallback a clientes (viejo esquema)
+            logger.info("Falling back to clientes table")
             result = await db.execute(
                 text(
                     """
@@ -246,6 +250,7 @@ class AuthService:
                 {"id": uid}
             )
             row = result.fetchone()
+            logger.info(f"clientes query returned: {row}")
             if row is None:
                 return None
             return SimpleNamespace(
