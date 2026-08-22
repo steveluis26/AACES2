@@ -44,17 +44,18 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     # NUCLEAR: Delete ALL users with admin email in both tables, then recreate
     logger.info("Nuclear cleanup: deleting any admin@aaces.com from usuarios and clientes...")
     # First, capture org_ids that have admin@aaces.com users (before deleting them)
-    org_res = await conn.execute(text("SELECT DISTINCT organizacion_id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com'"))
+    # Use TRIM and ILIKE to catch variants with spaces/case differences
+    org_res = await conn.execute(text("SELECT DISTINCT organizacion_id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com'"))
     org_ids = [row[0] for row in org_res.fetchall()]
     # Also delete by the known problematic ID directly
     await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
     await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
     await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
     await conn.execute(text("DELETE FROM aaces.clientes WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
-    await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
-    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por IN (SELECT id FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com')"))
-    result_usuarios = await conn.execute(text("DELETE FROM aaces.usuarios WHERE correo ILIKE 'admin@aaces.com'"))
-    result_clientes = await conn.execute(text("DELETE FROM aaces.clientes WHERE correo ILIKE 'admin@aaces.com'"))
+    await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com')"))
+    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por IN (SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com')"))
+    result_usuarios = await conn.execute(text("DELETE FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com'"))
+    result_clientes = await conn.execute(text("DELETE FROM aaces.clientes WHERE TRIM(correo) ILIKE 'admin@aaces.com'"))
     logger.info(f"Nuclear cleanup done: usuarios deleted={result_usuarios.rowcount}, clientes deleted={result_clientes.rowcount}")
     
     # Deactivate old organizations that had admin@aaces.com (prevents duplicate login matches)
@@ -63,13 +64,16 @@ async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
     if org_ids:
         logger.info(f"Deactivated {len(org_ids)} old organizations")
     
-    # Create fresh admin with new UUID - reuse org if exists with RFC, else create new
+    # Create fresh admin with new UUID - REUSE existing org with RFC (don't create duplicate)
     ph = hash_password_fn("admin123")
-    org_res = await conn.execute(text("SELECT id FROM aaces.organizaciones WHERE rfc = 'AAC123456789' AND estatus = 'activa' LIMIT 1"))
+    org_res = await conn.execute(text("SELECT id FROM aaces.organizaciones WHERE rfc = 'AAC123456789' LIMIT 1"))
     org_id = org_res.scalar()
     if org_id is None:
         org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
         org_id = org_res.scalar()
+    else:
+        # Reactivate if it was cancelled
+        await conn.execute(text("UPDATE aaces.organizaciones SET estatus = 'activa' WHERE id = :id"), {"id": org_id})
     await conn.execute(
         text(
             "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (gen_random_uuid(), 'Administrador', 'admin@aaces.com', :ph, 'admin', true, :org_id, 0, NULL)"
