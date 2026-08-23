@@ -198,7 +198,8 @@ async def get_current_user(
         user_id = payload.get("sub")
         user = await auth_service.get_user_by_id(db, user_id)
         
-        logger.info(f"get_user_by_id({user_id}) returned: {user}")
+        logger.info(f"get_user_by_id({user_id}) returned type: {type(user)}")
+        logger.info(f"get_user_by_id({user_id}) returned data: {vars(user) if hasattr(user, '__dict__') else user}")
         
         if not user:
             raise HTTPException(
@@ -206,9 +207,11 @@ async def get_current_user(
                 detail="Usuario no encontrado"
             )
         
-        # Try to construct response model to catch validation error
+        # Explicitly validate against ClienteResponse (Pydantic v2)
         try:
-            return user
+            validated = ClienteResponse.model_validate(user)
+            logger.info(f"ClienteResponse validation SUCCESS: {validated}")
+            return validated
         except Exception as validation_error:
             logger.error(f"ClienteResponse validation error: {validation_error}")
             logger.error(f"User object fields: {vars(user) if hasattr(user, '__dict__') else 'no dict'}")

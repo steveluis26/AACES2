@@ -65,12 +65,14 @@ class AuthService:
     
     def decode_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Decodificar token JWT"""
+        logger.info(f"decode_token called with token prefix: {token[:50]}...")
+        logger.info(f"Using SECRET_KEY length: {len(settings.SECRET_KEY)}, ALGORITHM: {settings.ALGORITHM}")
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            logger.debug(f"decode_token SUCCESS: sub={payload.get('sub')}, source={payload.get('source')}")
+            logger.info(f"decode_token SUCCESS: sub={payload.get('sub')}, source={payload.get('source')}, exp={payload.get('exp')}")
             return payload
         except JWTError as e:
-            logger.error(f"Error decodificando token: {e}")
+            logger.error(f"decode_token JWTError: {type(e).__name__}: {e}")
             logger.error(f"Token prefix: {token[:50]}...")
             return None
     
