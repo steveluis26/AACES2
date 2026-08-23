@@ -67,9 +67,11 @@ class AuthService:
         """Decodificar token JWT"""
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            logger.debug(f"decode_token SUCCESS: sub={payload.get('sub')}, source={payload.get('source')}")
             return payload
         except JWTError as e:
             logger.error(f"Error decodificando token: {e}")
+            logger.error(f"Token prefix: {token[:50]}...")
             return None
     
     async def authenticate_user(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
