@@ -206,12 +206,20 @@ async def get_current_user(
                 detail="Usuario no encontrado"
             )
         
-        return user
+        # Try to construct response model to catch validation error
+        try:
+            return user
+        except Exception as validation_error:
+            logger.error(f"ClienteResponse validation error: {validation_error}")
+            logger.error(f"User object fields: {vars(user) if hasattr(user, '__dict__') else 'no dict'}")
+            raise
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error obteniendo usuario actual: {e}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor"

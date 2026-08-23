@@ -232,7 +232,8 @@ class AuthService:
                     id=row[0], correo=row[1], nombre=row[2], categoria=row[3], 
                     estado='activo' if row[4] else 'inactivo',
                     organizacion_id=row[5], ciudad_base=None, fecha_creacion=row[6], fecha_actualizacion=row[7],
-                    ultimo_acceso=row[8], vigencia_desde=row[9], vigencia_hasta=row[10]
+                    ultimo_acceso=row[8], vigencia_desde=row[9], vigencia_hasta=row[10],
+                    plan='trial', cursos_creados=0, cursos_max=10, descuento_pct=0
                 )
             
             # Fallback a clientes (viejo esquema)
