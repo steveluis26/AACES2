@@ -328,6 +328,28 @@ class Organizacion(Base):
     )
 
 
+class UsuarioPlataforma(Base):
+    __tablename__ = "usuarios_plataforma"
+    __table_args__ = {"schema": "aaces"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    correo = Column(String(255), unique=True, nullable=False)
+    nombre = Column(String(100), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    rol = Column(String(30), default='super_admin', nullable=False)
+    activo = Column(Boolean, default=True, nullable=False)
+    intentos_fallidos = Column(Integer, default=0)
+    bloqueado_hasta = Column(DateTime(timezone=True))
+    ultimo_acceso = Column(DateTime(timezone=True))
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("rol IN ('super_admin')", name="check_rol_plataforma"),
+        Index('idx_usuarios_plataforma_correo', 'correo'),
+    )
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
 
@@ -350,7 +372,7 @@ class Usuario(Base):
 
     __table_args__ = (
         UniqueConstraint('organizacion_id', 'correo', name='uq_org_correo'),
-        CheckConstraint("rol IN ('admin', 'capacitador', 'operador')", name="check_rol_usuario"),
+        CheckConstraint("rol IN ('admin', 'staff')", name="check_rol_usuario"),
         Index('idx_usuarios_org_id', 'organizacion_id'),
         Index('idx_usuarios_correo', 'correo'),
         Index('idx_usuarios_activo', 'activo'),

@@ -1,5 +1,8 @@
 from abc import ABC, abstractmethod
-from weasyprint import HTML
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from weasyprint import HTML
 
 from app.services.document_types import DocumentDefinition
 
@@ -21,6 +24,7 @@ class WeasyPrintRenderer(Renderer):
         doc: DocumentDefinition,
         qr_svg: str,
     ) -> bytes:
+        from weasyprint import HTML
         html = self._inject_qr(doc.html, qr_svg)
         pdf_bytes = HTML(string=html).write_pdf()
         return pdf_bytes
@@ -36,4 +40,9 @@ class WeasyPrintRenderer(Renderer):
         return html + f"<div>{qr_svg}</div>"
 
 
-renderer = WeasyPrintRenderer()
+try:
+    renderer = WeasyPrintRenderer()
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(f"WeasyPrintRenderer not available: {e}")
+    renderer = None

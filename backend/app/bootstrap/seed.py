@@ -1,15 +1,28 @@
 from __future__ import annotations
 import logging
+import os
 import uuid
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 logger = logging.getLogger(__name__)
 
 
 async def ensure_seed_data(conn: AsyncConnection, hash_password_fn) -> None:
+    """Idempotent seed: platform user + demo org/admin. Safe to run multiple times."""
+    logger.info("Starting idempotent seed...")
+
+    # 1. Ensure plans exist (existing logic)
     await _ensure_plans(conn)
-    await _ensure_admin(conn, hash_password_fn)
+
+    # 2. Platform user (super_admin) - env-driven
+    platform_user_id = await _ensure_platform_user(conn, hash_password_fn)
+
+    # 3. Demo organization + admin user - RFC-based, idempotent
+    demo_org_id = await _ensure_demo_org_and_admin(conn, hash_password_fn, platform_user_id)
+
+    logger.info(f"Seed completed: platform_user_id={platform_user_id}, demo_org_id={demo_org_id}")
 
 
 async def _ensure_plans(conn: AsyncConnection) -> None:
@@ -25,8 +38,8 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
     )
     await conn.execute(
         text("""
-            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario, activo)
-            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true, true)
+            INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario, activo)
+            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true, true, true, true, true)
         """)
     )
     await conn.execute(
@@ -38,84 +51,119 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
     logger.info("Default plans seeded successfully")
 
 
-async def _ensure_admin(conn: AsyncConnection, hash_password_fn) -> None:
-    PROBLEM_ID = "73d2bb00-cde6-4255-bd27-d1282c4e83ff"
-    
-    # Check if admin already exists with a VALID (non-problem) ID
-    existing_valid = await conn.execute(
-        text("SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com' AND id != :pid LIMIT 1"),
-        {"pid": PROBLEM_ID}
+async def _ensure_platform_user(conn: AsyncConnection, hash_password_fn) -> uuid.UUID:
+    """
+    Upsert platform user (super_admin) in usuarios_plataforma.
+    Idempotent by email: returns existing UUID on re-run.
+    """
+    email = os.getenv("PLATFORM_USER_EMAIL", "admin@aaces.com")
+    password = os.getenv("PLATFORM_USER_PASSWORD", "supersecurepassword123")
+    name = os.getenv("PLATFORM_USER_NAME", "Super Admin")
+
+    ph = hash_password_fn(password)
+
+    # Check if platform user already exists
+    existing = await conn.execute(
+        text("SELECT id FROM aaces.usuarios_plataforma WHERE correo = :email"),
+        {"email": email}
     )
-    existing_id = existing_valid.scalar()
+    existing_id = existing.scalar()
     if existing_id:
-        logger.info(f"Admin already exists with valid ID: {existing_id}, skipping seed")
-        return
-    
-    # Check if problematic admin exists
-    problematic = await conn.execute(
-        text("SELECT id FROM aaces.usuarios WHERE id = :pid"),
-        {"pid": PROBLEM_ID}
-    )
-    if not problematic.scalar():
-        # Also check clientes table
-        problematic = await conn.execute(
-            text("SELECT id FROM aaces.clientes WHERE id = :pid"),
-            {"pid": PROBLEM_ID}
+        logger.info(f"Platform user already exists: {existing_id}")
+        # Update password/name in case they changed
+        await conn.execute(
+            text("""
+                UPDATE aaces.usuarios_plataforma
+                SET password_hash = :ph, nombre = :name, activo = true, fecha_actualizacion = now()
+                WHERE correo = :email
+            """),
+            {"ph": ph, "name": name, "email": email}
         )
-        if not problematic.scalar():
-            logger.info("No problematic admin found, checking if any admin exists...")
-            # Check if any admin exists at all
-            any_admin = await conn.execute(
-                text("SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com' LIMIT 1")
-            )
-            any_id = any_admin.scalar()
-            if any_id:
-                logger.info(f"Admin exists with valid ID: {any_id}, skipping seed")
-                return
-            logger.info("No admin found at all, creating fresh admin")
-            # Continue to create fresh admin
-    
-    # NUCLEAR: Delete ALL users with admin email in both tables, then recreate
-    logger.info("Nuclear cleanup: deleting any admin@aaces.com from usuarios and clientes...")
-    # First, capture org_ids that have admin@aaces.com users (before deleting them)
-    # Use TRIM and ILIKE to catch variants with spaces/case differences
-    org_res = await conn.execute(text("SELECT DISTINCT organizacion_id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com'"))
-    org_ids = [row[0] for row in org_res.fetchall()]
-    # Also delete by the known problematic ID directly
-    await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
-    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
-    await conn.execute(text("DELETE FROM aaces.usuarios WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
-    await conn.execute(text("DELETE FROM aaces.clientes WHERE id = '73d2bb00-cde6-4255-bd27-d1282c4e83ff'"))
-    await conn.execute(text("UPDATE aaces.templates SET creada_por = NULL WHERE creada_por IN (SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com')"))
-    await conn.execute(text("UPDATE aaces.documentos_emitidos SET emitido_por = NULL WHERE emitido_por IN (SELECT id FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com')"))
-    result_usuarios = await conn.execute(text("DELETE FROM aaces.usuarios WHERE TRIM(correo) ILIKE 'admin@aaces.com'"))
-    result_clientes = await conn.execute(text("DELETE FROM aaces.clientes WHERE TRIM(correo) ILIKE 'admin@aaces.com'"))
-    logger.info(f"Nuclear cleanup done: usuarios deleted={result_usuarios.rowcount}, clientes deleted={result_clientes.rowcount}")
-    
-    # Deactivate old organizations that had admin@aaces.com (prevents duplicate login matches)
-    for org_id in org_ids:
-        await conn.execute(text("UPDATE aaces.organizaciones SET estatus = 'cancelada' WHERE id = :id"), {"id": org_id})
-    if org_ids:
-        logger.info(f"Deactivated {len(org_ids)} old organizations")
-    
-    # Create fresh admin with new UUID - REUSE existing org with RFC (don't create duplicate)
-    ph = hash_password_fn("admin123")
-    org_res = await conn.execute(text("SELECT id FROM aaces.organizaciones WHERE rfc = 'AAC123456789' LIMIT 1"))
-    org_id = org_res.scalar()
-    if org_id is None:
-        org_res = await conn.execute(text("INSERT INTO aaces.organizaciones (id, rfc, razon_social, estatus) VALUES (gen_random_uuid(), 'AAC123456789', 'AACES Demo', 'activa') RETURNING id"))
-        org_id = org_res.scalar()
-    else:
-        # Reactivate if it was cancelled
-        await conn.execute(text("UPDATE aaces.organizaciones SET estatus = 'activa' WHERE id = :id"), {"id": org_id})
-    await conn.execute(
-        text(
-            "INSERT INTO aaces.usuarios (id, nombre, correo, password_hash, rol, activo, organizacion_id, intentos_fallidos, bloqueado_hasta) VALUES (gen_random_uuid(), 'Administrador', 'admin@aaces.com', :ph, 'admin', true, :org_id, 0, NULL)"
-        ),
-        {"ph": ph, "org_id": org_id},
+        return existing_id
+
+    # Create new platform user
+    result = await conn.execute(
+        text("""
+            INSERT INTO aaces.usuarios_plataforma (correo, nombre, password_hash, rol, activo)
+            VALUES (:email, :name, :ph, 'super_admin', true)
+            RETURNING id
+        """),
+        {"email": email, "name": name, "ph": ph}
     )
-    logger.info("Admin recreated successfully with new UUID")
-    # Get the newly created admin ID
-    new_admin = await conn.execute(text("SELECT id FROM aaces.usuarios WHERE correo = 'admin@aaces.com' LIMIT 1"))
-    new_id = new_admin.scalar()
-    logger.info(f"New admin UUID created: {new_id}")
+    new_id = result.scalar()
+    logger.info(f"Created platform user: {new_id} ({email})")
+    return new_id
+
+
+async def _ensure_demo_org_and_admin(conn: AsyncConnection, hash_password_fn, platform_user_id: uuid.UUID) -> uuid.UUID:
+    """
+    Upsert demo organization + admin user in usuarios.
+    Idempotent by RFC for org, by (organizacion_id, correo) for user.
+    Returns org_id.
+    """
+    rfc = os.getenv("DEMO_ORG_RFC", "AAC123456789")
+    org_name = os.getenv("DEMO_ORG_NAME", "AACES Demo")
+    admin_email = os.getenv("DEMO_ORG_ADMIN_EMAIL", "admin@demo.com")
+    admin_password = os.getenv("DEMO_ORG_ADMIN_PASSWORD", "demo123")
+    admin_name = os.getenv("DEMO_ADMIN_NAME", "Administrador")
+
+    ph = hash_password_fn(admin_password)
+
+    # 1. Upsert organization by RFC (idempotent)
+    org_res = await conn.execute(
+        text("""
+            INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, fecha_activacion)
+            VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, 'CDMX', 'Ciudad de México', 'activa', now())
+            ON CONFLICT (rfc) DO UPDATE SET
+                razon_social = EXCLUDED.razon_social,
+                nombre_comercial = EXCLUDED.nombre_comercial,
+                email_contacto = EXCLUDED.email_contacto,
+                estatus = 'activa',
+                fecha_activacion = COALESCE(aaces.organizaciones.fecha_activacion, now())
+            RETURNING id
+        """),
+        {
+            "rfc": rfc,
+            "razon_social": org_name,
+            "nombre_comercial": org_name,
+            "email_contacto": admin_email,
+        }
+    )
+    org_id = org_res.scalar()
+    logger.info(f"Demo organization upserted: {org_id} (RFC: {rfc})")
+
+    # 2. Upsert admin user in usuarios (idempotent by UNIQUE(organizacion_id, correo))
+    admin_res = await conn.execute(
+        text("""
+            INSERT INTO aaces.usuarios (organizacion_id, correo, nombre, password_hash, rol, activo)
+            VALUES (:org_id, :email, :name, :ph, 'admin', true)
+            ON CONFLICT (organizacion_id, correo) DO UPDATE SET
+                password_hash = EXCLUDED.password_hash,
+                nombre = EXCLUDED.nombre,
+                rol = EXCLUDED.rol,
+                activo = true,
+                fecha_actualizacion = now()
+            RETURNING id
+        """),
+        {"org_id": org_id, "email": admin_email, "name": admin_name, "ph": ph}
+    )
+    admin_id = admin_res.scalar()
+    logger.info(f"Demo admin upserted: {admin_id} ({admin_email})")
+
+    # 3. Ensure trial subscription exists for this org
+    plan_res = await conn.execute(
+        text("SELECT id FROM aaces.planes WHERE codigo = 'trial' AND activo = true LIMIT 1")
+    )
+    plan_id = plan_res.scalar()
+    if plan_id:
+        await conn.execute(
+            text("""
+                INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus, fecha_inicio, activada_por)
+                VALUES (:org_id, :plan_id, 'activa', CURRENT_DATE, :admin_id)
+                ON CONFLICT DO NOTHING
+            """),
+            {"org_id": org_id, "plan_id": plan_id, "admin_id": admin_id}
+        )
+        logger.info(f"Trial subscription ensured for org {org_id}")
+
+    return org_id

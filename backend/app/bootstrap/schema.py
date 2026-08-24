@@ -156,10 +156,54 @@ async def create_organizaciones(conn: AsyncConnection) -> None:
           fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           fecha_activacion TIMESTAMP WITH TIME ZONE,
           fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          notas_admin TEXT
+          notas_admin TEXT,
+          stripe_customer_id VARCHAR(255)
         )
     """))
     await conn.execute(text("ALTER TABLE aaces.organizaciones ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
+
+
+async def create_usuarios_plataforma(conn: AsyncConnection) -> None:
+    """Crear tabla usuarios_plataforma si no existe. Idempotente."""
+    # Verificar si tabla ya existe
+    result = await conn.execute(text("""
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'aaces' AND table_name = 'usuarios_plataforma'
+    """))
+    if result.scalar():
+        logger.info("usuarios_plataforma ya existe, saltando creación")
+        # Agregar columnas faltantes si no existen
+        await conn.execute(text("""
+            ALTER TABLE aaces.usuarios_plataforma 
+            ADD COLUMN IF NOT EXISTS intentos_fallidos INTEGER DEFAULT 0,
+            ADD COLUMN IF NOT EXISTS bloqueado_hasta TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS ultimo_acceso TIMESTAMPTZ
+        """))
+        return
+    
+    await conn.execute(text("""
+        CREATE TABLE aaces.usuarios_plataforma (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            correo VARCHAR(255) UNIQUE NOT NULL,
+            nombre VARCHAR(100) NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            rol VARCHAR(30) DEFAULT 'super_admin' NOT NULL,
+            activo BOOLEAN DEFAULT true NOT NULL,
+            intentos_fallidos INTEGER DEFAULT 0,
+            bloqueado_hasta TIMESTAMPTZ,
+            ultimo_acceso TIMESTAMPTZ,
+            fecha_creacion TIMESTAMPTZ DEFAULT now() NOT NULL,
+            fecha_actualizacion TIMESTAMPTZ DEFAULT now() NOT NULL
+        )
+    """))
+    await conn.execute(text("""
+        ALTER TABLE aaces.usuarios_plataforma
+        ADD CONSTRAINT check_rol_plataforma CHECK (rol IN ('super_admin'))
+    """))
+    await conn.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_usuarios_plataforma_correo ON aaces.usuarios_plataforma (correo)
+    """))
+    logger.info("usuarios_plataforma creada")
 
 
 async def create_usuarios(conn: AsyncConnection) -> None:
@@ -184,6 +228,64 @@ async def create_usuarios(conn: AsyncConnection) -> None:
     """))
     await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN id SET DEFAULT gen_random_uuid()"))
     await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN activo SET DEFAULT true"))
+
+
+async def alter_usuarios_add_constraints(conn: AsyncConnection) -> None:
+    """Agregar constraints a usuarios: CHECK rol, FK explícita. Idempotente."""
+    await conn.execute(text("SET search_path TO aaces"))
+    
+    # 1. Verificar y agregar CHECK constraint para rol
+    result = await conn.execute(text("""
+        SELECT 1 FROM information_schema.check_constraints cc
+        JOIN information_schema.constraint_column_usage ccu ON cc.constraint_name = ccu.constraint_name
+        WHERE ccu.table_schema = 'aaces' 
+        AND ccu.table_name = 'usuarios' 
+        AND ccu.column_name = 'rol'
+        AND cc.check_clause LIKE '%admin%staff%'
+    """))
+    if not result.scalar():
+        await conn.execute(text("""
+            ALTER TABLE aaces.usuarios 
+            ADD CONSTRAINT check_rol_usuario CHECK (rol IN ('admin', 'staff'))
+        """))
+        logger.info("check_rol_usuario agregado a usuarios")
+    else:
+        logger.info("check_rol_usuario ya existe en usuarios")
+    
+    # 2. Verificar y agregar FK explícita (nombre conocido)
+    result = await conn.execute(text("""
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_schema = 'aaces' 
+        AND table_name = 'usuarios' 
+        AND constraint_name = 'fk_usuarios_organizacion'
+    """))
+    if not result.scalar():
+        await conn.execute(text("""
+            ALTER TABLE aaces.usuarios 
+            ADD CONSTRAINT fk_usuarios_organizacion 
+            FOREIGN KEY (organizacion_id) REFERENCES aaces.organizaciones(id) ON DELETE CASCADE
+        """))
+        logger.info("fk_usuarios_organizacion agregada")
+    else:
+        logger.info("fk_usuarios_organizacion ya existe")
+    
+    # 3. Asegurar organizacion_id NOT NULL (ya debería serlo por create_usuarios)
+    result = await conn.execute(text("""
+        SELECT is_nullable FROM information_schema.columns
+        WHERE table_schema = 'aaces' 
+        AND table_name = 'usuarios' 
+        AND column_name = 'organizacion_id'
+    """))
+    if result.scalar() == 'YES':
+        # Verificar si hay NULLs antes de aplicar
+        null_count = await conn.execute(text("SELECT count(*) FROM aaces.usuarios WHERE organizacion_id IS NULL"))
+        if null_count.scalar() == 0:
+            await conn.execute(text("ALTER TABLE aaces.usuarios ALTER COLUMN organizacion_id SET NOT NULL"))
+            logger.info("organizacion_id SET NOT NULL en usuarios")
+        else:
+            logger.warning(f"Hay {null_count.scalar()} usuarios con organizacion_id=NULL, no se aplica NOT NULL")
+    else:
+        logger.info("organizacion_id ya es NOT NULL")
 
 
 async def create_suscripciones(conn: AsyncConnection) -> None:
@@ -313,13 +415,15 @@ async def ensure_schema(conn: AsyncConnection) -> None:
     await create_aaces_schema(conn)
     await create_extensions(conn)
     for fn in [
+        create_planes,
+        create_organizaciones,
         create_clientes,
         create_tipos_curso,
         create_grupos_curso,
         create_contactos,
-        create_planes,
-        create_organizaciones,
+        create_usuarios_plataforma,      # NEW: tabla para super_admin (sin organizacion_id)
         create_usuarios,
+        alter_usuarios_add_constraints,   # NEW: CHECK rol + FK explícita + NOT NULL
         create_suscripciones,
         create_templates,
         create_registro_intentos,

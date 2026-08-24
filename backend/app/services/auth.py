@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
+from uuid import UUID
+from enum import Enum
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select
 from app.core.config import settings
 from app.errors import (
     DomainError,
@@ -11,7 +13,7 @@ from app.errors import (
     OrganizationSuspendedError,
     AccountBlockedError,
 )
-from types import SimpleNamespace
+from app.models import UsuarioPlataforma, Usuario, Organizacion
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,18 +21,21 @@ logger = logging.getLogger(__name__)
 # Configuración de seguridad
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-class Role:
-    PUBLIC = "public"
-    CLIENT = "client"
+
+class Role(str, Enum):
+    """Roles de usuario en el sistema"""
+    SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
-    TRAINER = "trainer"
+    STAFF = "staff"
+    CLIENTE = "cliente"
+
 
 class AuthService:
-    """Servicio de autenticación con JWT y roles"""
-    
+    """Servicio de autenticación con JWT y roles - Arquitectura 2 tablas"""
+
     def __init__(self):
         self.pwd_context = pwd_context
-    
+
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """Verificar contraseña contra hash"""
         try:
@@ -38,114 +43,153 @@ class AuthService:
         except Exception as e:
             logger.error(f"Error verificando contraseña: {e}")
             return False
-    
+
     def get_password_hash(self, password: str) -> str:
         """Generar hash de contraseña"""
         return self.pwd_context.hash(password)
-    
+
     def create_access_token(self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
-        """Crear token de acceso JWT"""
+        """Crear token de acceso JWT con claim 'source' OBLIGATORIO"""
         to_encode = data.copy()
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
             expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        
-        to_encode.update({"exp": expire, "type": "access"})
+
+        # source es OBLIGATORIO: "plataforma" | "usuario"
+        source = data.get("source")
+        if source not in ("plataforma", "usuario"):
+            raise ValueError("Token debe incluir 'source': 'plataforma' | 'usuario'")
+
+        to_encode.update({"exp": expire, "type": "access", "source": source})
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
-    
+
     def create_refresh_token(self, data: Dict[str, Any]) -> str:
-        """Crear token de refresco JWT"""
+        """Crear token de refresco JWT con claim 'source' OBLIGATORIO"""
         to_encode = data.copy()
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
-        to_encode.update({"exp": expire, "type": "refresh"})
+
+        source = data.get("source")
+        if source not in ("plataforma", "usuario"):
+            raise ValueError("Token debe incluir 'source': 'plataforma' | 'usuario'")
+
+        to_encode.update({"exp": expire, "type": "refresh", "source": source})
         encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
-    
+
     def decode_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """Decodificar token JWT"""
+        """Decodificar token JWT y validar claim 'source'"""
         logger.info(f"decode_token called with token prefix: {token[:50]}...")
         logger.info(f"Using SECRET_KEY length: {len(settings.SECRET_KEY)}, ALGORITHM: {settings.ALGORITHM}")
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            logger.info(f"decode_token SUCCESS: sub={payload.get('sub')}, source={payload.get('source')}, exp={payload.get('exp')}")
+            
+            # Validar claim 'source' OBLIGATORIO
+            source = payload.get("source")
+            if source not in ("plataforma", "usuario"):
+                logger.error(f"Token inválido: source claim faltante o inválido: {source}")
+                return None
+            
+            logger.info(f"decode_token SUCCESS: sub={payload.get('sub')}, source={source}, exp={payload.get('exp')}")
             return payload
         except JWTError as e:
             logger.error(f"decode_token JWTError: {type(e).__name__}: {e}")
             logger.error(f"Token prefix: {token[:50]}...")
             return None
-    
-    async def authenticate_user(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
-        """Autenticar usuario por email y contraseña. Prueba nuevo esquema (usuarios) y fallback al viejo (clientes)."""
+
+    async def authenticate_user(self, db: AsyncSession, email: str, password: str) -> Tuple[Optional[Any], Optional[str]]:
+        """
+        Autenticar usuario - Flujo determinístico 2 tablas:
+        1. Intentar usuarios_plataforma (source="plataforma")
+        2. Intentar usuarios + organizaciones (source="usuario")
+        Retorna: (user_object, source) o (None, None)
+        """
         try:
+            # 1. PRIMERO: platform user (sin organizacion_id, visión transversal)
+            user = await self._authenticate_plataforma(db, email, password)
+            if user:
+                return user, "plataforma"
+
+            # 2. SEGUNDO: org user (CON organizacion_id FK NOT NULL)
             user = await self._authenticate_usuario(db, email, password)
             if user:
-                return user
-            return await self._authenticate_cliente(db, email, password)
+                return user, "usuario"
+
+            return None, None
         except DomainError:
             raise
         except Exception as e:
             logger.exception(f"Error en autenticación: {e}")
-            return None
+            return None, None
 
-    async def _authenticate_usuario(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
-        """Autenticar contra nuevo esquema usuarios + organizaciones"""
+    async def _authenticate_plataforma(self, db: AsyncSession, email: str, password: str) -> Optional[UsuarioPlataforma]:
+        """Autenticar contra usuarios_plataforma (super_admin)"""
         try:
             result = await db.execute(
-                text(
-                    """
-                    SELECT u.id, u.correo, u.nombre, u.rol, u.activo, u.password_hash,
-                           u.intentos_fallidos, u.bloqueado_hasta, u.organizacion_id,
-                           o.estatus, o.razon_social
-                    FROM aaces.usuarios u
-                    LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
-                    WHERE u.correo = :email AND u.activo = true AND (o.estatus IS NULL OR o.estatus = 'activa')
-                    LIMIT 1
-                    """
-                ),
-                {"email": email}
+                select(UsuarioPlataforma).where(
+                    UsuarioPlataforma.correo == email,
+                    UsuarioPlataforma.activo == True
+                )
             )
-            row = result.fetchone()
-            if row is None:
+            user = result.scalar_one_or_none()
+            if user is None:
                 return None
 
-            user = SimpleNamespace(
-                id=row[0], correo=row[1], nombre=row[2], rol=row[3], activo=row[4],
-                password_hash=row[5], intentos_fallidos=row[6], bloqueado_hasta=row[7],
-                organizacion_id=row[8], org_estatus=row[9], razon_social=row[10],
-                source="usuario"
-            )
-
-            if not self.verify_password(password, user.password_hash):
-                new_intentos = (user.intentos_fallidos or 0) + 1
-                bloqueado = None
-                if new_intentos >= 5:
-                    bloqueado = datetime.utcnow() + timedelta(minutes=30)
-                await db.execute(
-                    text("UPDATE aaces.usuarios SET intentos_fallidos = :i, bloqueado_hasta = :b WHERE id = :id"),
-                    {"i": new_intentos, "b": bloqueado, "id": user.id}
-                )
+            if not self.verify_password(password, str(user.password_hash)):
+                # Incrementar intentos fallidos
+                user.intentos_fallidos = (user.intentos_fallidos or 0) + 1
+                if user.intentos_fallidos >= 5:
+                    user.bloqueado_hasta = datetime.now(timezone.utc) + timedelta(minutes=30)
                 await db.commit()
                 return None
 
-            if user.org_estatus == 'pendiente':
-                raise OrganizationPendingError(
-                    "Tu cuenta está pendiente de activación por el administrador"
-                )
-            if user.org_estatus == 'suspendida':
-                raise OrganizationSuspendedError(
-                    "Tu organización ha sido suspendida. Contacta al administrador."
-                )
-            if user.org_estatus == 'cancelada':
-                raise OrganizationSuspendedError(
-                    "Tu organización ha sido cancelada. Contacta al administrador."
-                )
+            # Resetear intentos en éxito
+            user.intentos_fallidos = 0
+            user.bloqueado_hasta = None
+            user.ultimo_acceso = datetime.now(timezone.utc)
+            await db.commit()
 
-            await db.execute(
-                text("UPDATE aaces.usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = :ua WHERE id = :id"),
-                {"ua": datetime.utcnow(), "id": user.id}
+            return user
+        except Exception as e:
+            logger.error(f"Error autenticando plataforma: {e}")
+            return None
+
+    async def _authenticate_usuario(self, db: AsyncSession, email: str, password: str) -> Optional[Usuario]:
+        """Autenticar contra usuarios + organizaciones (admin/staff de org)"""
+        try:
+            result = await db.execute(
+                select(Usuario, Organizacion)
+                .join(Organizacion, Usuario.organizacion_id == Organizacion.id)
+                .where(
+                    Usuario.correo == email,
+                    Usuario.activo == True,
+                    Organizacion.estatus == "activa"
+                )
             )
+            row = result.first()
+            if row is None:
+                return None
+
+            user, org = row
+
+            if not self.verify_password(password, user.password_hash):
+                user.intentos_fallidos = (user.intentos_fallidos or 0) + 1
+                if user.intentos_fallidos >= 5:
+                    user.bloqueado_hasta = datetime.now(timezone.utc) + timedelta(minutes=30)
+                await db.commit()
+                return None
+
+            # Validar estado organización
+            if org.estatus == "pendiente":
+                raise OrganizationPendingError("Tu cuenta está pendiente de activación por el administrador")
+            if org.estatus in ("suspendida", "cancelada"):
+                raise OrganizationSuspendedError("Tu organización ha sido suspendida/cancelada. Contacta al administrador.")
+
+            # Resetear intentos en éxito
+            user.intentos_fallidos = 0
+            user.bloqueado_hasta = None
+            user.ultimo_acceso = datetime.now(timezone.utc)
             await db.commit()
 
             return user
@@ -155,144 +199,99 @@ class AuthService:
             logger.error(f"Error autenticando usuario: {e}")
             return None
 
-    async def _authenticate_cliente(self, db: AsyncSession, email: str, password: str) -> Optional[SimpleNamespace]:
-        """Autenticar contra esquema viejo (clientes) - backward compatibility"""
+    async def get_user_by_id(self, db: AsyncSession, user_id: UUID, source: str) -> Optional[Any]:
+        """
+        Obtener usuario por ID y source - SOURCE ES REQUERIDO
+        source="plataforma" -> usuarios_plataforma
+        source="usuario" -> usuarios + join organizaciones (solo activas)
+        """
         try:
-            result = await db.execute(
-                text(
-                    """
-                    SELECT id, correo, nombre, categoria, estado, password_hash, bloqueado_hasta, intentos_fallidos,
-                           organizacion_id
-                    FROM aaces.clientes
-                    WHERE correo = :email AND estado = 'activo'
-                    LIMIT 1
-                    """
-                ),
-                {"email": email}
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
+            logger.info(f"get_user_by_id called with user_id={user_id}, source={source}")
 
-            user = SimpleNamespace(
-                id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4],
-                password_hash=row[5], bloqueado_hasta=row[6], intentos_fallidos=row[7],
-                organizacion_id=row[8],
-                source="cliente"
-            )
-
-            if not self.verify_password(password, user.password_hash):
-                new_intentos = (user.intentos_fallidos or 0) + 1
-                bloqueado = None
-                if new_intentos >= 5:
-                    bloqueado = datetime.utcnow() + timedelta(minutes=30)
-                await db.execute(
-                    text("UPDATE aaces.clientes SET intentos_fallidos = :i, bloqueado_hasta = :b WHERE id = :id"),
-                    {"i": new_intentos, "b": bloqueado, "id": user.id}
+            if source == "plataforma":
+                result = await db.execute(
+                    select(UsuarioPlataforma).where(
+                        UsuarioPlataforma.id == user_id,
+                        UsuarioPlataforma.activo == True
+                    )
                 )
-                await db.commit()
-                return None
+                return result.scalar_one_or_none()
 
-            await db.execute(
-                text("UPDATE aaces.clientes SET intentos_fallidos = 0, bloqueado_hasta = NULL, ultimo_acceso = :ua WHERE id = :id"),
-                {"ua": datetime.utcnow(), "id": user.id}
-            )
-            await db.commit()
-
-            return user
-        except Exception as e:
-            logger.error(f"Error autenticando cliente: {e}")
-            return None
-    
-    async def get_user_by_id(self, db: AsyncSession, user_id: str) -> Optional[SimpleNamespace]:
-        """Obtener usuario por ID (esquema aaces - usuarios y clientes)"""
-        try:
-            logger.info(f"get_user_by_id called with user_id={user_id} (type={type(user_id)})")
-            # Primero intentar en usuarios (nuevo esquema)
-            import uuid as uuid_lib
-            try:
-                uid = uuid_lib.UUID(user_id)
-            except ValueError:
-                uid = user_id
-            logger.info(f"Parsed uid={uid} (type={type(uid)})")
-            result = await db.execute(
-                text(
-                    """
-                    SELECT u.id, u.correo, u.nombre, u.rol as categoria, u.activo as estado,
-                           u.organizacion_id, u.fecha_creacion, u.fecha_actualizacion,
-                           u.ultimo_acceso, 
-                           DATE(o.fecha_activacion) as vigencia_desde, 
-                           NULL as vigencia_hasta,
-                           u.rol
-                    FROM aaces.usuarios u
-                    LEFT JOIN aaces.organizaciones o ON o.id = u.organizacion_id
-                    WHERE u.id = :id
-                    LIMIT 1
-                    """
-                ),
-                {"id": uid}
-            )
-            row = result.fetchone()
-            logger.info(f"usuarios query returned: {row}")
-            if row is not None:
-                # Map rol to valid categoria for ClienteResponse
-                rol_value = row[11] if len(row) > 11 else row[3]
-                categoria_map = {
-                    'admin': 'enterprise',
-                    'staff': 'premium',
-                    'super_admin': 'enterprise',
-                }
-                mapped_categoria = categoria_map.get(rol_value, 'basico')
-                
-                return SimpleNamespace(
-                    id=row[0], correo=row[1], nombre=row[2], categoria=mapped_categoria, 
-                    estado='activo' if row[4] else 'inactivo',
-                    organizacion_id=row[5], ciudad_base=None, fecha_creacion=row[6], fecha_actualizacion=row[7],
-                    ultimo_acceso=row[8], vigencia_desde=row[9], vigencia_hasta=row[10],
-                    plan='trial', cursos_creados=0, cursos_max=10, descuento_pct=0
+            elif source == "usuario":
+                result = await db.execute(
+                    select(Usuario, Organizacion)
+                    .join(Organizacion, Usuario.organizacion_id == Organizacion.id)
+                    .where(
+                        Usuario.id == user_id,
+                        Usuario.activo == True,
+                        Organizacion.estatus == "activa"
+                    )
                 )
-            
-            # Fallback a clientes (viejo esquema)
-            logger.info("Falling back to clientes table")
-            result = await db.execute(
-                text(
-                    """
-                    SELECT id, correo, nombre, categoria, estado,
-                           ciudad_base, fecha_creacion, fecha_actualizacion,
-                           ultimo_acceso, vigencia_desde, vigencia_hasta
-                    FROM aaces.clientes
-                    WHERE id = :id
-                    LIMIT 1
-                    """
-                ),
-                {"id": uid}
-            )
-            row = result.fetchone()
-            logger.info(f"clientes query returned: {row}")
-            if row is None:
+                row = result.first()
+                return row[0] if row else None
+
+            else:
+                logger.error(f"Source inválido: {source}")
                 return None
-            return SimpleNamespace(
-                id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4],
-                ciudad_base=row[5], fecha_creacion=row[6], fecha_actualizacion=row[7],
-                ultimo_acceso=row[8], vigencia_desde=row[9], vigencia_hasta=row[10]
-            )
+
         except Exception as e:
             logger.error(f"Error obteniendo usuario: {e}")
             return None
-    
+
+    def _map_rol_to_categoria(self, rol: str) -> str:
+        """Mapear rol de usuario a categoria para ClienteResponse"""
+        rol_map = {
+            "admin": "enterprise",
+            "staff": "premium",
+            "super_admin": "enterprise",
+        }
+        return rol_map.get(rol, "basico")
+
+    def _build_plataforma_response(self, user: UsuarioPlataforma) -> Dict[str, Any]:
+        """Construir response para platform user"""
+        return {
+            "id": user.id,
+            "nombre": user.nombre,
+            "correo": user.correo,
+            "rol": user.rol,
+            "activo": user.activo,
+            "fecha_creacion": user.fecha_creacion,
+            "fecha_actualizacion": user.fecha_actualizacion,
+        }
+
+    def _build_usuario_response(self, user: Usuario, org: Optional[Organizacion] = None) -> Dict[str, Any]:
+        """Construir response para org user (mapea a ClienteResponse)"""
+        return {
+            "id": user.id,
+            "organizacion_id": user.organizacion_id,
+            "nombre": user.nombre,
+            "correo": user.correo,
+            "ciudad_base": None,
+            "categoria": self._map_rol_to_categoria(str(user.rol)),
+            "estado": "activo" if user.activo else "inactivo",
+            "fecha_creacion": user.fecha_creacion,
+            "fecha_actualizacion": user.fecha_actualizacion,
+            "ultimo_acceso": user.ultimo_acceso,
+            "vigencia_desde": org.fecha_activacion.date() if org and org.fecha_activacion else None,
+            "vigencia_hasta": None,
+            "plan": "trial",
+            "cursos_creados": 0,
+            "cursos_max": 10,
+            "descuento_pct": 0,
+        }
+
     def check_user_role(self, user_data: Dict[str, Any], required_roles: List[str]) -> bool:
         """Verificar si el usuario tiene uno de los roles requeridos"""
-        user_role = user_data.get("role", Role.PUBLIC)
+        user_role = user_data.get("role", "public")
         return user_role in required_roles
-    
+
     def check_user_permission(self, user_data: Dict[str, Any], resource: str, action: str) -> bool:
         """Verificar permisos del usuario para un recurso específico"""
-        user_role = user_data.get("role", Role.PUBLIC)
+        user_role = user_data.get("role", "public")
         user_id = user_data.get("sub")
-        
-        # Lógica de permisos basada en roles
+
         permissions = {
-            Role.ADMIN: {
+            "admin": {
                 "clientes": ["read", "write", "update", "delete"],
                 "capacitadores": ["read", "write", "update", "delete"],
                 "cursos": ["read", "write", "update", "delete"],
@@ -302,8 +301,8 @@ class AuthService:
                 "dashboard": ["read"],
                 "reports": ["read", "generate"],
             },
-            Role.CLIENT: {
-                "clientes": ["read", "update"],  # Solo su propio perfil
+            "client": {
+                "clientes": ["read", "update"],
                 "capacitadores": ["read", "write", "update"],
                 "cursos": ["read", "write", "update"],
                 "participantes": ["read", "write", "update"],
@@ -312,21 +311,22 @@ class AuthService:
                 "dashboard": ["read"],
                 "reports": ["read"],
             },
-            Role.TRAINER: {
+            "trainer": {
                 "cursos": ["read"],
                 "participantes": ["read"],
                 "validaciones": ["read"],
                 "dashboard": ["read"],
             },
-            Role.PUBLIC: {
-                "validaciones": ["read"],  # Solo validación pública
+            "public": {
+                "validaciones": ["read"],
             }
         }
-        
+
         role_permissions = permissions.get(user_role, {})
         resource_permissions = role_permissions.get(resource, [])
-        
+
         return action in resource_permissions
+
 
 # Instancia global del servicio
 auth_service = AuthService()

@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+from uuid import UUID
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.models import Cliente
-from app.schemas import LoginRequest, Token, ClienteResponse, ClienteUpdate
+from app.models import Cliente, UsuarioPlataforma, Usuario
+from app.schemas import LoginRequest, Token, ClienteResponse, ClienteUpdate, PlataformaUserResponse
 from app.services.auth import auth_service, Role
 from app.core.logging import audit_logger
 import logging
@@ -17,33 +18,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 security = HTTPBearer()
 
+
 @router.post("/login", response_model=Token)
 async def login(
     request: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    """Login de usuario con email y contraseña"""
+    """Login de usuario con email y contraseña - Nuevo flujo 2 tablas"""
     try:
         logger.debug(f"Login DEBUG={settings.DEBUG} DEV_BYPASS={getattr(settings, 'ALLOW_DEV_LOGIN', False)}")
-        user = await auth_service.authenticate_user(db, request.correo, request.password)
-        if not user and settings.DEBUG and getattr(settings, "ALLOW_DEV_LOGIN", False):
-            try:
-                res = await db.execute(
-                    text(
-                        "SELECT id, correo, nombre, categoria, estado FROM aaces.clientes WHERE correo = :email LIMIT 1"
-                    ),
-                    {"email": request.correo}
-                )
-                row = res.fetchone()
-                if row is not None:
-                    user = ClienteResponse(
-                        id=row[0], correo=row[1], nombre=row[2], categoria=row[3], estado=row[4]
-                    )
-            except Exception as _:
-                # Ignorar errores de BD en modo dev para no elevar a 500
-                pass
-        # Sin fallback dev: respetar autenticación real de BD
         
+        # Nuevo flujo: autenticación determinística 2 tablas
+        # Retorna (user_obj, source) donde source = "plataforma" | "usuario"
+        user, source = await auth_service.authenticate_user(db, request.correo, request.password)
+        
+        # Dev fallback removido - solo autenticación real de BD
         if not user:
             audit_logger.log_system_event(
                 "failed_login",
@@ -55,9 +44,9 @@ async def login(
                 detail="Credenciales inválidas o cuenta bloqueada"
             )
         
-        # Verificar si el usuario está bloqueado
+        # Verificar si el usuario está bloqueado (en BD ya se manejó, pero doble check)
         bh = getattr(user, "bloqueado_hasta", None)
-        if bh and bh > datetime.utcnow():
+        if bh and bh > datetime.now(timezone.utc):
             audit_logger.log_system_event(
                 "blocked_login",
                 "Account temporarily blocked",
@@ -68,29 +57,30 @@ async def login(
                 detail=f"Cuenta bloqueada hasta {user.bloqueado_hasta.strftime('%Y-%m-%d %H:%M')}"
             )
         
-        # Determinar rol del usuario (nuevo esquema vs viejo)
-        if getattr(user, "source", None) == "usuario":
-            role = user.rol
+        # Determinar rol según source
+        if source == "plataforma":
+            # Usuario de plataforma (super_admin)
+            role = Role.ADMIN
+            org_id = None
+            category = "super_admin"
+        else:
+            # Usuario de organización (admin/staff)
+            role = user.rol if user.rol == "admin" else Role.CLIENT
             org_id = str(user.organizacion_id) if user.organizacion_id else None
             category = user.rol
-        else:
-            role = determine_user_role(user)
-            org_id = str(user.organizacion_id) if getattr(user, "organizacion_id", None) else None
-            category = getattr(user, 'categoria', 'basico')
         
-        # Crear tokens JWT
+        # Crear tokens JWT con claim 'source' OBLIGATORIO
         token_data = {
             "sub": str(user.id),
             "email": user.correo,
             "role": role,
             "name": user.nombre,
+            "source": source,  # OBLIGATORIO
         }
         if org_id:
             token_data["org_id"] = org_id
         if category:
             token_data["category"] = category
-        if getattr(user, "source", None) == "usuario":
-            token_data["source"] = "usuario"
         
         access_token = auth_service.create_access_token(data=token_data)
         
@@ -98,7 +88,8 @@ async def login(
             data={
                 "sub": str(user.id),
                 "email": user.correo,
-                "role": role
+                "role": role,
+                "source": source,
             }
         )
         
@@ -107,7 +98,7 @@ async def login(
             user_id=str(user.id),
             action="successful_login",
             resource="auth",
-            details={"email": user.correo, "role": role, "source": getattr(user, "source", "cliente")}
+            details={"email": user.correo, "role": role, "source": source}
         )
         
         return {
@@ -127,12 +118,13 @@ async def login(
             detail="Error interno del servidor"
         )
 
+
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Refrescar token de acceso"""
+    """Refrescar token de acceso - Valida source claim"""
     try:
         token = credentials.credentials
         payload = auth_service.decode_token(token)
@@ -143,23 +135,40 @@ async def refresh_token(
                 detail="Token de refresco inválido"
             )
         
-        user_id = payload.get("sub")
-        user = await auth_service.get_user_by_id(db, user_id)
+        # Validar source claim en refresh token también
+        source = payload.get("source")
+        if source not in ("plataforma", "usuario"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token de refresco inválido: source claim faltante"
+            )
         
-        if not user or user.estado != "activo":
+        user_id = payload.get("sub")
+        user = await auth_service.get_user_by_id(db, UUID(user_id), source)
+        
+        if not user or (hasattr(user, 'activo') and not user.activo) or (hasattr(user, 'estado') and user.estado != "activo"):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Usuario no válido"
             )
         
-        # Crear nuevo access token
+        # Determinar role para nuevo token
+        if source == "plataforma":
+            role = Role.ADMIN
+            category = "super_admin"
+        else:
+            role = user.rol if user.rol == "admin" else Role.CLIENT
+            category = user.rol
+        
+        # Crear nuevo access token con source claim
         new_access_token = auth_service.create_access_token(
             data={
                 "sub": str(user.id),
                 "email": user.correo,
-                "role": payload.get("role"),
+                "role": role,
                 "name": user.nombre,
-                "category": user.categoria
+                "source": source,
+                "category": category,
             }
         )
         
@@ -179,12 +188,13 @@ async def refresh_token(
             detail="Error interno del servidor"
         )
 
-@router.get("/me", response_model=ClienteResponse)
+
+@router.get("/me")
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ):
-    """Obtener información del usuario actual"""
+    """Obtener información del usuario actual - DUAL response model"""
     try:
         token = credentials.credentials
         payload = auth_service.decode_token(token)
@@ -195,11 +205,18 @@ async def get_current_user(
                 detail="Token inválido o expirado"
             )
         
-        user_id = payload.get("sub")
-        user = await auth_service.get_user_by_id(db, user_id)
+        # Extraer source claim (validado en decode_token)
+        source = payload.get("source")
+        if source not in ("plataforma", "usuario"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token inválido: source claim faltante"
+            )
         
-        logger.info(f"get_user_by_id({user_id}) returned type: {type(user)}")
-        logger.info(f"get_user_by_id({user_id}) returned data: {vars(user) if hasattr(user, '__dict__') else user}")
+        user_id = payload.get("sub")
+        user = await auth_service.get_user_by_id(db, UUID(user_id), source)
+        
+        logger.info(f"get_user_by_id({user_id}, source={source}) returned type: {type(user)}")
         
         if not user:
             raise HTTPException(
@@ -207,15 +224,24 @@ async def get_current_user(
                 detail="Usuario no encontrado"
             )
         
-        # Explicitly validate against ClienteResponse (Pydantic v2)
-        try:
-            validated = ClienteResponse.model_validate(user)
-            logger.info(f"ClienteResponse validation SUCCESS: {validated}")
+        # DUAL RESPONSE MODEL según source
+        if source == "plataforma":
+            # Validar contra PlataformaUserResponse
+            validated = PlataformaUserResponse.model_validate(user)
+            logger.info(f"PlataformaUserResponse validation SUCCESS")
             return validated
-        except Exception as validation_error:
-            logger.error(f"ClienteResponse validation error: {validation_error}")
-            logger.error(f"User object fields: {vars(user) if hasattr(user, '__dict__') else 'no dict'}")
-            raise
+        else:
+            # Validar contra ClienteResponse (requiere org para vigencia_desde)
+            from app.models import Organizacion
+            org_result = await db.execute(
+                select(Organizacion).where(Organizacion.id == user.organizacion_id)
+            )
+            org = org_result.scalar_one_or_none()
+            
+            response_data = auth_service._build_usuario_response(user, org)
+            validated = ClienteResponse.model_validate(response_data)
+            logger.info(f"ClienteResponse validation SUCCESS")
+            return validated
         
     except HTTPException:
         raise
@@ -227,6 +253,7 @@ async def get_current_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor"
         )
+
 
 @router.post("/logout")
 async def logout(
@@ -251,6 +278,7 @@ async def logout(
         logger.error(f"Error en logout: {e}")
         return {"message": "Sesión cerrada exitosamente"}
 
+
 @router.post("/dev-reset-password")
 async def dev_reset_password(
     payload: Dict[str, Any],
@@ -264,7 +292,10 @@ async def dev_reset_password(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Parámetros inválidos")
     try:
         ph = auth_service.get_password_hash(new_password)
-        r2 = await db.execute(text("UPDATE aaces.clientes SET password_hash = :ph WHERE correo = :email"), {"ph": ph, "email": email})
+        # Try usuarios first, then clientes
+        r2 = await db.execute(text("UPDATE aaces.usuarios SET password_hash = :ph WHERE correo = :email"), {"ph": ph, "email": email})
+        if r2.rowcount == 0:
+            r2 = await db.execute(text("UPDATE aaces.clientes SET password_hash = :ph WHERE correo = :email"), {"ph": ph, "email": email})
         await db.commit()
         return {"updated": (r2.rowcount or 0)}
     except Exception as e:
@@ -272,9 +303,9 @@ async def dev_reset_password(
         logger.error(f"Error en dev-reset-password: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno")
 
+
 def determine_user_role(user: Cliente) -> str:
     """Determinar el rol del usuario basado en su email o categoría"""
-    # Admin users por email
     admin_emails = [
         "admin@aaces.com",
         "administrator@aaces.com", 
@@ -284,13 +315,13 @@ def determine_user_role(user: Cliente) -> str:
     if user.correo in admin_emails:
         return Role.ADMIN
     
-    # Por categoría de cliente
     if user.categoria == "enterprise":
         return Role.CLIENT
     elif user.categoria == "premium":
         return Role.CLIENT
-    else:  # básico
+    else:
         return Role.CLIENT
+
 
 async def get_current_user_data(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -307,6 +338,7 @@ async def get_current_user_data(
         )
     
     return payload
+
 
 def require_role(required_roles: list):
     """Decorador para requerir roles específicos"""
@@ -325,26 +357,22 @@ def require_role(required_roles: list):
     
     return role_checker
 
+
 # Middleware de autenticación para diferentes roles
 require_admin = require_role([Role.ADMIN])
-require_client = require_role([Role.ADMIN, Role.CLIENT])
-require_trainer = require_role([Role.ADMIN, Role.CLIENT, Role.TRAINER])
-require_authenticated = require_role([Role.ADMIN, Role.CLIENT, Role.TRAINER])
+require_client = require_role([Role.ADMIN, Role.CLIENTE])
+require_trainer = require_role([Role.ADMIN, Role.CLIENTE, Role.STAFF])
+require_authenticated = require_role([Role.ADMIN, Role.CLIENTE, Role.STAFF])
 
 
 async def require_superadmin(
     user_data: Dict[str, Any] = Depends(get_current_user_data)
 ):
-    """Requerir rol admin SIN organizacion_id (superadmin de plataforma)."""
-    if user_data.get("role") not in [Role.ADMIN]:
+    """Requerir super_admin de plataforma (source=plataforma, sin org_id)"""
+    if user_data.get("source") != "plataforma":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de administrador"
-        )
-    if user_data.get("org_id"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso no autorizado para administradores de organización"
+            detail="Se requiere acceso de super administrador de plataforma"
         )
     return user_data
 
@@ -352,11 +380,11 @@ async def require_superadmin(
 async def require_org_admin(
     user_data: Dict[str, Any] = Depends(get_current_user_data)
 ):
-    """Requerir admin con organizacion_id (admin de una organizacion)."""
-    if user_data.get("role") not in [Role.ADMIN]:
+    """Requerir admin de organización (source=usuario, con org_id)"""
+    if user_data.get("source") != "usuario":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de administrador"
+            detail="Se requiere administrador de organización"
         )
     org_id = user_data.get("org_id")
     if not org_id:
@@ -365,6 +393,7 @@ async def require_org_admin(
             detail="Se requiere una organización asociada al usuario"
         )
     return user_data
+
 
 @router.put("/profile")
 async def update_profile(
@@ -378,6 +407,12 @@ async def update_profile(
         if not data:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido o expirado")
         user_id = data.get("sub")
+        source = data.get("source")
+        
+        # Solo usuarios de organización pueden actualizar perfil de cliente
+        if source != "usuario":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo usuarios de organización")
+        
         sets = []
         params: Dict[str, Any] = {"id": user_id}
         if payload.nombre is not None:
@@ -397,7 +432,7 @@ async def update_profile(
             params["estado"] = payload.estado.strip()
         if not sets:
             return {"updated": 0}
-        sql = f"UPDATE aaces.clientes SET {', '.join(sets)}, fecha_actualizacion = NOW() WHERE id = :id"
+        sql = f"UPDATE aaces.usuarios SET {', '.join(sets)}, fecha_actualizacion = NOW() WHERE id = :id"
         res = await db.execute(text(sql), params)
         await db.commit()
         return {"updated": int(res.rowcount or 0)}
@@ -451,7 +486,6 @@ async def register(
             {"rfc": rfc}
         )
         if rfc_check.fetchone():
-            await _log_intento(db, rfc, admin_correo, request, "duplicado", "RFC ya registrado")
             raise HTTPException(status_code=409, detail="Ya existe una organización registrada con este RFC")
 
         # Check correo duplicado en usuarios
@@ -460,7 +494,6 @@ async def register(
             {"correo": admin_correo}
         )
         if email_check.fetchone():
-            await _log_intento(db, rfc, admin_correo, request, "duplicado", "Correo ya registrado")
             raise HTTPException(status_code=409, detail="Este correo ya está registrado")
 
         # Get plan
@@ -500,24 +533,22 @@ async def register(
             {"org_id": org_id, "nombre": admin_nombre, "correo": admin_correo, "ph": password_hash}
         )
 
-        # Create pending subscription
+        # Create subscription
         await db.execute(
             text("""
-                INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus)
-                VALUES (:org_id, :plan_id, 'pendiente')
+                INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus, fecha_inicio, activada_por)
+                VALUES (:org_id, :plan_id, 'activa', CURRENT_DATE, (SELECT id FROM aaces.usuarios WHERE correo = :correo))
             """),
-            {"org_id": org_id, "plan_id": plan_id}
+            {"org_id": org_id, "plan_id": plan_id, "correo": admin_correo}
         )
 
         await db.commit()
 
-        await _log_intento(db, rfc, admin_correo, request, "exito", f"Registro exitoso plan={plan_codigo}")
-
         return {
-            "success": True,
-            "message": "Registro exitoso. Recibirás un correo cuando tu cuenta sea activada.",
             "organizacion_id": org_id,
-            "plan": plan_codigo
+            "admin_email": admin_correo,
+            "plan": plan_codigo,
+            "message": "Organización registrada. La suscripción está activa."
         }
 
     except HTTPException:
@@ -526,20 +557,3 @@ async def register(
         await db.rollback()
         logger.error(f"Error en registro: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
-
-
-async def _log_intento(db: AsyncSession, rfc: str, correo: str, request: Request, resultado: str, detalle: str = None):
-    """Registrar intento de registro en tabla registro_intentos"""
-    try:
-        ip = request.client.host if request.client else None
-        ua = request.headers.get("user-agent") if request.headers else None
-        await db.execute(
-            text("""
-                INSERT INTO aaces.registro_intentos (rfc, correo, ip_origen, user_agent, resultado, detalle)
-                VALUES (:rfc, :correo, :ip, :ua, :resultado, :detalle)
-            """),
-            {"rfc": rfc, "correo": correo, "ip": ip, "ua": ua, "resultado": resultado, "detalle": detalle}
-        )
-        await db.commit()
-    except Exception:
-        pass

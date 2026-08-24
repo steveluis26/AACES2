@@ -21,10 +21,10 @@ class ClienteBase(BaseSchema):
     correo: EmailStr
     ciudad_base: Optional[str] = Field(None, max_length=100)
     categoria: str = Field('basico', pattern='^(basico|premium|enterprise)$')
-    
+
 class ClienteCreate(ClienteBase):
     password: str = Field(..., min_length=8, max_length=100)
-    
+
     @validator('password')
     def validate_password(cls, v):
         if len(v) < 8:
@@ -59,6 +59,18 @@ class ClienteResponse(ClienteBase):
     cursos_creados: int = 0
     cursos_max: int = 10
     descuento_pct: int = 0
+
+
+class PlataformaUserResponse(BaseSchema):
+    id: UUID
+    nombre: str
+    correo: EmailStr
+    rol: str
+    activo: bool
+    fecha_creacion: datetime
+    fecha_actualizacion: datetime
+    # NO organizacion_id, NO ciudad_base, NO categoria, NO plan, NO cursos_*
+
 
 # Capacitador schemas
 class CapacitadorBase(BaseSchema):
@@ -340,7 +352,7 @@ class PasswordResetRequest(BaseSchema):
 class PasswordResetConfirm(BaseSchema):
     token: str
     new_password: str = Field(..., min_length=8)
-    
+
     @validator('new_password')
     def validate_password(cls, v):
         if len(v) < 8:
@@ -392,7 +404,6 @@ class SuccessResponse(BaseSchema):
     success: bool = True
     message: str
     data: Optional[Dict[str, Any]] = None
-
 
 # Documento schemas
 class DocumentoGenerarRequest(BaseSchema):
