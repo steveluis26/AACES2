@@ -70,11 +70,12 @@ async def _ensure_platform_user(conn: AsyncConnection, hash_password_fn) -> uuid
     existing_id = existing.scalar()
     if existing_id:
         logger.info(f"Platform user already exists: {existing_id}")
-        # Update password/name in case they changed
+        # Update password/name in case they changed, and reset lockout counters
         await conn.execute(
             text("""
                 UPDATE aaces.usuarios_plataforma
-                SET password_hash = :ph, nombre = :name, activo = true, fecha_actualizacion = now()
+                SET password_hash = :ph, nombre = :name, activo = true, fecha_actualizacion = now(),
+                    intentos_fallidos = 0, bloqueado_hasta = NULL
                 WHERE correo = :email
             """),
             {"ph": ph, "name": name, "email": email}
