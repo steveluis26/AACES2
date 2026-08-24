@@ -235,39 +235,27 @@ async def alter_usuarios_add_constraints(conn: AsyncConnection) -> None:
     await conn.execute(text("SET search_path TO aaces"))
     
     # 1. Verificar y agregar CHECK constraint para rol
-    result = await conn.execute(text("""
-        SELECT 1 FROM information_schema.check_constraints cc
-        JOIN information_schema.constraint_column_usage ccu ON cc.constraint_name = ccu.constraint_name
-        WHERE ccu.table_schema = 'aaces' 
-        AND ccu.table_name = 'usuarios' 
-        AND ccu.column_name = 'rol'
-        AND cc.check_clause LIKE '%admin%staff%'
-    """))
-    if not result.scalar():
-        await conn.execute(text("""
+    try:
+        async with conn.begin_nested():
+            await conn.execute(text("""
             ALTER TABLE aaces.usuarios 
             ADD CONSTRAINT check_rol_usuario CHECK (rol IN ('admin', 'staff'))
         """))
         logger.info("check_rol_usuario agregado a usuarios")
-    else:
-        logger.info("check_rol_usuario ya existe en usuarios")
+    except Exception as e:
+        logger.info(f"check_rol_usuario ya existe en usuarios: {e}")
     
     # 2. Verificar y agregar FK explícita (nombre conocido)
-    result = await conn.execute(text("""
-        SELECT 1 FROM information_schema.table_constraints
-        WHERE table_schema = 'aaces' 
-        AND table_name = 'usuarios' 
-        AND constraint_name = 'fk_usuarios_organizacion'
-    """))
-    if not result.scalar():
-        await conn.execute(text("""
+    try:
+        async with conn.begin_nested():
+            await conn.execute(text("""
             ALTER TABLE aaces.usuarios 
             ADD CONSTRAINT fk_usuarios_organizacion 
             FOREIGN KEY (organizacion_id) REFERENCES aaces.organizaciones(id) ON DELETE CASCADE
         """))
         logger.info("fk_usuarios_organizacion agregada")
-    else:
-        logger.info("fk_usuarios_organizacion ya existe")
+    except Exception as e:
+        logger.info(f"fk_usuarios_organizacion ya existe: {e}")
     
     # 3. Asegurar organizacion_id NOT NULL (ya debería serlo por create_usuarios)
     result = await conn.execute(text("""
