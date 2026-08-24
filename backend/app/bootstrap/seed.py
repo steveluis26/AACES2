@@ -142,7 +142,9 @@ async def _ensure_demo_org_and_admin(conn: AsyncConnection, hash_password_fn, pl
                 nombre = EXCLUDED.nombre,
                 rol = EXCLUDED.rol,
                 activo = true,
-                fecha_actualizacion = now()
+                fecha_actualizacion = now(),
+                intentos_fallidos = 0,
+                bloqueado_hasta = NULL
             RETURNING id
         """),
         {"org_id": org_id, "email": admin_email, "name": admin_name, "ph": ph}
