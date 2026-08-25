@@ -513,7 +513,7 @@ async def register(
             text("""
                 INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, fecha_activacion)
                 VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, :estatus, 
-                    CASE WHEN :estatus = 'activa' THEN CURRENT_TIMESTAMP ELSE NULL END)
+                    CASE WHEN :estatus_val = 'activa' THEN CURRENT_TIMESTAMP ELSE NULL END)
                 RETURNING id
             """),
             {
@@ -522,6 +522,7 @@ async def register(
                 "email_contacto": admin_correo,
                 "estado": estado, "ciudad": ciudad,
                 "estatus": org_estatus,
+                "estatus_val": org_estatus,
             }
         )
         org_id = str(org_id_res.scalar())
