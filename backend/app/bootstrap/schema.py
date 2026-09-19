@@ -33,7 +33,7 @@ async def create_tipos_curso(conn: AsyncConnection) -> None:
           nombre VARCHAR(200) NOT NULL,
           descripcion TEXT,
           costo_por_persona NUMERIC(10,2) DEFAULT 0,
-          estado VARCHAR(20) DEFAULT 'activo',
+          estado VARCHAR(50) DEFAULT 'activo',
           fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
     """))
@@ -51,7 +51,7 @@ async def create_grupos_curso(conn: AsyncConnection) -> None:
           descripcion TEXT,
           precio_base NUMERIC(10,2) DEFAULT 0,
           precio_promocional NUMERIC(10,2),
-          estado VARCHAR(20) DEFAULT 'activo',
+          estado VARCHAR(50) DEFAULT 'activo',
           fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
     """))
@@ -73,8 +73,8 @@ async def create_clientes(conn: AsyncConnection) -> None:
           correo VARCHAR(255) UNIQUE NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
           ciudad_base VARCHAR(100),
-          categoria VARCHAR(20) NOT NULL DEFAULT 'basico',
-          estado VARCHAR(20) NOT NULL DEFAULT 'activo',
+          categoria VARCHAR(50) NOT NULL DEFAULT 'basico',
+          estado VARCHAR(50) NOT NULL DEFAULT 'activo',
           fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           fecha_cambio_categoria TIMESTAMP WITH TIME ZONE,
@@ -88,7 +88,7 @@ async def create_clientes(conn: AsyncConnection) -> None:
           must_change_password BOOLEAN DEFAULT false,
           vigencia_desde DATE,
           vigencia_hasta DATE,
-          plan VARCHAR(20) NOT NULL DEFAULT 'trial',
+          plan VARCHAR(50) NOT NULL DEFAULT 'trial',
           cursos_creados INTEGER NOT NULL DEFAULT 0,
           cursos_max INTEGER NOT NULL DEFAULT 10,
           descuento_pct INTEGER NOT NULL DEFAULT 0,
@@ -148,7 +148,7 @@ async def create_organizaciones(conn: AsyncConnection) -> None:
           razon_social VARCHAR(200) NOT NULL,
           nombre_comercial VARCHAR(200),
           email_contacto VARCHAR(255),
-          telefono VARCHAR(20),
+          telefono VARCHAR(50),
           estado VARCHAR(100),
           ciudad VARCHAR(100),
           direccion TEXT,
@@ -215,7 +215,7 @@ async def create_usuarios(conn: AsyncConnection) -> None:
           correo VARCHAR(255) NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
           rol VARCHAR(30) DEFAULT 'admin' NOT NULL,
-          telefono VARCHAR(20),
+          telefono VARCHAR(50),
           activo BOOLEAN DEFAULT true,
           ultimo_acceso TIMESTAMP WITH TIME ZONE,
           intentos_fallidos INTEGER DEFAULT 0,
@@ -328,7 +328,7 @@ async def create_registro_intentos(conn: AsyncConnection) -> None:
           correo VARCHAR(255),
           ip_origen VARCHAR(45),
           user_agent TEXT,
-          resultado VARCHAR(20),
+          resultado VARCHAR(50),
           detalle TEXT,
           fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )
@@ -343,7 +343,7 @@ async def create_documentos_emitidos(conn: AsyncConnection) -> None:
           template_id UUID REFERENCES aaces.templates(id) ON DELETE SET NULL,
           template_version INTEGER,
           tipo_documento VARCHAR(30) NOT NULL,
-          codigo_validacion VARCHAR(20) NOT NULL,
+          codigo_validacion VARCHAR(50) NOT NULL,
           folio VARCHAR(50),
           storage_provider VARCHAR(50) NOT NULL,
           storage_key VARCHAR(500) NOT NULL,
@@ -352,7 +352,7 @@ async def create_documentos_emitidos(conn: AsyncConnection) -> None:
           documento_metadata JSONB DEFAULT '{}',
           emitido_por UUID REFERENCES aaces.usuarios(id) ON DELETE SET NULL,
           fecha_emision TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-          estatus VARCHAR(20) DEFAULT 'emitido' NOT NULL,
+          estatus VARCHAR(50) DEFAULT 'emitido' NOT NULL,
           CONSTRAINT check_tipo_documento_emitido CHECK (tipo_documento IN ('CONSTANCIA', 'DC3', 'DIPLOMA', 'CREDENCIAL', 'OTRO')),
           CONSTRAINT check_estatus_documento CHECK (estatus IN ('emitido', 'cancelado', 'reemitido'))
         )
@@ -368,8 +368,8 @@ async def create_verificaciones(conn: AsyncConnection) -> None:
           fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           ip VARCHAR(45),
           user_agent TEXT,
-          tipo VARCHAR(20) NOT NULL DEFAULT 'QR',
-          resultado VARCHAR(20) NOT NULL DEFAULT 'VALIDA',
+          tipo VARCHAR(50) NOT NULL DEFAULT 'QR',
+          resultado VARCHAR(50) NOT NULL DEFAULT 'VALIDA',
           CONSTRAINT check_tipo_verificacion CHECK (tipo IN ('QR', 'LINK', 'API')),
           CONSTRAINT check_resultado_verificacion CHECK (resultado IN ('VALIDA', 'REVOCADA', 'EXPIRADA', 'NO_EXISTE'))
         )
@@ -382,9 +382,9 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         # El register de Fase 2 inserta la fila puente en clientes con estas
         # columnas; la tabla legacy puede no tenerlas (el CREATE TABLE las
         # agregó sin reparación ADD COLUMN). Sin esto el registro truena con 500.
-        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'trial'",
-        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS categoria VARCHAR(20) NOT NULL DEFAULT 'basico'",
-        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'activo'",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS plan VARCHAR(50) NOT NULL DEFAULT 'trial'",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS categoria VARCHAR(50) NOT NULL DEFAULT 'basico'",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS estado VARCHAR(50) NOT NULL DEFAULT 'activo'",
         # La tabla real tiene estas columnas NOT NULL pero sin DEFAULT
         # (el CREATE TABLE sí les pone DEFAULT). Sin esto, cualquier INSERT
         # a clientes que no las incluya truena con NotNullViolation.
@@ -415,7 +415,7 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_validado_en TIMESTAMPTZ",
         # Participantes: el modelo declara pax_id pero la tabla legacy no la tiene.
         # Se agrega nullable + backfill para no romper filas existentes.
-        "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS pax_id VARCHAR(20)",
+        "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS pax_id VARCHAR(50)",
         "UPDATE aaces.participantes SET pax_id = 'PAX-' || upper(substr(md5(random()::text || id::text), 1, 9)) WHERE pax_id IS NULL",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_participantes_pax_id ON aaces.participantes(pax_id)",
         # El INSERT de create_participante incluye `pais`, pero la tabla legacy
@@ -436,11 +436,12 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         # "asignar constancia" genera códigos públicos de 8 chars (VARCHAR).
         # El servicio /constancias/emitir reutiliza el código existente →
         # el INSERT truena con "invalid input syntax for type uuid" (500).
-        # Se unifica a VARCHAR(20) para que ambos flujos usen el mismo formato.
+        # Se unifica a VARCHAR(50) para que ambos flujos usen el mismo formato
+        # (50 acomoda UUIDs existentes de 36 chars y códigos nuevos de 8).
         # Orden: primero DROP DEFAULT (gen_random_uuid bloquea el cambio de tipo),
         # luego ALTER TYPE. Si ya es VARCHAR, ambos son no-op (no fallan).
         "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion DROP DEFAULT",
-        "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion TYPE VARCHAR(20) USING codigo_validacion::text",
+        "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion TYPE VARCHAR(50) USING codigo_validacion::text",
     ]:
         try:
             async with conn.begin_nested():
