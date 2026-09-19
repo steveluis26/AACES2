@@ -9,7 +9,7 @@ from datetime import date
 import uuid
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import require_org_admin, get_current_user_data
+from app.core.identity import get_current_identity, get_current_cliente_id, require_org_id, Identity
 from app.services.constancias import constancias_service
 from app.services.storage_provider import LocalStorageProvider
 from app.core.config import settings
@@ -35,15 +35,25 @@ class EmitirConstanciaLegacyRequest(BaseModel):
     tipo_documento: str = Field(default="CONSTANCIA", pattern="^(CONSTANCIA|DC3|DIPLOMA|CREDENCIAL|OTRO)$")
 
 
+async def _scoped_org_id(db: AsyncSession, identity: Identity) -> Optional[str]:
+    """org_id para filtrar recursos, o None si es plataforma (sin filtro).
+
+    Nunca hace fallback a otra organización: si el usuario no tiene
+    organización vinculada, lanza 403 explícito.
+    """
+    if identity.source == "plataforma":
+        return None
+    return await require_org_id(db, identity)
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def emitir_constancia_legacy(
     payload: EmitirConstanciaLegacyRequest,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cliente_id = await get_current_cliente_id(db, identity)
+    org_id = await require_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
@@ -60,30 +70,15 @@ async def emitir_constancia_legacy(
     cp_row = cp.fetchone()
     if not cp_row:
         raise HTTPException(status_code=404, detail="Curso-participante no encontrado")
-    if str(cp_row[3]) != cid:
+    if str(cp_row[3]) != cliente_id:
         raise HTTPException(status_code=403, detail="No tienes permiso para emitir constancias de este curso")
-
-    org_res = await db.execute(
-        text("SELECT organizacion_id FROM aaces.clientes WHERE id = :cid"),
-        {"cid": cid},
-    )
-    org_row = org_res.fetchone()
-    org_id = str(org_row[0]) if org_row and org_row[0] else None
-    if not org_id:
-        org_res2 = await db.execute(
-            text("SELECT id FROM aaces.organizaciones ORDER BY fecha_creacion LIMIT 1")
-        )
-        org_row2 = org_res2.fetchone()
-        org_id = str(org_row2[0]) if org_row2 else None
-    if not org_id:
-        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
 
     # Use the new constancias_service which generates PDF
     doc = await constancias_service.emitir(
         db=db,
         organizacion_id=org_id,
         curso_participante_id=payload.curso_participante_id,
-        emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
+        emitido_por=identity.user_id if identity.source == "usuario" else None,
         template_id=None,  # Will use default active template
     )
 
@@ -93,31 +88,20 @@ async def emitir_constancia_legacy(
 @router.post("/emitir")
 async def emitir_constancia(
     payload: EmitirConstanciaRequest,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data.get("org_id")
-    if not organizacion_id:
-        cid = user_data.get("sub")
-        if cid:
-            row = await db.execute(
-                text("SELECT organizacion_id FROM aaces.clientes WHERE id=:cid"),
-                {"cid": cid},
-            )
-            r = row.fetchone()
-            organizacion_id = str(r[0]) if r and r[0] else None
-    if not organizacion_id:
-        raise HTTPException(status_code=403, detail="Se requiere una organización asociada")
+    organizacion_id = await require_org_id(db, identity)
     try:
         doc = await constancias_service.emitir(
             db=db,
             organizacion_id=organizacion_id,
             curso_participante_id=payload.curso_participante_id,
-            emitido_por=user_data.get("sub") if user_data.get("source") == "usuario" else None,
+            emitido_por=identity.user_id if identity.source == "usuario" else None,
             template_id=payload.template_id,
         )
         audit_logger.log_user_action(
-            user_id=user_data.get("sub"),
+            user_id=identity.user_id,
             action="constancia_emitida",
             resource="constancias",
             details={"doc_id": doc["id"], "codigo_validacion": doc["codigo_validacion"]},
@@ -140,17 +124,20 @@ async def listar_constancias(
     fecha_hasta: Optional[date] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     conditions = []
     params: Dict[str, Any] = {}
+
+    # Aislamiento multi-tenant: solo constancias de la propia organización.
+    if org_id is not None:
+        conditions.append("d.organizacion_id = :org_id")
+        params["org_id"] = org_id
 
     if q:
         conditions.append("(d.folio ILIKE :q OR CAST(d.codigo_validacion AS text) ILIKE :q)")
@@ -243,18 +230,23 @@ async def listar_constancias(
 
 @router.get("/resumen")
 async def resumen_constancias(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
-    total = await db.execute(text("SELECT count(*) FROM aaces.documentos_emitidos"))
-    emitidas = await db.execute(text("SELECT count(*) FROM aaces.documentos_emitidos WHERE estatus = 'emitido'"))
-    canceladas = await db.execute(text("SELECT count(*) FROM aaces.documentos_emitidos WHERE estatus = 'cancelado'"))
+    # Aislamiento multi-tenant.
+    if org_id is not None:
+        base = "FROM aaces.documentos_emitidos WHERE organizacion_id = :org_id"
+        params: Dict[str, Any] = {"org_id": org_id}
+    else:  # plataforma: vista global
+        base = "FROM aaces.documentos_emitidos"
+        params = {}
+    total = await db.execute(text(f"SELECT count(*) {base}"), params)
+    emitidas = await db.execute(text(f"SELECT count(*) {base} {'AND' if params else 'WHERE'} estatus = 'emitido'"), params)
+    canceladas = await db.execute(text(f"SELECT count(*) {base} {'AND' if params else 'WHERE'} estatus = 'cancelado'"), params)
 
     return {
         "total": int(total.scalar() or 0),
@@ -267,23 +259,25 @@ async def resumen_constancias(
 async def detalle_constancia(
     constancia_id: str,
     request: Request,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
+    filtro_org = "AND organizacion_id = :org_id" if org_id is not None else ""
+    params: Dict[str, Any] = {"id": constancia_id}
+    if org_id is not None:
+        params["org_id"] = org_id
     res = await db.execute(
-        text("""
+        text(f"""
             SELECT id, tipo_documento, estatus, codigo_validacion, folio, fecha_emision, storage_key
             FROM aaces.documentos_emitidos
-            WHERE id = :id
+            WHERE id = :id {filtro_org}
             LIMIT 1
         """),
-        {"id": constancia_id},
+        params,
     )
     row = res.fetchone()
     if not row:
@@ -307,17 +301,19 @@ async def detalle_constancia(
 @router.get("/{constancia_id}/pdf")
 async def descargar_pdf_constancia(
     constancia_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
+    filtro_org = "AND organizacion_id = :org_id" if org_id is not None else ""
+    params: Dict[str, Any] = {"id": constancia_id}
+    if org_id is not None:
+        params["org_id"] = org_id
     res = await db.execute(
-        text("SELECT storage_key FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
+        text(f"SELECT storage_key FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
+        params,
     )
     row = res.fetchone()
     if not row:
@@ -343,17 +339,19 @@ async def descargar_pdf_constancia(
 @router.post("/{constancia_id}/cancelar")
 async def cancelar_constancia(
     constancia_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
+    filtro_org = "AND organizacion_id = :org_id" if org_id is not None else ""
+    params: Dict[str, Any] = {"id": constancia_id}
+    if org_id is not None:
+        params["org_id"] = org_id
     res = await db.execute(
-        text("SELECT estatus FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
+        text(f"SELECT estatus FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
+        params,
     )
     row = res.fetchone()
     if not row:
@@ -362,8 +360,8 @@ async def cancelar_constancia(
         raise HTTPException(status_code=400, detail="La constancia ya está cancelada")
 
     await db.execute(
-        text("UPDATE aaces.documentos_emitidos SET estatus = 'cancelado' WHERE id = :id"),
-        {"id": constancia_id},
+        text(f"UPDATE aaces.documentos_emitidos SET estatus = 'cancelado' WHERE id = :id {filtro_org}"),
+        params,
     )
     await db.commit()
     return {"status": "cancelado"}
@@ -372,17 +370,19 @@ async def cancelar_constancia(
 @router.post("/{constancia_id}/reemitir")
 async def reemitir_constancia(
     constancia_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
+    filtro_org = "AND organizacion_id = :org_id" if org_id is not None else ""
+    params: Dict[str, Any] = {"id": constancia_id}
+    if org_id is not None:
+        params["org_id"] = org_id
     res = await db.execute(
-        text("SELECT organizacion_id, tipo_documento FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
+        text(f"SELECT organizacion_id, tipo_documento FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
+        params,
     )
     row = res.fetchone()
     if not row:
@@ -392,8 +392,8 @@ async def reemitir_constancia(
     tipo_doc = row[1]
 
     await db.execute(
-        text("UPDATE aaces.documentos_emitidos SET estatus = 'reemitido' WHERE id = :id"),
-        {"id": constancia_id},
+        text(f"UPDATE aaces.documentos_emitidos SET estatus = 'reemitido' WHERE id = :id {filtro_org}"),
+        params,
     )
 
     doc_id = str(uuid.uuid4())
@@ -417,17 +417,19 @@ async def reemitir_constancia(
 @router.get("/{constancia_id}/timeline")
 async def timeline_constancia(
     constancia_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    org_id = await _scoped_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
+    filtro_org = "AND organizacion_id = :org_id" if org_id is not None else ""
+    params: Dict[str, Any] = {"id": constancia_id}
+    if org_id is not None:
+        params["org_id"] = org_id
     res = await db.execute(
-        text("SELECT estatus, fecha_emision FROM aaces.documentos_emitidos WHERE id = :id LIMIT 1"),
-        {"id": constancia_id},
+        text(f"SELECT estatus, fecha_emision FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
+        params,
     )
     row = res.fetchone()
     if not row:

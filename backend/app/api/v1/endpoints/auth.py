@@ -466,6 +466,7 @@ async def register(
         nombre_comercial = (org_data.get("nombre_comercial") or "").strip()
         estado = (org_data.get("estado") or "").strip()
         ciudad = (org_data.get("ciudad") or "").strip()
+        stps_registro = (org_data.get("stps_registro") or "").strip().upper() or None
 
         admin_nombre = (admin_data.get("nombre") or "").strip()
         admin_correo = (admin_data.get("correo") or "").strip().lower()
@@ -516,8 +517,8 @@ async def register(
         org_estatus = 'activa' if plan_codigo == 'trial' else 'pendiente'
         org_id_res = await db.execute(
             text("""
-                INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, fecha_activacion)
-                VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, :estatus, 
+                INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, stps_registro, fecha_activacion)
+                VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, :estatus, :stps_registro,
                     CASE WHEN :estatus_val = 'activa' THEN CURRENT_TIMESTAMP ELSE NULL END)
                 RETURNING id
             """),
@@ -528,18 +529,42 @@ async def register(
                 "estado": estado, "ciudad": ciudad,
                 "estatus": org_estatus,
                 "estatus_val": org_estatus,
+                "stps_registro": stps_registro,
             }
         )
         org_id = str(org_id_res.scalar())
 
         # Create admin user
         password_hash = auth_service.get_password_hash(admin_password)
-        await db.execute(
+        admin_id_res = await db.execute(
             text("""
                 INSERT INTO aaces.usuarios (organizacion_id, nombre, correo, password_hash, rol, activo)
                 VALUES (:org_id, :nombre, :correo, :ph, 'admin', true)
+                RETURNING id
             """),
             {"org_id": org_id, "nombre": admin_nombre, "correo": admin_correo, "ph": password_hash}
+        )
+        admin_id = str(admin_id_res.scalar())
+
+        # Crear la fila legacy `clientes` vinculada a la organización.
+        # Es el puente que usan las tablas con cliente_id (cursos, participantes,
+        # pagos). Se crea al alta para que la org opere de inmediato, sin esperar
+        # activación manual. Convención: clientes.id = id del usuario admin.
+        await db.execute(
+            text("""
+                INSERT INTO aaces.clientes
+                    (id, nombre, correo, password_hash, plan, categoria, estado, organizacion_id)
+                VALUES
+                    (:id, :nombre, :correo, :ph, :plan, 'basico', 'activo', :org_id)
+            """),
+            {
+                "id": admin_id,
+                "nombre": admin_nombre,
+                "correo": admin_correo,
+                "ph": password_hash,
+                "plan": plan_codigo,
+                "org_id": org_id,
+            }
         )
 
         # Create subscription

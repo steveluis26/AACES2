@@ -7,7 +7,7 @@ from sqlalchemy import text
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import get_current_user_data
+from app.core.identity import get_current_identity, require_org_id, Identity
 from app.services.stripe_service import (
     is_configured,
     create_customer,
@@ -29,20 +29,6 @@ class CrearSuscripcionSchema(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-async def _org_id_de_user(db, user_data: dict):
-    org_id = user_data.get("org_id")
-    if not org_id:
-        # Si el token no trae org, la resolvemos desde clientes->organizacion
-        cid = user_data.get("sub")
-        res = await db.execute(
-            text("SELECT organizacion_id FROM aaces.clientes WHERE id = :cid LIMIT 1"),
-            {"cid": cid},
-        )
-        row = res.fetchone()
-        org_id = str(row[0]) if row and row[0] else None
-    return org_id
-
-
 async def _get_or_create_stripe_customer(db, org_id: str, email: str, nombre: str):
     res = await db.execute(
         text("SELECT stripe_customer_id FROM aaces.organizaciones WHERE id = :id LIMIT 1"),
@@ -102,12 +88,10 @@ async def listar_planes(db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 @router.get("/suscripcion/mia")
 async def mi_suscripcion(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = await _org_id_de_user(db, user_data)
-    if not org_id:
-        raise HTTPException(status_code=400, detail="Sin organización asociada")
+    org_id = await require_org_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
     res = await db.execute(
         text(
@@ -144,12 +128,10 @@ async def mi_suscripcion(
 @router.post("/suscripcion")
 async def crear_suscripcion(
     payload: CrearSuscripcionSchema,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = await _org_id_de_user(db, user_data)
-    if not org_id:
-        raise HTTPException(status_code=400, detail="Sin organización asociada")
+    org_id = await require_org_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
@@ -277,10 +259,10 @@ async def crear_suscripcion(
 @router.put("/suscripcion/{suscripcion_id}/cancelar")
 async def cancelar_suscripcion(
     suscripcion_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = await _org_id_de_user(db, user_data)
+    org_id = await require_org_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
     res = await db.execute(
         text("SELECT id, referencia_pago, estatus FROM aaces.suscripciones WHERE id = :id AND organizacion_id = :org LIMIT 1"),

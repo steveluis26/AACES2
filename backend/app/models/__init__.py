@@ -311,6 +311,10 @@ class Organizacion(Base):
     ciudad = Column(String(100))
     direccion = Column(Text)
     estatus = Column(String(30), default='pendiente', nullable=False)
+    # Validación STPS del Agente Capacitador Externo (Fase 2).
+    stps_registro = Column(String(50))
+    stps_validado = Column(Boolean, default=False, nullable=False)
+    stps_validado_en = Column(DateTime(timezone=True))
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
     fecha_activacion = Column(DateTime(timezone=True))
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

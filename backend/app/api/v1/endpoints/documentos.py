@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import get_current_user_data, require_org_admin
+from app.core.identity import require_org_identity, Identity
 from app.services.documentos import documentos_service
 from app.schemas import DocumentoGenerarRequest, DocumentoResponse, DocumentoListResponse, DocumentoGenerarResponse
 from app.core.logging import audit_logger
@@ -18,21 +18,21 @@ router = APIRouter()
 @router.post("/generar", response_model=DocumentoGenerarResponse)
 async def generar_documento(
     payload: DocumentoGenerarRequest,
-    user_data: dict = Depends(require_org_admin),
+    identity: Identity = Depends(require_org_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data["org_id"]
+    organizacion_id = identity.org_id
     try:
         doc = await documentos_service.generar(
             db=db,
             organizacion_id=organizacion_id,
             template_id=str(payload.template_id),
             data=payload.data,
-            emitido_por=user_data.get("sub"),
+            emitido_por=identity.user_id,
             extra_metadata=payload.documento_metadata,
         )
         audit_logger.log_user_action(
-            user_id=user_data.get("sub"),
+            user_id=identity.user_id,
             action="documento_emitido",
             resource="documentos",
             details={"doc_id": doc["id"], "tipo": doc["tipo_documento"]},
@@ -67,10 +67,10 @@ async def listar_documentos(
     estatus: Optional[str] = Query(None, pattern="^(emitido|cancelado|reemitido)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    user_data: dict = Depends(require_org_admin),
+    identity: Identity = Depends(require_org_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data["org_id"]
+    organizacion_id = identity.org_id
     return await documentos_service.listar(
         db=db,
         organizacion_id=organizacion_id,
@@ -84,10 +84,10 @@ async def listar_documentos(
 @router.get("/{doc_id}")
 async def obtener_documento(
     doc_id: str,
-    user_data: dict = Depends(require_org_admin),
+    identity: Identity = Depends(require_org_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data["org_id"]
+    organizacion_id = identity.org_id
     doc = await documentos_service.obtener(db, doc_id, organizacion_id)
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado")
@@ -97,10 +97,10 @@ async def obtener_documento(
 @router.get("/{doc_id}/download")
 async def descargar_documento(
     doc_id: str,
-    user_data: dict = Depends(require_org_admin),
+    identity: Identity = Depends(require_org_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data["org_id"]
+    organizacion_id = identity.org_id
     pdf = await documentos_service.descargar(db, doc_id, organizacion_id)
     if not pdf:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado o cancelado")
@@ -118,10 +118,10 @@ async def descargar_documento(
 @router.patch("/{doc_id}/cancelar")
 async def cancelar_documento(
     doc_id: str,
-    user_data: dict = Depends(require_org_admin),
+    identity: Identity = Depends(require_org_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    organizacion_id = user_data["org_id"]
+    organizacion_id = identity.org_id
     ok = await documentos_service.cancelar(db, doc_id, organizacion_id)
     if not ok:
         raise HTTPException(
@@ -129,7 +129,7 @@ async def cancelar_documento(
             detail="No se pudo cancelar. El documento no existe, no pertenece a tu organización o ya fue cancelado.",
         )
     audit_logger.log_user_action(
-        user_id=user_data.get("sub"),
+        user_id=identity.user_id,
         action="documento_cancelado",
         resource="documentos",
         details={"doc_id": doc_id},
