@@ -389,6 +389,7 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE aaces.clientes ALTER COLUMN id SET DEFAULT gen_random_uuid()",
         "ALTER TABLE aaces.curso_participante ALTER COLUMN codigo_validacion TYPE VARCHAR(36)",
         "UPDATE aaces.planes SET activo = true WHERE activo IS NULL",
+        "ALTER TABLE aaces.usuarios ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN DEFAULT false",
         "UPDATE aaces.usuarios SET activo = true WHERE activo IS NULL",
     ]:
         try:
