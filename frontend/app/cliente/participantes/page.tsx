@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@/components/ui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Alert } from '@/components/ui'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from '@/components/ui/table'
 import { ChevronRight } from 'lucide-react'
@@ -34,6 +34,7 @@ export default function ParticipantesPage() {
 
   const [duplicados, setDuplicados] = useState<{ id: string; pax_id: string; nombre: string; correo: string; score: number }[]>([])
   const [creando, setCreando] = useState(false)
+  const [crearError, setCrearError] = useState('')
 
   const load = useCallback(async (query = '') => {
     try {
@@ -58,6 +59,7 @@ export default function ParticipantesPage() {
   const crear = async () => {
     if (!nombre.trim()) return
     setCreando(true)
+    setCrearError('')
     try {
       const result = await apiRequest<{ id: string; pax_id: string }>('/participantes', {
         method: 'POST',
@@ -69,7 +71,7 @@ export default function ParticipantesPage() {
       load(q)
       router.push(`/cliente/participantes/${result.id}`)
     } catch (e) {
-      alert((e as Error)?.message || 'Error al crear participante')
+      setCrearError((e as Error)?.message || 'Error al crear participante')
     } finally { setCreando(false) }
   }
 
@@ -107,6 +109,7 @@ export default function ParticipantesPage() {
               </Button>
               <Button variant="outline" onClick={resetForm}>Limpiar</Button>
             </div>
+            {crearError && (<Alert className="alert-error">{crearError}</Alert>)}
 
             {duplicados.length > 0 && (
               <div className="border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 rounded p-3 space-y-2">

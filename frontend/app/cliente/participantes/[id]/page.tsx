@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@/components/ui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Alert } from '@/components/ui'
 import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/app/services/api'
 
@@ -54,6 +54,7 @@ export default function ParticipanteDetallePage() {
   const pid = params.id as string
   const [p, setP] = useState<ParticipanteDetalle | null>(null)
   const [editando, setEditando] = useState(false)
+  const [guardarError, setGuardarError] = useState('')
   const [editNombre, setEditNombre] = useState('')
   const [editCorreo, setEditCorreo] = useState('')
   const [editTelefono, setEditTelefono] = useState('')
@@ -82,6 +83,7 @@ export default function ParticipanteDetallePage() {
   }, [p])
 
   const guardar = async () => {
+    setGuardarError('')
     try {
       await apiRequest(`/participantes/${pid}`, {
         method: 'PUT',
@@ -92,7 +94,7 @@ export default function ParticipanteDetallePage() {
       })
       setEditando(false)
       load()
-    } catch (e) { alert((e as Error)?.message || 'Error al actualizar') }
+    } catch (e) { setGuardarError((e as Error)?.message || 'Error al actualizar') }
   }
 
   const descargarQR = () => {
@@ -157,6 +159,7 @@ export default function ParticipanteDetallePage() {
                 <Input label="Cargo" value={editCargo} onChange={e => setEditCargo(e.target.value)} />
                 <Input label="Ciudad" value={editCiudad} onChange={e => setEditCiudad(e.target.value)} />
                 <Button onClick={guardar}>Guardar cambios</Button>
+                {guardarError && (<Alert className="alert-error">{guardarError}</Alert>)}
               </div>
             ) : (
               <div className="space-y-2 text-sm">
