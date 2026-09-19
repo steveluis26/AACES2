@@ -13,11 +13,16 @@ export default function AjustesPage() {
       <Tabs defaultValue="perfil">
         <TabsList>
           <TabsTrigger value="perfil">Perfil</TabsTrigger>
+          <TabsTrigger value="directorio">Directorio</TabsTrigger>
           <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
         </TabsList>
 
         <TabsContent value="perfil" className="mt-4">
           <PerfilTab />
+        </TabsContent>
+
+        <TabsContent value="directorio" className="mt-4">
+          <DirectorioTab />
         </TabsContent>
 
         <TabsContent value="seguridad" className="mt-4">
@@ -103,6 +108,111 @@ function PerfilTab() {
           </div>
           <div className="flex items-center gap-2">
             <Button disabled={saving} onClick={saveExtras}>{saving ? 'Guardando…' : 'Guardar cambios'}</Button>
+            {message && <span className="text-sm">{message}</span>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function DirectorioTab() {
+  const [form, setForm] = useState({ nombre_comercial: '', descripcion_publica: '', sitio_web: '', logo_url: '', telefono: '', email_contacto: '', ciudad: '', estado: '' })
+  const [stps, setStps] = useState<{ validado: boolean; registro: string | null }>({ validado: false, registro: null })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await apiRequest<any>('/organizaciones/perfil')
+        setForm({
+          nombre_comercial: p.nombre_comercial || '',
+          descripcion_publica: p.descripcion_publica || '',
+          sitio_web: p.sitio_web || '',
+          logo_url: p.logo_url || '',
+          telefono: p.telefono || '',
+          email_contacto: p.email_contacto || '',
+          ciudad: p.ciudad || '',
+          estado: p.estado || '',
+        })
+        setStps({ validado: !!p.stps_validado, registro: p.stps_registro || null })
+      } catch {}
+      finally { setLoading(false) }
+    })()
+  }, [])
+
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const guardar = async () => {
+    setMessage('')
+    setSaving(true)
+    try {
+      await apiRequest('/organizaciones/perfil', { method: 'PUT', body: JSON.stringify(form) })
+      setMessage('Perfil público guardado')
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Error al guardar')
+    } finally { setSaving(false) }
+  }
+
+  if (loading) return <Card><CardContent className="py-6 text-sm text-muted-foreground">Cargando perfil…</CardContent></Card>
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Perfil público del directorio</CardTitle>
+        <p className="text-sm text-muted-foreground">Esto es lo que verán las empresas cuando el directorio esté disponible.</p>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4 text-sm">
+          {stps.validado ? (
+            <span className="inline-block rounded-full bg-green-100 text-green-800 px-3 py-1 text-xs font-semibold">✓ Agente Capacitador validado STPS{stps.registro ? ` · ${stps.registro}` : ''}</span>
+          ) : (
+            <span className="inline-block rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-semibold">Validación STPS pendiente</span>
+          )}
+        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <span className="block text-sm text-muted-foreground mb-1">Nombre comercial</span>
+              <Input value={form.nombre_comercial} onChange={e => set('nombre_comercial', e.target.value)} placeholder="Ej. Capacitación Industrial del Norte" />
+            </div>
+            <div>
+              <span className="block text-sm text-muted-foreground mb-1">Sitio web</span>
+              <Input value={form.sitio_web} onChange={e => set('sitio_web', e.target.value)} placeholder="tudominio.com" />
+            </div>
+          </div>
+          <div>
+            <span className="block text-sm text-muted-foreground mb-1">Descripción pública</span>
+            <Input value={form.descripcion_publica} onChange={e => set('descripcion_publica', e.target.value)} placeholder="A qué se dedica tu agencia, experiencia, cobertura…" />
+          </div>
+          <div>
+            <span className="block text-sm text-muted-foreground mb-1">Logo (URL de imagen)</span>
+            <Input value={form.logo_url} onChange={e => set('logo_url', e.target.value)} placeholder="https://…" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <span className="block text-sm text-muted-foreground mb-1">Teléfono público</span>
+              <Input value={form.telefono} onChange={e => set('telefono', e.target.value)} />
+            </div>
+            <div>
+              <span className="block text-sm text-muted-foreground mb-1">Correo público</span>
+              <Input value={form.email_contacto} onChange={e => set('email_contacto', e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <span className="block text-sm text-muted-foreground mb-1">Ciudad</span>
+              <Input value={form.ciudad} onChange={e => set('ciudad', e.target.value)} />
+            </div>
+            <div>
+              <span className="block text-sm text-muted-foreground mb-1">Estado</span>
+              <Input value={form.estado} onChange={e => set('estado', e.target.value)} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button disabled={saving} onClick={guardar}>{saving ? 'Guardando…' : 'Guardar perfil público'}</Button>
             {message && <span className="text-sm">{message}</span>}
           </div>
         </div>

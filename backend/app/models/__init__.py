@@ -320,6 +320,10 @@ class Organizacion(Base):
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     notas_admin = Column(Text)
     stripe_customer_id = Column(String(255))
+    # Perfil público para el futuro directorio (V009)
+    logo_url = Column(String(500))
+    sitio_web = Column(String(255))
+    descripcion_publica = Column(Text)
 
     usuarios = relationship("Usuario", back_populates="organizacion", foreign_keys="Usuario.organizacion_id")
     suscripciones = relationship("Suscripcion", back_populates="organizacion")
@@ -628,3 +632,27 @@ class PaqueteCurso(Base):
 
     paquete_id = Column(UUID(as_uuid=True), ForeignKey("paquetes.id", ondelete="CASCADE"), primary_key=True)
     catalogo_curso_id = Column(UUID(as_uuid=True), ForeignKey("catalogo_cursos.id", ondelete="CASCADE"), primary_key=True)
+
+
+class ListaEspera(Base):
+    """Leads capturados desde /marketplace (V009).
+
+    tipo: 'empresa' (busca capacitación) | 'agencia' (quiere publicar).
+    """
+    __tablename__ = "lista_espera"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    nombre = Column(String(200), nullable=False)
+    email = Column(String(255), nullable=False)
+    empresa = Column(String(200))
+    ciudad = Column(String(100))
+    tipo = Column(String(20), nullable=False, default='empresa')
+    mensaje = Column(Text)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint("tipo IN ('empresa', 'agencia')", name="check_tipo_lista_espera"),
+        Index('idx_lista_espera_email', 'email'),
+        Index('idx_lista_espera_tipo', 'tipo'),
+        Index('idx_lista_espera_fecha', 'fecha_creacion'),
+    )

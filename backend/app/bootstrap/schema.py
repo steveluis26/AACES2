@@ -495,6 +495,29 @@ async def create_catalogo(conn: AsyncConnection) -> None:
         await conn.execute(text(idx))
 
 
+async def create_lista_espera(conn: AsyncConnection) -> None:
+    # V009: leads capturados desde /marketplace (lista de espera del directorio).
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.lista_espera (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          nombre VARCHAR(200) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          empresa VARCHAR(200),
+          ciudad VARCHAR(100),
+          tipo VARCHAR(20) NOT NULL DEFAULT 'empresa',
+          mensaje TEXT,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT check_tipo_lista_espera CHECK (tipo IN ('empresa', 'agencia'))
+        )
+    """))
+    for idx in [
+        "CREATE INDEX IF NOT EXISTS idx_lista_espera_email ON aaces.lista_espera (email)",
+        "CREATE INDEX IF NOT EXISTS idx_lista_espera_tipo ON aaces.lista_espera (tipo)",
+        "CREATE INDEX IF NOT EXISTS idx_lista_espera_fecha ON aaces.lista_espera (fecha_creacion)",
+    ]:
+        await conn.execute(text(idx))
+
+
 async def create_legacy_fixes(conn: AsyncConnection) -> None:
     for stmt in [
         "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL",
@@ -551,6 +574,12 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0",
         "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0",
         "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS empresa_participacion VARCHAR(200)",
+        # V009: perfil público de la organización para el futuro directorio.
+        # La tabla legacy no tiene estas columnas (lección permanente: toda
+        # columna nueva en tabla existente necesita su ADD COLUMN explícito).
+        "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)",
+        "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS sitio_web VARCHAR(255)",
+        "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS descripcion_publica TEXT",
         # documentos_emitidos.codigo_validacion es UUID pero el flujo legacy
         # "asignar constancia" genera códigos públicos de 8 chars (VARCHAR).
         # El servicio /constancias/emitir reutiliza el código existente →
@@ -593,6 +622,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_verificaciones,
         create_notificaciones,
         create_catalogo,
+        create_lista_espera,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

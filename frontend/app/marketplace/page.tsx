@@ -1,8 +1,53 @@
 "use client"
+import { useState } from "react"
 import { MapPin, Search, Building2, Star } from "lucide-react"
 import Link from "next/link"
 
+type TipoLead = "empresa" | "agencia"
+
 export default function MarketplacePage() {
+  const [tipo, setTipo] = useState<TipoLead>("empresa")
+  const [nombre, setNombre] = useState("")
+  const [email, setEmail] = useState("")
+  const [empresa, setEmpresa] = useState("")
+  const [ciudad, setCiudad] = useState("")
+  const [mensaje, setMensaje] = useState("")
+  const [error, setError] = useState("")
+  const [enviando, setEnviando] = useState(false)
+  const [listo, setListo] = useState(false)
+
+  const enviar = async () => {
+    setError("")
+    if (!nombre.trim()) { setError("Escribe tu nombre"); return }
+    if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError("Escribe un correo válido"); return }
+    setEnviando(true)
+    try {
+      const res = await fetch("/api/v1/public/lista-espera", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: nombre.trim(),
+          email: email.trim(),
+          empresa: empresa.trim() || null,
+          ciudad: ciudad.trim() || null,
+          tipo,
+          mensaje: mensaje.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || "No se pudo registrar")
+      }
+      setListo(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo registrar")
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const inputCls = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-orange-500"
+
   return (
     <div className="min-h-screen bg-background pt-24">
       <section className="py-16 md:py-24 text-center">
@@ -41,14 +86,50 @@ export default function MarketplacePage() {
             <p className="mt-2 text-muted-foreground max-w-lg mx-auto">
               Únete al directorio desde el inicio. Cuando una empresa busque capacitación en tu ciudad, aparecerás entre los primeros resultados.
             </p>
-            <div className="mt-6">
-              <Link
-                href="mailto:hola@aaces.com?subject=Quiero%20aparecer%20en%20el%20directorio%20de%20AACES"
-                className="inline-flex items-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors"
-              >
-                Quiero aparecer en el directorio
-              </Link>
-            </div>
+
+            {listo ? (
+              <div className="mt-6 rounded-xl border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30 p-6">
+                <p className="font-semibold text-green-700 dark:text-green-400">¡Listo! Ya estás en la lista.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Te avisaremos en cuanto el directorio esté disponible.</p>
+              </div>
+            ) : (
+              <div className="mt-6 text-left max-w-lg mx-auto space-y-3">
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => setTipo("empresa")}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${tipo === "empresa" ? "bg-orange-500 text-white" : "border border-border bg-background"}`}
+                  >
+                    Busco capacitación
+                  </button>
+                  <button
+                    onClick={() => setTipo("agencia")}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${tipo === "agencia" ? "bg-orange-500 text-white" : "border border-border bg-background"}`}
+                  >
+                    Soy agencia
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input className={inputCls} placeholder="Tu nombre *" value={nombre} onChange={e => setNombre(e.target.value)} />
+                  <input className={inputCls} placeholder="Correo *" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+                  <input className={inputCls} placeholder={tipo === "empresa" ? "Empresa" : "Agencia"} value={empresa} onChange={e => setEmpresa(e.target.value)} />
+                  <input className={inputCls} placeholder="Ciudad" value={ciudad} onChange={e => setCiudad(e.target.value)} />
+                </div>
+                <textarea className={inputCls} rows={2} placeholder="¿Qué capacitación buscas u ofreces? (opcional)" value={mensaje} onChange={e => setMensaje(e.target.value)} />
+                {error && <p className="text-sm text-red-600">{error}</p>}
+                <div className="text-center">
+                  <button
+                    onClick={enviar}
+                    disabled={enviando}
+                    className="inline-flex items-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition-colors disabled:opacity-60"
+                  >
+                    {enviando ? "Registrando…" : "Avísame cuando esté listo"}
+                  </button>
+                </div>
+                <p className="text-center text-xs text-muted-foreground">
+                  ¿Ya eres cliente de AACES? <Link href="/cliente/catalogo" className="underline hover:text-orange-500">Publica tus cursos desde tu panel</Link>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>

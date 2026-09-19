@@ -96,3 +96,62 @@ async def public_participant_profile(
         "por_vencer": por_vencer,
         "vencidos": vencidos,
     }
+
+
+# ---------------------------------------------------------------------------
+# Lista de espera del directorio (V009) — sin autenticación.
+# ---------------------------------------------------------------------------
+
+import re as _re
+from pydantic import BaseModel as _BaseModel, Field as _Field
+from typing import Optional as _Optional
+
+_EMAIL_RE = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+class ListaEsperaCreate(_BaseModel):
+    nombre: str = _Field(..., min_length=1, max_length=200)
+    email: str = _Field(..., min_length=3, max_length=255)
+    empresa: _Optional[str] = _Field(None, max_length=200)
+    ciudad: _Optional[str] = _Field(None, max_length=100)
+    tipo: str = _Field("empresa", pattern="^(empresa|agencia)$")
+    mensaje: _Optional[str] = None
+
+
+@router.post("/lista-espera")
+async def registrar_lista_espera(
+    payload: ListaEsperaCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Captura un lead desde /marketplace. Idempotente ante reintentos."""
+    email = payload.email.strip().lower()
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Correo electrónico inválido")
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    # Anti-duplicado simple: mismo correo+tipo en las últimas 24h → ok sin insertar.
+    dup = await db.execute(
+        text("""
+            SELECT 1 FROM lista_espera
+            WHERE email = :email AND tipo = :tipo
+              AND fecha_creacion > CURRENT_TIMESTAMP - INTERVAL '24 hours'
+            LIMIT 1
+        """),
+        {"email": email, "tipo": payload.tipo},
+    )
+    if not dup.fetchone():
+        await db.execute(
+            text("""
+                INSERT INTO lista_espera (nombre, email, empresa, ciudad, tipo, mensaje)
+                VALUES (:nombre, :email, :empresa, :ciudad, :tipo, :mensaje)
+            """),
+            {
+                "nombre": payload.nombre.strip(),
+                "email": email,
+                "empresa": (payload.empresa or "").strip() or None,
+                "ciudad": (payload.ciudad or "").strip() or None,
+                "tipo": payload.tipo,
+                "mensaje": (payload.mensaje or "").strip() or None,
+            },
+        )
+        await db.commit()
+    return {"ok": True}
