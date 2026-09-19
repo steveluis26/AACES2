@@ -421,6 +421,17 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         # El INSERT de create_participante incluye `pais`, pero la tabla legacy
         # no tiene la columna (se agregó al modelo sin reparación ADD COLUMN).
         "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS pais VARCHAR(50) DEFAULT 'Mexico'",
+        # La tabla legacy aaces.participantes no tiene cliente_id (la migración
+        # 001 la creó sin esa columna). Fase 2 filtra por cliente_id para
+        # el aislamiento multi-tenant; sin esto todo el módulo truena con 500.
+        "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS cliente_id UUID",
+        "CREATE INDEX IF NOT EXISTS idx_participantes_cliente_id ON aaces.participantes(cliente_id)",
+        # El INSERT que vincula participante→curso usa costo_asignado/descuento
+        # y varios SELECT usan empresa_participacion, pero la tabla legacy no
+        # tiene esas columnas (no están ni en la migración 001 ni en el modelo).
+        "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0",
+        "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0",
+        "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS empresa_participacion VARCHAR(200)",
     ]:
         try:
             async with conn.begin_nested():
