@@ -113,6 +113,17 @@ async def domain_error_handler(request: Request, exc: DomainError):
         content={"detail": str(exc)},
     )
 
+
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    # Los 500 silenciosos son imposibles de diagnosticar sin el traceback.
+    # Se registra el error completo en el log y se devuelve un 500 genérico.
+    logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
+
 # Root endpoint
 @app.get("/")
 async def root():
