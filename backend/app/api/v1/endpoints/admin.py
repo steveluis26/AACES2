@@ -18,6 +18,25 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+def _parse_fecha_segura(valor):
+    """Convierte un valor de fecha (texto ISO o date) a date, o None si es inválido.
+
+    Protege al endpoint de fechas fuera del rango representable por Python
+    (p. ej. '0001-01-01 BC', que Postgres acepta pero date.fromordinal no):
+    en vez de tronar con ValueError y tumbar la lista completa, la fila se
+    reporta sin vigencia.
+    """
+    if valor is None:
+        return None
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    try:
+        return date.fromisoformat(str(valor).strip())
+    except (ValueError, TypeError):
+        return None
+
 @router.get("/dashboard/metrics")
 async def get_admin_dashboard_metrics(
     user_data: Dict[str, Any] = Depends(require_superadmin),
@@ -154,7 +173,7 @@ async def get_admin_clientes(
         total_count = int(total_res.scalar() or 0)
 
         rows_res = await db.execute(text(
-            f"SELECT id, nombre, correo, ciudad_base, categoria, estado, fecha_creacion, ultimo_acceso, vigencia_desde, vigencia_hasta FROM clientes {where_sql} ORDER BY fecha_creacion DESC OFFSET :skip LIMIT :limit"
+            f"SELECT id, nombre, correo, ciudad_base, categoria, estado, fecha_creacion, ultimo_acceso, vigencia_desde::text AS vigencia_desde, vigencia_hasta::text AS vigencia_hasta FROM clientes {where_sql} ORDER BY fecha_creacion DESC OFFSET :skip LIMIT :limit"
         ), {**params, "skip": skip, "limit": limit})
         clientes_rows = rows_res.fetchall()
 
@@ -182,8 +201,8 @@ async def get_admin_clientes(
             ), {"cid": cid})
             ingresos = float(ing_res.scalar() or 0)
 
-            vd = r[8]
-            vh = r[9]
+            vd = _parse_fecha_segura(r[8])
+            vh = _parse_fecha_segura(r[9])
             today = datetime.utcnow().date()
             vigente = True
             if vd is not None and vh is not None:
