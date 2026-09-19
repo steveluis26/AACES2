@@ -212,6 +212,7 @@ class ConstanciasService:
 
         await db.execute(
             text("""
+                -- constancia v2: codigo_validacion es VARCHAR
                 INSERT INTO aaces.documentos_emitidos
                     (id, organizacion_id, template_id, template_version, tipo_documento,
                      codigo_validacion, folio, storage_provider, storage_key, pdf_hash,
