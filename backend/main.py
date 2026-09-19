@@ -18,6 +18,48 @@ from app.bootstrap.seed import ensure_seed_data
 from app.bootstrap.version import ensure_schema_version
 from app.bootstrap.health import check_schema_health
 
+
+async def _job_recordatorios() -> None:
+    """Envuelve el job diario con su propia sesión de BD."""
+    from app.core.database import AsyncSessionLocal
+    from app.services.recordatorios import ejecutar_recordatorios
+
+    async with AsyncSessionLocal() as db:
+        try:
+            resumen = await ejecutar_recordatorios(db)
+            logger.info("Job recordatorios OK: %s", resumen)
+        except Exception:
+            logger.exception("Job recordatorios falló")
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+
+def _iniciar_scheduler_recordatorios():
+    """Programa el job diario 7:00 AM (America/Mexico_City) + catch-up al arranque.
+
+    El job es idempotente (clave UNIQUE por aviso), así que el catch-up nunca
+    duplica: solo genera los avisos que falten si el contenedor estuvo caído.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Mexico_City")
+    sched = AsyncIOScheduler(timezone=tz)
+    sched.add_job(
+        _job_recordatorios,
+        CronTrigger(hour=7, minute=0, timezone=tz),
+        id="recordatorios_diarios",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    sched.start()
+    logger.info("Scheduler de recordatorios iniciado (diario 7:00 America/Mexico_City)")
+    return sched
+
 logger = logging.getLogger(__name__)
 
 def setup_logging():
@@ -55,7 +97,17 @@ async def lifespan(app: FastAPI):
         if health.status == "BROKEN":
             logger.error("Schema health BROKEN: missing %s", health.missing_tables)
             raise RuntimeError("Schema health BROKEN")
+    # Recordatorios: scheduler diario + catch-up idempotente al arranque
+    scheduler = _iniciar_scheduler_recordatorios()
+    try:
+        await _job_recordatorios()
+    except Exception:
+        logger.exception("Catch-up inicial de recordatorios falló")
     yield
+    try:
+        scheduler.shutdown(wait=False)
+    except Exception as e:
+        logger.warning(f"Error deteniendo scheduler: {e}")
     try:
         await engine.dispose()
     except Exception as e:

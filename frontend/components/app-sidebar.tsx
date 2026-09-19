@@ -7,6 +7,7 @@ import {
   FolderIcon,
   HelpCircleIcon,
   LayoutDashboardIcon,
+  BellIcon,
   ListIcon,
   ScrollTextIcon,
   SettingsIcon,
@@ -52,6 +53,7 @@ const MENU_CLIENTE = [
   { title: "Reportes",   url: "/cliente/reportes",     icon: BarChartIcon },
   { title: "Gestión",    url: "/cliente/gestion",      icon: FolderIcon },
   { title: "Calendario", url: "/cliente/cursos?view=calendar", icon: CalendarIcon },
+  { title: "Notificaciones", url: "/cliente/notificaciones", icon: BellIcon },
 ]
 
 const data = {

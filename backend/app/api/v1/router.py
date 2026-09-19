@@ -22,6 +22,7 @@ api_router.include_router(dashboard_kpi.router, prefix="/dashboard", tags=["dash
 api_router.include_router(verificar.router, prefix="/verificar", tags=["verificar"])
 api_router.include_router(stripe_payments.router, prefix="/stripe", tags=["stripe"])
 api_router.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
+api_router.include_router(notificaciones.router, prefix="/notificaciones", tags=["notificaciones"])
 api_router.include_router(cursos.router, prefix="/cursos", tags=["cursos"])
 api_router.include_router(participantes.router, prefix="/participantes", tags=["participantes"])
 api_router.include_router(public_endpoints.router, prefix="/public", tags=["public"])

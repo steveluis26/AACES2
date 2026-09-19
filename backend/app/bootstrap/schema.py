@@ -376,6 +376,44 @@ async def create_verificaciones(conn: AsyncConnection) -> None:
     """))
 
 
+async def create_notificaciones(conn: AsyncConnection) -> None:
+    # V007: centro de notificaciones + registro de recordatorios.
+    # La clave determinística con UNIQUE por organización hace el job
+    # diario idempotente (nunca duplica avisos).
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.notificaciones (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          tipo VARCHAR(50) NOT NULL,
+          clave VARCHAR(200) NOT NULL,
+          titulo VARCHAR(200) NOT NULL,
+          mensaje TEXT NOT NULL,
+          destinatario_correo VARCHAR(255),
+          referencia_tipo VARCHAR(50),
+          referencia_id UUID,
+          dias_restantes INTEGER,
+          leida BOOLEAN NOT NULL DEFAULT false,
+          email_estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+          email_error TEXT,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_envio TIMESTAMP WITH TIME ZONE,
+          fecha_lectura TIMESTAMP WITH TIME ZONE,
+          CONSTRAINT uq_notificacion_org_clave UNIQUE (organizacion_id, clave),
+          CONSTRAINT check_tipo_notificacion CHECK (tipo IN (
+            'constancia_por_vencer', 'curso_proximo', 'suscripcion_por_vencer',
+            'pago_fallido', 'curso_sin_participantes')),
+          CONSTRAINT check_email_estado_notificacion CHECK (email_estado IN (
+            'pendiente', 'enviado', 'fallido', 'omitido'))
+        )
+    """))
+    for idx in [
+        "CREATE INDEX IF NOT EXISTS idx_notificaciones_org ON aaces.notificaciones (organizacion_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notificaciones_org_leida ON aaces.notificaciones (organizacion_id, leida)",
+        "CREATE INDEX IF NOT EXISTS idx_notificaciones_fecha ON aaces.notificaciones (fecha_creacion)",
+    ]:
+        await conn.execute(text(idx))
+
+
 async def create_legacy_fixes(conn: AsyncConnection) -> None:
     for stmt in [
         "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL",
@@ -472,6 +510,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_registro_intentos,
         create_documentos_emitidos,
         create_verificaciones,
+        create_notificaciones,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

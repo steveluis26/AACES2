@@ -511,3 +511,47 @@ class Verificacion(Base):
         Index('idx_verificaciones_fecha', 'fecha'),
         Index('idx_verificaciones_documento', 'documento_id'),
     )
+
+
+class Notificacion(Base):
+    """Centro de notificaciones + registro de recordatorios enviados.
+
+    Cada fila es un aviso para el admin de una organización. La columna
+    ``clave`` es determinística (tipo + referencia + variante) y tiene
+    UNIQUE por organización: el job diario es idempotente y nunca genera
+    duplicados aunque se ejecute varias veces.
+    """
+    __tablename__ = "notificaciones"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    tipo = Column(String(50), nullable=False)
+    clave = Column(String(200), nullable=False)
+    titulo = Column(String(200), nullable=False)
+    mensaje = Column(Text, nullable=False)
+    destinatario_correo = Column(String(255))
+    referencia_tipo = Column(String(50))
+    referencia_id = Column(UUID(as_uuid=True))
+    dias_restantes = Column(Integer)
+    leida = Column(Boolean, default=False, nullable=False)
+    email_estado = Column(String(20), default='pendiente', nullable=False)
+    email_error = Column(Text)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_envio = Column(DateTime(timezone=True))
+    fecha_lectura = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint('organizacion_id', 'clave', name='uq_notificacion_org_clave'),
+        CheckConstraint(
+            "tipo IN ('constancia_por_vencer', 'curso_proximo', "
+            "'suscripcion_por_vencer', 'pago_fallido', 'curso_sin_participantes')",
+            name='check_tipo_notificacion',
+        ),
+        CheckConstraint(
+            "email_estado IN ('pendiente', 'enviado', 'fallido', 'omitido')",
+            name='check_email_estado_notificacion',
+        ),
+        Index('idx_notificaciones_org', 'organizacion_id'),
+        Index('idx_notificaciones_org_leida', 'organizacion_id', 'leida'),
+        Index('idx_notificaciones_fecha', 'fecha_creacion'),
+    )
