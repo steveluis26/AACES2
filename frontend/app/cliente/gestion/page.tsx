@@ -73,7 +73,9 @@ export default function GestionClientePage() {
     const fi = norm(nuevoCurso.fecha_inicio)
     const ff = norm(nuevoCurso.fecha_fin)
     if (!nombre || !ciudad) { setCursoError('Nombre y ciudad son requeridos'); return }
-    if ((nuevoCurso.estado || 'pendiente') === 'activo' && !fi) { setCursoError('Para estado Activo, debes asignar al menos la fecha de inicio'); return }
+    if (!fi) { setCursoError('Ingresa la fecha de inicio del curso'); return }
+    if (!ff) { setCursoError('Ingresa la fecha de término del curso'); return }
+    if (ff < fi) { setCursoError('La fecha de término debe ser igual o posterior a la fecha de inicio'); return }
     const payload: Record<string, unknown> = { nombre, ciudad, empresa_contratante: (nuevoCurso.empresa_contratante || '').trim() }
     // Las fechas se envían siempre que estén capturadas; el backend deriva
     // el estado (en_espera/activo) a partir de ellas e ignora el 'estado' del form.
