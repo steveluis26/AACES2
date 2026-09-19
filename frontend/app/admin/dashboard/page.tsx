@@ -117,7 +117,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       {/* Resumen de métricas */}
-      <div className="mx-4 lg:mx-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="mx-4 lg:mx-6 grid-kpis">
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
               <Card key={i}><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>

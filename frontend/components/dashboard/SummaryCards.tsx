@@ -19,7 +19,7 @@ export function SummaryCards({ kpis }: { kpis: Kpis }) {
   ]
 
   return (
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid-kpis">
       {cards.map((card) => (
         <Card key={card.label}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">

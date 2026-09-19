@@ -1050,7 +1050,7 @@ export default function CursosClientePage() {
                         return (
                           <div key={gr} className="space-y-2">
                             <div className="text-sm font-semibold capitalize">{gr}</div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid-cards">
                               {list.map((p, idx) => {
                                 const saldo = (Number(p.costo_asignado || 0) - Number(p.valor_pagado || 0)) || 0
                                 const nombreCompleto = `${String(p.nombres ?? p.nombre ?? '').trim()} ${String(p.apellido_paterno ?? p.apellido ?? '').trim()} ${String(p.apellido_materno ?? '').trim()}`.trim()

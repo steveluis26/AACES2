@@ -88,6 +88,20 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  /* Tarjetas auto-adaptativas: llenan la fila sin importar cuántas haya.
+     1 tarjeta → ancho completo; 2 → 2 columnas; 3+ → tantas como quepan.
+     En móvil siempre 1 columna. Nunca deja huecos blancos a la derecha. */
+  .grid-cards {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  }
+  /* Variante para tarjetas pequeñas tipo KPI */
+  .grid-kpis {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  }
 }
 
 /* Custom scrollbar */

@@ -30,7 +30,7 @@ export default function AdminClienteParticipantesPage({ params }: { params: { id
         <h1 className="text-2xl font-semibold">Participantes del cliente</h1>
       </div>
       <div className="px-4 lg:px-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid-cards">
           {participantes.map(p => {
             const nombreCompleto = `${String(p.nombres ?? p.nombre ?? '').trim()} ${String(p.apellido_paterno ?? p.apellido ?? '').trim()} ${String(p.apellido_materno ?? '').trim()}`.trim()
             const initials = (() => {
