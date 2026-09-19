@@ -59,6 +59,11 @@ export default function CursosClientePage() {
   const [nuevoConstanciaNorma, setNuevoConstanciaNorma] = useState('')
   const [nuevoAsignacion, setNuevoAsignacion] = useState<Record<string, { constancia_id?: string; id_certificado?: string; codigo_validacion?: string; fecha_emision_certificado?: string; fecha_expiracion?: string; estado_acreditacion?: boolean }>>({})
   const [detalleError, setDetalleError] = useState<string>('')
+  const [csvError, setCsvError] = useState<string>('')
+  const [participanteError, setParticipanteError] = useState<string>('')
+  const [precioGrupoError, setPrecioGrupoError] = useState<string>('')
+  const [constanciaError, setConstanciaError] = useState<string>('')
+  const [filaError, setFilaError] = useState<Record<string, string>>({})
 
   const reload = useCallback(async () => {
     try {
@@ -162,6 +167,7 @@ export default function CursosClientePage() {
 
   const exportarCSV = useCallback(async () => {
     if (!selected) return
+    setCsvError('')
     try {
       const res = await fetch(`/api/v1/clientes/cursos/${selected.id}/participantes/export?format=csv`, { headers })
       const blob = await res.blob()
@@ -176,7 +182,7 @@ export default function CursosClientePage() {
       a.remove()
       URL.revokeObjectURL(url)
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo exportar')
+      setCsvError((e as Error)?.message || 'No se pudo exportar')
     }
   }, [selected, headers])
 
@@ -507,6 +513,7 @@ export default function CursosClientePage() {
           <div className="flex flex-col gap-2">
             <Button className="w-full" onClick={() => saveParticipante(p)}>Guardar</Button>
             <Button className="w-full" variant="destructive" onClick={() => deleteParticipante(p)}>Eliminar</Button>
+            {filaError[p.id] && (<Alert className="alert-error">{filaError[p.id]}</Alert>)}
             <Button className="w-full" variant="secondary" onClick={() => setOpenDetails(prev => ({ ...prev, [p.id]: !prev[p.id] }))}>{openDetails[p.id] ? 'Ocultar detalles' : 'Detalles'}</Button>
           </div>
         )
@@ -563,9 +570,10 @@ export default function CursosClientePage() {
         await apiRequest(`/clientes/curso-participante/${cpId}/precio`, { method: 'PUT', body: JSON.stringify({ costo_asignado: Number(precio || 0), descuento: 0 }) })
       }
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo agregar')
+      setParticipanteError((e as Error)?.message || 'No se pudo agregar')
       return
     }
+    setParticipanteError('')
     setNuevoPart({ nombres: '', apellido_paterno: '', apellido_materno: '', correo: '', ciudad_origen: '', telefono: '', empresa: '', cargo: '', profesion: '', id_certificado: '', codigo_validacion: '', estado_acreditacion: false, fecha_emision_certificado: '', fecha_expiracion: '', precio_modo: 'normal' })
     await loadParticipantes()
   }
@@ -598,15 +606,16 @@ export default function CursosClientePage() {
     try {
       await apiRequest(`/clientes/cursos/${selected.id}/participantes/${p.id}`, { method: 'PUT', body: JSON.stringify(payload) })
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo guardar')
+      setFilaError(prev => ({ ...prev, [p.id]: (e as Error)?.message || 'No se pudo guardar' }))
       return
     }
+    setFilaError(prev => { const nx = { ...prev }; delete nx[p.id]; return nx })
     await loadParticipantes()
   }
 
   const registrarPago = async (p: CursoParticipante) => {
     const cfg = nuevoPago[p.id] || { monto: 0, metodo: 'efectivo', ref: '' }
-    if (!cfg.monto || cfg.monto <= 0) { alert('Ingresa un monto válido'); return }
+    if (!cfg.monto || cfg.monto <= 0) { setFilaError(prev => ({ ...prev, [p.id]: 'Ingresa un monto válido' })); return }
     const payload = {
       monto: Number(cfg.monto || 0),
       metodo_pago: cfg.metodo || 'efectivo',
@@ -616,10 +625,11 @@ export default function CursosClientePage() {
     try {
       await apiRequest(`/clientes/curso-participante/${p.id}/pagos`, { method: 'POST', body: JSON.stringify(payload) })
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo registrar el pago')
+      setFilaError(prev => ({ ...prev, [p.id]: (e as Error)?.message || 'No se pudo registrar el pago' }))
       return
     }
     setNuevoPago(prev => { const nx = { ...prev }; delete nx[p.id]; return nx })
+    setFilaError(prev => { const nx = { ...prev }; delete nx[p.id]; return nx })
     await loadParticipantes()
   }
 
@@ -632,20 +642,23 @@ export default function CursosClientePage() {
     try {
       await apiRequest(`/clientes/curso-participante/${p.id}/precio`, { method: 'PUT', body: JSON.stringify(payload) })
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo guardar el precio')
+      setFilaError(prev => ({ ...prev, [p.id]: (e as Error)?.message || 'No se pudo guardar el precio' }))
       return
     }
+    setFilaError(prev => { const nx = { ...prev }; delete nx[p.id]; return nx })
     await loadParticipantes()
   }
 
   const aplicarPrecioGrupo = async (mode: 'solo_vacios' | 'todos') => {
     if (!selected) return
+    setPrecioGrupoError('')
     try {
       await apiRequest(`/clientes/cursos/${selected.id}/aplicar-precio-grupo`, { method: 'POST', body: JSON.stringify({ mode }) })
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo aplicar el precio de grupo')
+      setPrecioGrupoError((e as Error)?.message || 'No se pudo aplicar el precio de grupo')
       return
     }
+    setPrecioGrupoError('')
     await loadParticipantes()
   }
 
@@ -667,9 +680,10 @@ export default function CursosClientePage() {
     try {
       await apiRequest(`/clientes/cursos/${selected.id}/participantes/${p.id}`, { method: 'DELETE' })
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo eliminar')
+      setParticipanteError((e as Error)?.message || 'No se pudo eliminar')
       return
     }
+    setParticipanteError('')
     await loadParticipantes()
   }
 
@@ -906,6 +920,8 @@ export default function CursosClientePage() {
                   <Button variant="secondary" onClick={exportarCSV}>Exportar CSV</Button>
                 </div>
               </div>
+              {csvError && (<Alert className="alert-error mt-2">{csvError}</Alert>)}
+              {precioGrupoError && (<Alert className="alert-error mt-2">{precioGrupoError}</Alert>)}
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="secondary" className="cursor-pointer" onClick={() => setEstadoFilter('todos')}>Total {stats.total}</Badge>
@@ -958,8 +974,9 @@ export default function CursosClientePage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         <Input placeholder="Nombre de constancia (ej. Espacios confinados)" value={nuevoConstanciaNombre} onChange={(e) => setNuevoConstanciaNombre(e.target.value)} />
                         <Input placeholder="Norma/NOM (opcional)" value={nuevoConstanciaNorma} onChange={(e) => setNuevoConstanciaNorma(e.target.value)} />
-                        <Button onClick={async () => { if (!selected) return; const nombre = nuevoConstanciaNombre.trim(); const norma = nuevoConstanciaNorma.trim(); if (!nombre) { alert('Ingresa un nombre de constancia'); return } try { await apiRequest(`/clientes/cursos/${selected.id}/constancias`, { method: 'POST', body: JSON.stringify({ nombre, norma: norma || undefined }) }); setNuevoConstanciaNombre(''); setNuevoConstanciaNorma(''); await loadConstanciasCurso(); } catch (e) { alert((e as Error)?.message || 'No se pudo registrar la constancia') } }}>Registrar constancia</Button>
+                        <Button onClick={async () => { if (!selected) return; setConstanciaError(''); const nombre = nuevoConstanciaNombre.trim(); const norma = nuevoConstanciaNorma.trim(); if (!nombre) { setConstanciaError('Ingresa un nombre de constancia'); return } try { await apiRequest(`/clientes/cursos/${selected.id}/constancias`, { method: 'POST', body: JSON.stringify({ nombre, norma: norma || undefined }) }); setNuevoConstanciaNombre(''); setNuevoConstanciaNorma(''); await loadConstanciasCurso(); setConstanciaError(''); } catch (e) { setConstanciaError((e as Error)?.message || 'No se pudo registrar la constancia') } }}>Registrar constancia</Button>
                       </div>
+                      {constanciaError && (<Alert className="alert-error">{constanciaError}</Alert>)}
                     </div>
                   </CardContent>
                 </Card>
@@ -983,6 +1000,7 @@ export default function CursosClientePage() {
                 </div>
               </div>
               <div className="flex gap-2"><Button onClick={crearParticipante}>Agregar</Button></div>
+              {participanteError && (<Alert className="alert-error mt-2">{participanteError}</Alert>)}
               <div className="text-xs text-muted-foreground">Los montos representan: Costo y Pagado. Saldo = Costo − Pagado.</div>
               <div className="space-y-3">
                 {displayed.length > 0 ? (
@@ -1034,6 +1052,7 @@ export default function CursosClientePage() {
                                       
                                       <Button variant="ghost" onClick={() => verPagos(row.original)}>{openPagos[row.original.id] ? 'Ocultar pagos' : 'Ver pagos'}</Button>
                                     </div>
+                                    {filaError[row.original.id] && (<Alert className="alert-error mt-2">{filaError[row.original.id]}</Alert>)}
                                     {openPagos[row.original.id] && (
                                       <div className="space-y-1">
                                         <div className="text-xs font-semibold">Pagos</div>
@@ -1136,6 +1155,7 @@ export default function CursosClientePage() {
                                       <Button variant="destructive" onClick={() => deleteParticipante(p)}>Eliminar</Button>
                                       <Button variant="ghost" onClick={() => verPagos(p)}>{openPagos[p.id] ? 'Ocultar pagos' : 'Ver pagos'}</Button>
                                     </div>
+                                    {filaError[p.id] && (<Alert className="alert-error">{filaError[p.id]}</Alert>)}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                       <Input placeholder="ID certificado" value={String(p.id_certificado || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], id_certificado: e.target.value } } return a })} />
                                       <Input placeholder="Código validación" value={String(p.codigo_validacion || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], codigo_validacion: e.target.value.toUpperCase() } } return a })} />
@@ -1166,7 +1186,7 @@ export default function CursosClientePage() {
                                         <Checkbox checked={!!nuevoAsignacion[p.id]?.estado_acreditacion} onCheckedChange={(val) => setNuevoAsignacion(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || {}), estado_acreditacion: !!val } }))} />
                                         <span className="text-sm">Acreditado</span>
                                       </div>
-                                      <Button onClick={async () => { if (!selected) return; const data = nuevoAsignacion[p.id] || {}; const constancia_id = data.constancia_id; if (!constancia_id) { alert('Selecciona una constancia del curso'); return } const payload: Record<string, unknown> = { constancia_id }; if (typeof data.estado_acreditacion !== 'undefined') payload.estado_acreditacion = !!data.estado_acreditacion; try { await apiRequest(`/clientes/cursos/${selected.id}/participantes/${p.id}/constancias`, { method: 'POST', body: JSON.stringify(payload) }); setNuevoAsignacion(prev => ({ ...prev, [p.id]: {} })); await loadConstanciasAsignadas(); } catch (e) { alert((e as Error)?.message || 'No se pudo asignar la constancia') } }}>Asignar constancia</Button>
+                                      <Button onClick={async () => { if (!selected) return; const data = nuevoAsignacion[p.id] || {}; const constancia_id = data.constancia_id; if (!constancia_id) { setFilaError(prev => ({ ...prev, [p.id]: 'Selecciona una constancia del curso' })); return } const payload: Record<string, unknown> = { constancia_id }; if (typeof data.estado_acreditacion !== 'undefined') payload.estado_acreditacion = !!data.estado_acreditacion; try { await apiRequest(`/clientes/cursos/${selected.id}/participantes/${p.id}/constancias`, { method: 'POST', body: JSON.stringify(payload) }); setNuevoAsignacion(prev => ({ ...prev, [p.id]: {} })); await loadConstanciasAsignadas(); setFilaError(prev => { const nx = { ...prev }; delete nx[p.id]; return nx }) } catch (e) { setFilaError(prev => ({ ...prev, [p.id]: (e as Error)?.message || 'No se pudo asignar la constancia' })) } }}>Asignar constancia</Button>
                                       <Button variant="secondary" disabled={!p.estado_acreditacion} onClick={async () => { try { const token = localStorage.getItem('aaces_token'); const res = await fetch('/api/v1/constancias/emitir', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ curso_participante_id: p.id }) }); if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'Error al emitir') } const data = await res.json(); const doc = data.documento; const dl = await fetch(doc.descarga_url, { headers: { Authorization: `Bearer ${token}` } }); if (dl.ok) { const blob = await dl.blob(); const url = URL.createObjectURL(blob); window.open(url, '_blank'); } toast.success('Constancia emitida correctamente'); await loadConstanciasAsignadas(); } catch (e) { toast.error((e as Error)?.message || 'Error al emitir constancia') } }}>
                                         Emitir constancia
                                       </Button>
