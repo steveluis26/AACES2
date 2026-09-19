@@ -343,7 +343,7 @@ class TokenData(BaseSchema):
     correo: Optional[str] = None
 
 class LoginRequest(BaseSchema):
-    correo: EmailStr
+    correo: str
     password: str = Field(..., min_length=1)
 
 class PasswordResetRequest(BaseSchema):

@@ -8,6 +8,20 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+// Convierte el `detail` de un error de la API en un mensaje legible.
+// FastAPI devuelve `detail` como string en 401, pero como lista de
+// errores de validación en 422; sin esto React mostraba "[object Object]".
+function resolveErrorDetail(err: unknown, status: number): string {
+  const fallback = status === 401 ? "Credenciales inválidas" : `Error ${status}`
+  const detail = (err as { detail?: unknown } | null)?.detail
+  if (typeof detail === "string" && detail.trim()) return detail
+  if (Array.isArray(detail) && detail.length > 0) {
+    const msg = (detail[0] as { msg?: unknown } | null)?.msg
+    if (typeof msg === "string" && msg.trim()) return msg
+  }
+  return fallback
+}
+
 export function LoginForm({
   className,
   ...props
@@ -39,7 +53,7 @@ export function LoginForm({
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: "Error de autenticación" }))
-        throw new Error(err.detail || (res.status === 401 ? "Credenciales inválidas" : `Error ${res.status}`))
+        throw new Error(resolveErrorDetail(err, res.status))
       }
       const data = await res.json()
       const token = data.access_token as string

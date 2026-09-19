@@ -65,6 +65,35 @@ describe('LoginForm', () => {
     })
   })
 
+  it('shows a readable message on 422 validation errors (never "[object Object]")', async () => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: false,
+        status: 422,
+        json: () =>
+          Promise.resolve({
+            detail: [
+              {
+                loc: ['body', 'correo'],
+                msg: 'value is not a valid email address',
+                type: 'value_error.email',
+              },
+            ],
+          }),
+      })
+    ) as jest.Mock
+
+    render(<LoginForm />)
+    fireEvent.change(screen.getByLabelText(/correo/i), { target: { value: 'demo-walkthrough@aaces.local' } })
+    fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'TestPass1' } })
+    fireEvent.click(screen.getByRole('button', { name: /ingresar/i }))
+
+    await waitFor(() => {
+      expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument()
+      expect(screen.getByText(/value is not a valid email address/i)).toBeInTheDocument()
+    })
+  })
+
   it('updates input values on change', () => {
     render(<LoginForm />)
     const emailInput = screen.getByLabelText(/correo/i)
