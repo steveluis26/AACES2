@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@/components/ui'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from '@/components/ui/table'
+import { ChevronRight } from 'lucide-react'
 import { apiRequest } from '@/app/services/api'
 
 type ParticipanteListado = {
@@ -132,6 +133,32 @@ export default function ParticipantesPage() {
 
       <Card>
         <CardContent className="p-0">
+          {/* Tarjetas en móvil */}
+          <div className="md:hidden divide-y divide-border">
+            {participantes.map(p => (
+              <button key={p.id} type="button" onClick={() => router.push(`/cliente/participantes/${p.id}`)}
+                className="w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-muted/50">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{p.nombre}</div>
+                  <div className="text-xs text-muted-foreground truncate">{p.correo || 'Sin correo'}</div>
+                  {(p.empresa || p.cargo) && (
+                    <div className="text-xs text-muted-foreground truncate">{[p.empresa, p.cargo].filter(Boolean).join(' · ')}</div>
+                  )}
+                </div>
+                <div className="shrink-0 flex items-center gap-2">
+                  <span className="font-mono text-xs">{p.pax_id}</span>
+                  <ChevronRight className="size-4 text-muted-foreground" />
+                </div>
+              </button>
+            ))}
+            {participantes.length === 0 && (
+              <div className="text-sm text-muted-foreground text-center py-8">
+                No hay participantes registrados. Crea el primero.
+              </div>
+            )}
+          </div>
+          {/* Tabla en escritorio */}
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -163,6 +190,7 @@ export default function ParticipantesPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

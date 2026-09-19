@@ -699,13 +699,13 @@ export default function CursosClientePage() {
           <Button variant="outline" onClick={() => { setOpenEventDialog(false); const el = typeof window !== 'undefined' ? document.getElementById('participantes-section') : null; if (el) { el.scrollIntoView({ behavior: 'smooth' }); el.classList.add('scroll-highlight'); setTimeout(() => el.classList.remove('scroll-highlight'), 1500) } }}>Ver participantes</Button>
       </DialogFooter>
       </Dialog>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Próximos cursos</h1>
-        <div className="flex gap-2">
-          <Button variant="default" onClick={() => { window.location.href = '/cliente/gestion' }}>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button className="flex-1 sm:flex-none" variant="default" onClick={() => { window.location.href = '/cliente/gestion' }}>
             Crear curso
           </Button>
-          <Button variant="secondary" onClick={() => { window.location.href = '/cliente/dashboard' }}>
+          <Button className="flex-1 sm:flex-none" variant="secondary" onClick={() => { window.location.href = '/cliente/dashboard' }}>
             Volver al dashboard
           </Button>
         </div>
@@ -735,10 +735,37 @@ export default function CursosClientePage() {
                   <Button variant="outline" size="sm" onClick={() => { const m = currentMonth + 1; if (m > 11) { setCurrentMonth(0); setCurrentYear(y => y + 1) } else setCurrentMonth(m) }}><ChevronRightIcon className="size-4" /></Button>
                 </div>
               </div>
-              <div className="grid grid-cols-7 gap-2 text-xs font-medium">
+              {/* Agenda por día en móvil */}
+              <div className="md:hidden space-y-2">
+                {calendarCells.filter(c => c.date && c.items.length > 0).map((c, idx) => {
+                  const d = c.date as Date
+                  return (
+                    <div key={idx} className="border rounded-md p-3">
+                      <div className="text-sm font-semibold capitalize">
+                        {d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                      </div>
+                      <div className="mt-2 space-y-1.5">
+                        {c.items.map((ev, iidx) => (
+                          <button key={`${ev.id}-${String(ev.fecha_inicio).slice(0,10)}-${iidx}`} type="button"
+                            className="w-full text-left text-sm px-2.5 py-1.5 rounded-md bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 truncate"
+                            onClick={() => { setSelected(ev); setOpenEventDialog(true) }}>
+                            <Badge variant="secondary" className="mr-1.5">{String(ev.ciudad || '').slice(0, 12)}</Badge>
+                            {ev.nombre}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {calendarCells.every(c => !c.date || c.items.length === 0) && (
+                  <div className="text-sm text-muted-foreground text-center py-6">No hay cursos programados este mes.</div>
+                )}
+              </div>
+              {/* Calendario mensual en escritorio */}
+              <div className="hidden md:grid grid-cols-7 gap-2 text-xs font-medium">
                 {['D','L','M','X','J','V','S'].map(d => (<div key={d} className="text-center">{d}</div>))}
               </div>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="hidden md:grid grid-cols-7 gap-2">
                 {calendarCells.map((c, idx) => (
                   <div key={idx} className="min-h-[120px] border rounded-md p-2">
                     {c.date ? (
