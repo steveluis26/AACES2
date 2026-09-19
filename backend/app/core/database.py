@@ -3,13 +3,20 @@ from typing import AsyncGenerator
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
 from app.core.config import settings
-from sqlalchemy import event
+from sqlalchemy import event, MetaData
 import logging
 
 logger = logging.getLogger(__name__)
 
 class Base(DeclarativeBase):
-    pass
+    # Esquema por defecto para TODAS las tablas del ORM.
+    # Fija el esquema en el SQL generado (FROM aaces.usuarios) en lugar de
+    # depender del search_path de la conexion, que Neon/Render no aplican de
+    # forma fiable (server_settings + evento connect). Sin esto, un reinicio
+    # puede dejar todas las queries ORM con "relation X does not exist"
+    # (visto en prod 2026-09-19: todos los logins en 401).
+    # Los modelos que declaran su propio schema en __table_args__ lo conservan.
+    metadata = MetaData(schema="aaces")
 
 # Create async engine
 # Ensure async driver for PostgreSQL
