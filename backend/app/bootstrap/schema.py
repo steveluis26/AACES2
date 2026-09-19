@@ -418,6 +418,9 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS pax_id VARCHAR(20)",
         "UPDATE aaces.participantes SET pax_id = 'PAX-' || upper(substr(md5(random()::text || id::text), 1, 9)) WHERE pax_id IS NULL",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_participantes_pax_id ON aaces.participantes(pax_id)",
+        # El INSERT de create_participante incluye `pais`, pero la tabla legacy
+        # no tiene la columna (se agregó al modelo sin reparación ADD COLUMN).
+        "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS pais VARCHAR(50) DEFAULT 'Mexico'",
     ]:
         try:
             async with conn.begin_nested():
