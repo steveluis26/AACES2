@@ -14,6 +14,8 @@ import {
   YAxis,
 } from 'recharts'
 import { Badge } from '@/components/ui/badge'
+import { Alert } from '@/components/ui'
+import { Button } from '@/components/ui'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -61,25 +63,31 @@ export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null)
   const [ciudades, setCiudades] = useState<CiudadRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const token = typeof window !== 'undefined' ? localStorage.getItem('aaces_token') : null
 
   useEffect(() => {
     let cancelled = false
     const fetchData = async () => {
       setLoading(true)
+      setError('')
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (token) headers['Authorization'] = `Bearer ${token}`
         const m = await fetch(`/api/v1/admin/dashboard/metrics`, { headers })
+        if (!m.ok) throw new Error(`No se pudieron cargar las métricas de la plataforma (${m.status})`)
         const mjson = await m.json()
-        if (!cancelled && m.ok) setMetrics(mjson)
+        if (!cancelled) setMetrics(mjson)
         const c = await fetch(`/api/v1/admin/dashboard/ciudad`, { headers })
-        const cjson = await c.json()
-        if (!cancelled && c.ok) setCiudades(cjson.data ?? [])
-      } catch {
+        if (c.ok) {
+          const cjson = await c.json()
+          if (!cancelled) setCiudades(cjson.data ?? [])
+        }
+      } catch (e) {
         if (!cancelled) {
           setMetrics(null)
           setCiudades([])
+          setError((e as Error)?.message || 'No se pudieron cargar las métricas de la plataforma')
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -129,6 +137,19 @@ export default function AdminDashboardPage() {
         <h1 className="text-2xl font-bold">Panel de plataforma</h1>
         <p className="text-sm text-muted-foreground">Métricas del negocio AACES (solo superadmin)</p>
       </div>
+
+      {!loading && error && (
+        <div className="mx-4 lg:mx-6">
+          <Alert className="alert-error">
+            <div className="flex items-center justify-between gap-3">
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                Reintentar
+              </Button>
+            </div>
+          </Alert>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="mx-4 lg:mx-6 grid-kpis">
