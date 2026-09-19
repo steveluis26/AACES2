@@ -343,7 +343,7 @@ async def create_documentos_emitidos(conn: AsyncConnection) -> None:
           template_id UUID REFERENCES aaces.templates(id) ON DELETE SET NULL,
           template_version INTEGER,
           tipo_documento VARCHAR(30) NOT NULL,
-          codigo_validacion UUID NOT NULL DEFAULT gen_random_uuid(),
+          codigo_validacion VARCHAR(20) NOT NULL,
           folio VARCHAR(50),
           storage_provider VARCHAR(50) NOT NULL,
           storage_key VARCHAR(500) NOT NULL,
@@ -437,22 +437,9 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         # El servicio /constancias/emitir reutiliza el código existente →
         # el INSERT truena con "invalid input syntax for type uuid" (500).
         # Se unifica a VARCHAR(20) para que ambos flujos usen el mismo formato.
-        """DO $$
-        BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'aaces'
-                  AND table_name = 'documentos_emitidos'
-                  AND column_name = 'codigo_validacion'
-                  AND data_type = 'uuid'
-            ) THEN
-                ALTER TABLE aaces.documentos_emitidos
-                    ALTER COLUMN codigo_validacion TYPE VARCHAR(20)
-                    USING codigo_validacion::text;
-                ALTER TABLE aaces.documentos_emitidos
-                    ALTER COLUMN codigo_validacion DROP DEFAULT;
-            END IF;
-        END $$""",
+        # Si ya es VARCHAR, el ALTER es no-op (no falla).
+        "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion TYPE VARCHAR(20) USING codigo_validacion::text",
+        "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion DROP DEFAULT",
     ]:
         try:
             async with conn.begin_nested():
