@@ -437,9 +437,10 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         # El servicio /constancias/emitir reutiliza el código existente →
         # el INSERT truena con "invalid input syntax for type uuid" (500).
         # Se unifica a VARCHAR(20) para que ambos flujos usen el mismo formato.
-        # Si ya es VARCHAR, el ALTER es no-op (no falla).
-        "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion TYPE VARCHAR(20) USING codigo_validacion::text",
+        # Orden: primero DROP DEFAULT (gen_random_uuid bloquea el cambio de tipo),
+        # luego ALTER TYPE. Si ya es VARCHAR, ambos son no-op (no fallan).
         "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion DROP DEFAULT",
+        "ALTER TABLE aaces.documentos_emitidos ALTER COLUMN codigo_validacion TYPE VARCHAR(20) USING codigo_validacion::text",
     ]:
         try:
             async with conn.begin_nested():
