@@ -3,10 +3,10 @@ import { useState } from "react"
 import { MapPin, Search, Building2, Star } from "lucide-react"
 import Link from "next/link"
 
-type TipoLead = "empresa" | "agencia"
+type TipoLead = "agencia"
 
 export default function MarketplacePage() {
-  const [tipo, setTipo] = useState<TipoLead>("empresa")
+  const tipo: TipoLead = "agencia"
   const [nombre, setNombre] = useState("")
   const [email, setEmail] = useState("")
   const [empresa, setEmpresa] = useState("")
@@ -20,6 +20,7 @@ export default function MarketplacePage() {
     setError("")
     if (!nombre.trim()) { setError("Escribe tu nombre"); return }
     if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError("Escribe un correo válido"); return }
+    if (!empresa.trim()) { setError("Escribe el nombre de tu agencia"); return }
     setEnviando(true)
     try {
       const res = await fetch("/api/v1/public/lista-espera", {
@@ -94,27 +95,13 @@ export default function MarketplacePage() {
               </div>
             ) : (
               <div className="mt-6 text-left max-w-lg mx-auto space-y-3">
-                <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => setTipo("empresa")}
-                    className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${tipo === "empresa" ? "bg-orange-500 text-white" : "border border-border bg-background"}`}
-                  >
-                    Busco capacitación
-                  </button>
-                  <button
-                    onClick={() => setTipo("agencia")}
-                    className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${tipo === "agencia" ? "bg-orange-500 text-white" : "border border-border bg-background"}`}
-                  >
-                    Soy agencia
-                  </button>
-                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input className={inputCls} placeholder="Tu nombre *" value={nombre} onChange={e => setNombre(e.target.value)} />
                   <input className={inputCls} placeholder="Correo *" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-                  <input className={inputCls} placeholder={tipo === "empresa" ? "Empresa" : "Agencia"} value={empresa} onChange={e => setEmpresa(e.target.value)} />
+                  <input className={inputCls} placeholder="Nombre de tu agencia *" value={empresa} onChange={e => setEmpresa(e.target.value)} />
                   <input className={inputCls} placeholder="Ciudad" value={ciudad} onChange={e => setCiudad(e.target.value)} />
                 </div>
-                <textarea className={inputCls} rows={2} placeholder="¿Qué capacitación buscas u ofreces? (opcional)" value={mensaje} onChange={e => setMensaje(e.target.value)} />
+                <textarea className={inputCls} rows={2} placeholder="¿Qué capacitación ofreces? (opcional)" value={mensaje} onChange={e => setMensaje(e.target.value)} />
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 <div className="text-center">
                   <button
