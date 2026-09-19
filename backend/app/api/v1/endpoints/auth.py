@@ -531,8 +531,8 @@ async def register(
         password_hash = auth_service.get_password_hash(admin_password)
         await db.execute(
             text("""
-                INSERT INTO aaces.usuarios (organizacion_id, nombre, correo, password_hash, rol)
-                VALUES (:org_id, :nombre, :correo, :ph, 'admin')
+                INSERT INTO aaces.usuarios (organizacion_id, nombre, correo, password_hash, rol, activo)
+                VALUES (:org_id, :nombre, :correo, :ph, 'admin', true)
             """),
             {"org_id": org_id, "nombre": admin_nombre, "correo": admin_correo, "ph": password_hash}
         )
