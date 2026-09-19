@@ -210,18 +210,6 @@ class ConstanciasService:
             "participante_id": str(cp.participante_id),
         })
 
-        # DEBUG: ver qué tipo ve el backend para codigo_validacion
-        type_check = await db.execute(
-            text("""
-                SELECT data_type FROM information_schema.columns
-                WHERE table_schema = 'aaces'
-                AND table_name = 'documentos_emitidos'
-                AND column_name = 'codigo_validacion'
-            """)
-        )
-        col_type = type_check.scalar()
-        logger.warning(f"DEBUG codigo_validacion type as seen by backend: {col_type}")
-
         await db.execute(
             text("""
                 INSERT INTO aaces.documentos_emitidos
@@ -270,7 +258,7 @@ class ConstanciasService:
                     WHERE id = :cp_id
                 """),
                 {
-                    "fecha_exp": cp.fecha_expiracion.isoformat(),
+                    "fecha_exp": cp.fecha_expiracion,
                     "cp_id": curso_participante_id,
                 }
             )
