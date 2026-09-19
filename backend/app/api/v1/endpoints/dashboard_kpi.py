@@ -4,19 +4,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import get_current_user_data
+from app.core.identity import get_current_identity, get_current_cliente_id, require_org_id, Identity
 
 router = APIRouter()
 
 
 @router.get("")
 async def dashboard_kpi(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    # org_id resuelto desde BD; la plataforma no tiene KPIs propios (403 explícito).
+    org_id = await require_org_id(db, identity)
+    # cliente_id legacy para las tablas que aún no tienen organizacion_id.
+    cid = await get_current_cliente_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
@@ -51,11 +52,9 @@ async def dashboard_kpi(
     constancias_res = await db.execute(
         text("""
             SELECT count(*) FROM aaces.documentos_emitidos d
-            JOIN aaces.organizaciones o ON o.id = d.organizacion_id
-            JOIN aaces.clientes cl ON cl.organizacion_id = o.id
-            WHERE cl.id = :cid
+            WHERE d.organizacion_id = :org_id
         """),
-        {"cid": cid},
+        {"org_id": org_id},
     )
     constancias_emitidas = int(constancias_res.scalar() or 0)
 

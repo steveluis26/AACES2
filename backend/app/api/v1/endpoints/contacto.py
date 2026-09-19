@@ -6,7 +6,7 @@ from datetime import datetime
 import logging
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import require_admin
+from app.api.v1.endpoints.auth import require_superadmin
 from app.core.logging import audit_logger
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ async def listar_contactos(
     leido: Optional[bool] = Query(None),
     asunto: Optional[str] = Query(None),
     search: Optional[str] = Query(None, min_length=2),
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -160,7 +160,7 @@ async def listar_contactos(
 @router.get("/admin/contacto/{contacto_id}")
 async def obtener_contacto(
     contacto_id: str,
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -205,7 +205,7 @@ async def obtener_contacto(
 async def actualizar_estado_contacto(
     contacto_id: str,
     payload: dict,
-    user_data: Dict[str, Any] = Depends(require_admin),
+    user_data: dict = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
     await db.execute(text("SET LOCAL search_path TO aaces"))
@@ -240,7 +240,7 @@ async def actualizar_estado_contacto(
     await db.commit()
 
     audit_logger.log_user_action(
-        user_id=user_data["sub"],
+        user_id=user_data.get("sub"),
         action="update_contacto_status",
         resource="contacto",
         details={"contacto_id": contacto_id, **payload}

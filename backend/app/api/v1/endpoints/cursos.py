@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 import uuid
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import get_current_user_data
+from app.core.identity import get_current_identity, get_current_cliente_id, Identity
 
 router = APIRouter()
 
@@ -44,12 +44,10 @@ class CursoResponseSchema(BaseModel):
 @router.post("", response_model=CursoResponseSchema, status_code=status.HTTP_201_CREATED)
 async def crear_curso(
     payload: CursoCreateSchema,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
 
     if payload.fecha_inicio and payload.fecha_fin and payload.fecha_inicio > payload.fecha_fin:
         raise HTTPException(status_code=400, detail="fecha_inicio no puede ser mayor que fecha_fin")
@@ -99,12 +97,10 @@ async def crear_curso(
 async def listar_cursos(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
     res = await db.execute(
@@ -140,12 +136,10 @@ async def listar_cursos(
 @router.get("/{curso_id}", response_model=CursoResponseSchema)
 async def obtener_curso(
     curso_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
     res = await db.execute(
@@ -190,12 +184,10 @@ class ParticipanteCreateSchema(BaseModel):
 async def add_participante(
     curso_id: str,
     payload: ParticipanteCreateSchema,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
@@ -213,8 +205,8 @@ async def add_participante(
 
     pid = None
     ex_mail = await db.execute(
-        text("SELECT id FROM aaces.participantes WHERE correo = :correo"),
-        {"correo": correo},
+        text("SELECT id FROM aaces.participantes WHERE correo = :correo AND cliente_id = :cid"),
+        {"correo": correo, "cid": cid},
     )
     row_mail = ex_mail.fetchone()
     if row_mail:
@@ -224,11 +216,13 @@ async def add_participante(
         pax_id = f"PAX-{uuid.uuid4().hex[:8].upper()}"
         ins = await db.execute(
             text("""
-                INSERT INTO aaces.participantes (id, nombre, correo, pais, telefono, empresa, cargo)
-                VALUES (gen_random_uuid(), :nombre, :correo, 'Mexico', :telefono, :empresa, :cargo)
+                INSERT INTO aaces.participantes (id, pax_id, cliente_id, nombre, correo, pais, telefono, empresa, cargo)
+                VALUES (gen_random_uuid(), :pax_id, :cid, :nombre, :correo, 'Mexico', :telefono, :empresa, :cargo)
                 RETURNING id
             """),
             {
+                "pax_id": pax_id,
+                "cid": cid,
                 "nombre": nombre,
                 "correo": correo,
                 "telefono": payload.telefono,

@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, text
 from typing import List, Optional
+import uuid
 from uuid import UUID
 from datetime import date, datetime
 from typing import Optional, List
@@ -20,14 +21,58 @@ from app.schemas import (
     PagoResponse, PagoCreate, PagoUpdate,
     PaginatedResponse, ValidacionResponse
 )
-from app.core.security import get_current_user
-from app.api.v1.endpoints.auth import get_current_user_data
-from app.api.v1.endpoints.auth import require_client, get_current_user_data
+from app.core.identity import get_current_identity, get_current_cliente_id, require_platform_identity, Identity
 from sqlalchemy import text
 from app.services.security import security_service
 from app.services.email import email_service
 from app.services.validation import validation_service
 from app.core.logging import audit_logger
+
+
+# Campos que una organización puede editar de su propia ficha.
+# Plan, categoría, límites y estado solo los toca la plataforma.
+CLIENTE_CAMPOS_PROPIOS = {"nombre", "correo", "ciudad_base"}
+
+
+async def _own_cliente_id(db: AsyncSession, identity: Identity) -> str | None:
+    """Devuelve el cliente_id propio de la organización del usuario (vía puente
+    clientes.organizacion_id). None para plataforma (acceso total) o si no hay
+    fila vinculada."""
+    if identity.source == "plataforma":
+        return None
+    if not identity.org_id:
+        return None
+    row = await db.execute(
+        text("SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id ORDER BY fecha_creacion LIMIT 1"),
+        {"org_id": identity.org_id},
+    )
+    rec = row.fetchone()
+    return str(rec[0]) if rec else None
+
+
+def _exigir_acceso_cliente(cliente_id: UUID, own_cliente_id: str | None, identity: Identity) -> None:
+    """403 si el usuario no es plataforma y el recurso no es de su organización."""
+    if identity.source == "plataforma":
+        return
+    if own_cliente_id is None or str(cliente_id) != own_cliente_id:
+        raise HTTPException(status_code=403, detail="Sin acceso a este recurso")
+
+
+async def _exigir_cp_propio(db: AsyncSession, identity: Identity, cp_id: str) -> None:
+    """404 si el curso_participante no existe o no pertenece a la organización."""
+    if identity.source == "plataforma":
+        return
+    cid = await get_current_cliente_id(db, identity)
+    row = await db.execute(
+        text("""
+            SELECT 1 FROM aaces.curso_participante cp
+            JOIN aaces.cursos c ON c.id = cp.curso_id
+            WHERE cp.id = :cp AND c.cliente_id = :cid
+        """),
+        {"cp": cp_id, "cid": cid},
+    )
+    if row.scalar() is None:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
 from app.core.config import settings
 import io
 import csv
@@ -76,9 +121,9 @@ async def get_clientes(
     categoria: Optional[str] = Query(None, pattern="^(basico|premium|enterprise)$"),
     estado: Optional[str] = Query(None, pattern="^(activo|suspendido|eliminado)$"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(require_platform_identity)
 ):
-    """Obtener lista de clientes con filtros y paginación."""
+    """Obtener lista de clientes con filtros y paginación. Solo plataforma."""
     try:
         # Construir consulta base
         query = select(Cliente)
@@ -123,9 +168,10 @@ async def get_clientes(
 @router.post("/clientes", response_model=ClienteResponse)
 async def create_cliente(
     cliente: ClienteCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(require_platform_identity)
 ):
-    """Crear un nuevo cliente."""
+    """Crear un nuevo cliente. Solo plataforma (el registro público es /auth/register)."""
     try:
         # Verificar si el correo ya existe
         existing_cliente = await db.execute(
@@ -167,18 +213,20 @@ async def create_cliente(
 async def get_cliente(
     cliente_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Obtener un cliente por ID."""
+    """Obtener un cliente por ID (solo plataforma o la propia organización)."""
     try:
+        own = await _own_cliente_id(db, identity)
+        _exigir_acceso_cliente(cliente_id, own, identity)
         result = await db.execute(
             select(Cliente).where(Cliente.id == cliente_id)
         )
         cliente = result.scalar_one_or_none()
-        
+
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         return cliente
     except HTTPException:
         raise
@@ -190,29 +238,45 @@ async def update_cliente(
     cliente_id: UUID,
     cliente: ClienteUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Actualizar un cliente."""
+    """Actualizar un cliente.
+
+    La plataforma puede editar todo. Una organización solo su propia ficha y
+    únicamente campos no privilegiados (nombre, correo, ciudad_base):
+    plan, categoría, límites y estado son exclusivos de plataforma.
+    """
     try:
+        own = await _own_cliente_id(db, identity)
+        _exigir_acceso_cliente(cliente_id, own, identity)
+
+        update_data = cliente.dict(exclude_unset=True)
+        if identity.source != "plataforma":
+            privilegiados = [f for f in update_data if f not in CLIENTE_CAMPOS_PROPIOS]
+            if privilegiados:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Solo la plataforma puede modificar: {', '.join(privilegiados)}"
+                )
+
         result = await db.execute(
             select(Cliente).where(Cliente.id == cliente_id)
         )
         db_cliente = result.scalar_one_or_none()
-        
+
         if not db_cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Actualizar campos
-        update_data = cliente.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_cliente, field, value)
-        
+
         await db.commit()
         await db.refresh(db_cliente)
-        
+
         # Registrar auditoría
-        audit_logger.log_cliente_update(cliente_id, current_user["id"])
-        
+        audit_logger.log_cliente_update(cliente_id, identity.user_id)
+
         return db_cliente
     except HTTPException:
         raise
@@ -224,27 +288,29 @@ async def update_cliente(
 async def delete_cliente(
     cliente_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Eliminar un cliente (soft delete)."""
+    """Eliminar un cliente (soft delete). Solo plataforma."""
     try:
+        if identity.source != "plataforma":
+            raise HTTPException(status_code=403, detail="Solo la plataforma puede eliminar clientes")
         result = await db.execute(
             select(Cliente).where(Cliente.id == cliente_id)
         )
         db_cliente = result.scalar_one_or_none()
-        
+
         if not db_cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        
+
         # Soft delete
         db_cliente.estado = "eliminado"
         db_cliente.fecha_eliminacion_logica = func.now()
-        
+
         await db.commit()
-        
+
         # Registrar auditoría
-        audit_logger.log_cliente_deletion(cliente_id, current_user["id"])
-        
+        audit_logger.log_cliente_deletion(cliente_id, identity.user_id)
+
         return {"message": "Cliente eliminado exitosamente"}
     except HTTPException:
         raise
@@ -264,12 +330,15 @@ async def get_capacitadores(
     especialidad: Optional[str] = Query(None, max_length=50),
     estado: Optional[str] = Query(None, pattern="^(activo|inactivo)$"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Obtener lista de capacitadores."""
+    """Obtener lista de capacitadores (solo los de la propia organización)."""
     try:
         query = select(Capacitador)
-        
+        if identity.source != "plataforma":
+            cid = await get_current_cliente_id(db, identity)
+            query = query.where(Capacitador.cliente_id == cid)
+
         if search:
             query = query.where(
                 or_(
@@ -306,10 +375,13 @@ async def get_capacitadores(
 async def create_capacitador(
     capacitador: CapacitadorCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Crear un nuevo capacitador."""
+    """Crear un nuevo capacitador (vinculado a la organización)."""
     try:
+        data = capacitador.dict()
+        if identity.source != "plataforma":
+            data["cliente_id"] = await get_current_cliente_id(db, identity)
         # Verificar si el correo ya existe
         existing_capacitador = await db.execute(
             select(Capacitador).where(Capacitador.correo == capacitador.correo)
@@ -319,14 +391,14 @@ async def create_capacitador(
                 status_code=400,
                 detail="Ya existe un capacitador con este correo electrónico"
             )
-        
-        db_capacitador = Capacitador(**capacitador.dict())
+
+        db_capacitador = Capacitador(**data)
         db.add(db_capacitador)
         await db.commit()
         await db.refresh(db_capacitador)
-        
-        audit_logger.log_capacitador_creation(db_capacitador.id, current_user["id"])
-        
+
+        audit_logger.log_capacitador_creation(db_capacitador.id, identity.user_id)
+
         return db_capacitador
     except HTTPException:
         raise
@@ -349,12 +421,15 @@ async def get_cursos(
     fecha_inicio_to: Optional[date] = Query(None),
     capacitador_id: Optional[UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Obtener lista de cursos con filtros avanzados."""
+    """Obtener lista de cursos con filtros avanzados (solo los de la propia organización)."""
     try:
         query = select(Curso)
-        
+        if identity.source != "plataforma":
+            cid = await get_current_cliente_id(db, identity)
+            query = query.where(Curso.cliente_id == cid)
+
         if search:
             query = query.where(
                 or_(
@@ -406,12 +481,15 @@ async def get_participantes(
     search: Optional[str] = Query(None, max_length=100),
     cliente_id: Optional[UUID] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Obtener lista de participantes."""
+    """Obtener lista de participantes (solo los de la propia organización)."""
     try:
         query = select(Participante)
-        
+        if identity.source != "plataforma":
+            cid = await get_current_cliente_id(db, identity)
+            query = query.where(Participante.cliente_id == cid)
+
         if search:
             query = query.where(
                 or_(
@@ -424,7 +502,9 @@ async def get_participantes(
             )
         
         if cliente_id:
-            query = query.where(Participante.id.isnot(None))
+            if identity.source != "plataforma":
+                raise HTTPException(status_code=403, detail="No puedes filtrar por otra organización")
+            query = query.where(Participante.cliente_id == cliente_id)
         
         total_query = select(func.count()).select_from(query.subquery())
         total_result = await db.execute(total_query)
@@ -518,40 +598,55 @@ async def validar_certificado(
 @router.get("/estadisticas/dashboard")
 async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    identity: Identity = Depends(get_current_identity)
 ):
-    """Obtener estadísticas generales para el dashboard."""
+    """Obtener estadísticas para el dashboard (solo de la propia organización)."""
     try:
+        es_plataforma = identity.source == "plataforma"
+        cid = None if es_plataforma else await get_current_cliente_id(db, identity)
+
+        def con_tenant(q, modelo):
+            if es_plataforma:
+                return q
+            return q.where(modelo.cliente_id == cid)
+
         # Total clientes
-        clientes_total = await db.execute(select(func.count(Cliente.id)))
-        total_clientes = clientes_total.scalar()
-        
-        # Clientes activos
-        clientes_activos = await db.execute(
-            select(func.count(Cliente.id)).where(Cliente.estado == "activo")
-        )
-        total_clientes_activos = clientes_activos.scalar()
-        
+        if es_plataforma:
+            clientes_total = await db.execute(select(func.count(Cliente.id)))
+            clientes_activos = await db.execute(
+                select(func.count(Cliente.id)).where(Cliente.estado == "activo")
+            )
+            total_clientes = clientes_total.scalar()
+            total_clientes_activos = clientes_activos.scalar()
+        else:
+            total_clientes = 1
+            total_clientes_activos = 1
+
         # Total cursos
-        cursos_total = await db.execute(select(func.count(Curso.id)))
+        cursos_total = await db.execute(con_tenant(select(func.count(Curso.id)), Curso))
         total_cursos = cursos_total.scalar()
-        
+
         # Cursos activos
         cursos_activos = await db.execute(
-            select(func.count(Curso.id)).where(Curso.estado == "activo")
+            con_tenant(select(func.count(Curso.id)).where(Curso.estado == "activo"), Curso)
         )
         total_cursos_activos = cursos_activos.scalar()
-        
+
         # Total participantes
-        participantes_total = await db.execute(select(func.count(Participante.id)))
+        participantes_total = await db.execute(con_tenant(select(func.count(Participante.id)), Participante))
         total_participantes = participantes_total.scalar()
-        
-        # Certificados emitidos
-        certificados_emitidos = await db.execute(
-            select(func.count(CursoParticipante.id)).where(CursoParticipante.estado_acreditacion == True)
+
+        # Certificados emitidos (vía curso -> cliente_id)
+        cert_q = (
+            select(func.count(CursoParticipante.id))
+            .join(Curso, CursoParticipante.curso_id == Curso.id)
+            .where(CursoParticipante.estado_acreditacion == True)
         )
+        if not es_plataforma:
+            cert_q = cert_q.where(Curso.cliente_id == cid)
+        certificados_emitidos = await db.execute(cert_q)
         total_certificados = certificados_emitidos.scalar()
-        
+
         return {
             "clientes": {
                 "total": total_clientes,
@@ -575,11 +670,11 @@ async def get_dashboard_stats(
 
 @router.get("/mis-cursos")
 async def get_mis_cursos(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         cursos = await db.execute(text("SELECT id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, estado, empresa_contratante FROM cursos WHERE cliente_id = :cid ORDER BY fecha_inicio DESC"), {"cid": cid})
         cursos_rows = cursos.fetchall()
@@ -641,12 +736,12 @@ async def get_mis_cursos(
 
 @router.get("/agenda/proximos")
 async def get_proximos_cursos(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     """Lista de cursos próximos del cliente, ordenados por fecha de inicio"""
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         parents_q = text(
             """
@@ -687,7 +782,7 @@ async def get_proximos_cursos(
                 await db.execute(text("SET LOCAL search_path TO aaces"))
                 await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID"))
                 await db.commit()
-                return await get_proximos_cursos(user_data, db)
+                return await get_proximos_cursos(identity, db)
             except Exception as e2:
                 await db.rollback()
                 raise HTTPException(status_code=500, detail=f"Error agregando columna curso_padre_id: {str(e2)}")
@@ -697,14 +792,14 @@ async def get_proximos_cursos(
 async def get_agenda_mes(
     year: int,
     month: int,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     """Cursos del cliente que intersectan con el mes solicitado, incluyendo subcursos"""
     try:
         if month < 1 or month > 12:
             raise HTTPException(status_code=400, detail="Mes inválido")
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         # Rango de mes [start, end] en tipos date nativos
         from datetime import date, timedelta
@@ -770,12 +865,12 @@ async def get_agenda_mes(
 @router.post("/cursos")
 async def crear_curso(
     payload: CursoCreatePayload,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     """Crear un nuevo curso para el cliente autenticado"""
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         data = payload.dict(exclude_unset=True)
         nombre = (data.get("nombre") or "").strip()
         ciudad = (data.get("ciudad") or "").strip()
@@ -803,7 +898,7 @@ async def crear_curso(
             raise HTTPException(status_code=400, detail="Nombre y ciudad son requeridos")
 
         # Trial check: límite de cursos según plan/suscripción
-        org_id = user_data.get("organizacion_id")
+        org_id = identity.org_id
         if org_id:
             # New schema: check subscription limits
             sub_res = await db.execute(
@@ -1009,11 +1104,11 @@ class CursoEditPayload(BaseModel):
 async def update_curso(
     curso_id: str,
     payload: CursoEditPayload,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         def ensure_date(value):
             if value is None:
                 return None
@@ -1101,11 +1196,11 @@ async def update_curso(
 async def aplicar_precio_grupo(
     curso_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         modo = str(payload.get("mode") or payload.get("aplicar_a") or "solo_vacios").strip()
         await db.execute(text("SET LOCAL search_path TO aaces"))
         row = await db.execute(text("SELECT grupo_id FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
@@ -1132,16 +1227,18 @@ async def aplicar_precio_grupo(
 async def update_precio_participante(
     cp_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
+        # Gate de propiedad ANTES de modificar.
+        await _exigir_cp_propio(db, identity, cp_id)
         q_a = text("UPDATE aaces.curso_participante SET costo_asignado = :costo, descuento = :descuento WHERE id = :id")
         await db.execute(q_a, {"costo": payload.get("costo_asignado", 0), "descuento": payload.get("descuento", 0), "id": cp_id})
-        cid_res = await db.execute(text("SELECT curso_id FROM aaces.curso_participante WHERE id = :id"), {"id": cp_id})
-        c_row = cid_res.fetchone()
         await db.commit()
         return {"updated": 1}
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando precio: {str(e)}")
@@ -1149,13 +1246,16 @@ async def update_precio_participante(
 @router.get("/curso-participante/{cp_id}/pagos")
 async def get_pagos_participante(
     cp_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
+        await _exigir_cp_propio(db, identity, cp_id)
         res = await db.execute(text("SELECT id, monto, metodo_pago, fecha_pago, estado_pago, comprobante_url FROM aaces.pagos WHERE curso_participante_id = :id ORDER BY fecha_pago DESC"), {"id": cp_id})
         rows = res.fetchall()
         return [{"id": r[0], "monto": float(r[1] or 0), "metodo_pago": r[2], "fecha_pago": r[3], "estado_pago": r[4], "comprobante_url": r[5]} for r in rows]
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error obteniendo pagos: {str(e)}")
 
@@ -1163,11 +1263,12 @@ async def get_pagos_participante(
 async def add_pago_participante(
     cp_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
+        await _exigir_cp_propio(db, identity, cp_id)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_base NUMERIC(10,2) DEFAULT 0"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
@@ -1221,11 +1322,11 @@ async def add_pago_participante(
 @router.post("/clientes/servicio/mercadopago/preference")
 async def crear_preferencia_servicio(
     payload_in: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         prow = await db.execute(text("SELECT nombre, correo FROM clientes WHERE id = :id"), {"id": cid})
         pr = prow.fetchone()
@@ -1310,6 +1411,13 @@ async def mercadopago_webhook(
                 await db.execute(text("ALTER TABLE IF EXISTS aaces.pagos ADD CONSTRAINT check_tipo_pago CHECK (tipo_pago IN ('participante','capacitador','curso_completo','servicio'))"))
             except Exception:
                 pass
+            # Idempotencia: MP reintenta notificaciones; no acreditar dos veces el mismo pago.
+            dup = await db.execute(
+                text("SELECT 1 FROM aaces.pagos WHERE referencia_pago = :ref AND metodo_pago = 'mercadopago' LIMIT 1"),
+                {"ref": str(pid)},
+            )
+            if dup.scalar() is not None:
+                return {"ok": True}
             await db.execute(text("INSERT INTO aaces.pagos (cliente_id, curso_participante_id, tipo_pago, monto, moneda, metodo_pago, referencia_pago, comprobante_url, fecha_pago, estado_pago, notas, creado_por) VALUES (:cid, NULL, 'servicio', :monto, 'MXN', 'mercadopago', :ref, NULL, now(), :st, NULL, 'sistema')"), {"cid": cid, "monto": amount, "ref": str(pid), "st": estado_pago})
             if estado_pago == 'completado':
                 await db.execute(text("UPDATE clientes SET vigencia_desde = CURRENT_DATE, vigencia_hasta = CASE WHEN vigencia_hasta IS NOT NULL AND vigencia_hasta > CURRENT_DATE THEN (vigencia_hasta + make_interval(months => CAST(:months AS integer)))::date ELSE (CURRENT_DATE + make_interval(months => CAST(:months AS integer)))::date END WHERE id = :cid"), {"cid": cid, "months": months})
@@ -1322,11 +1430,11 @@ async def mercadopago_webhook(
 @router.get("/cursos/{curso_id}/participantes")
 async def list_participantes_curso(
     curso_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_base NUMERIC(10,2) DEFAULT 0"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
@@ -1434,11 +1542,11 @@ async def list_participantes_curso(
 async def export_participantes_curso(
     curso_id: str,
     format: Optional[str] = Query("csv"),
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
@@ -1535,11 +1643,11 @@ async def export_participantes_curso(
 async def add_participante_curso(
     curso_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
@@ -1564,7 +1672,8 @@ async def add_participante_curso(
         pid = None
         # Campo número_documento eliminado: no se usa para deduplicación
         if not pid and correo:
-            ex_mail = await db.execute(text("SELECT id FROM aaces.participantes WHERE correo = :correo"), {"correo": correo})
+            # Deduplicación por tenant: el mismo correo puede existir en otra organización.
+            ex_mail = await db.execute(text("SELECT id FROM aaces.participantes WHERE correo = :correo AND cliente_id = :cid"), {"correo": correo, "cid": cid})
             row_mail = ex_mail.fetchone()
             if row_mail:
                 pid = row_mail[0]
@@ -1590,7 +1699,8 @@ async def add_participante_curso(
             combined_apellido = apellido or (apellido_paterno + (" " + apellido_materno if apellido_materno else ""))
             await db.execute(text("ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS apellido_paterno VARCHAR(100)"))
             await db.execute(text("ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS apellido_materno VARCHAR(100)"))
-            ins = await db.execute(text("INSERT INTO aaces.participantes (id, nombre, apellido, apellido_paterno, apellido_materno, correo, ciudad_origen, telefono, empresa, cargo, nivel_educacion, pais) VALUES (gen_random_uuid(), :nombre, :apellido, :ap_pat, :ap_mat, :correo, :ciudad, :telefono, :empresa, :cargo, :profesion, 'Mexico') RETURNING id"), {"nombre": (nombre or nombres) or None, "apellido": combined_apellido or None, "ap_pat": (apellido_paterno or "").strip() or None, "ap_mat": (apellido_materno or "").strip() or None, "correo": correo, "ciudad": ciudad or None, "telefono": telefono or None, "empresa": empresa or None, "cargo": cargo or None, "profesion": profesion or None})
+            pax_id = f"PAX-{uuid.uuid4().hex[:8].upper()}"
+            ins = await db.execute(text("INSERT INTO aaces.participantes (id, pax_id, cliente_id, nombre, apellido, apellido_paterno, apellido_materno, correo, ciudad_origen, telefono, empresa, cargo, nivel_educacion, pais) VALUES (gen_random_uuid(), :pax_id, :cid, :nombre, :apellido, :ap_pat, :ap_mat, :correo, :ciudad, :telefono, :empresa, :cargo, :profesion, 'Mexico') RETURNING id"), {"pax_id": pax_id, "cid": cid, "nombre": (nombre or nombres) or None, "apellido": combined_apellido or None, "ap_pat": (apellido_paterno or "").strip() or None, "ap_mat": (apellido_materno or "").strip() or None, "correo": correo, "ciudad": ciudad or None, "telefono": telefono or None, "empresa": empresa or None, "cargo": cargo or None, "profesion": profesion or None})
             pid = ins.scalar()
         # Evitar violación de UNIQUE: si ya existe la inscripción, reutilizar su id
         ex_global = await db.execute(text("SELECT id FROM aaces.curso_participante WHERE curso_id = :curso AND participante_id = :pid"), {"curso": curso_id, "pid": pid})
@@ -1697,11 +1807,11 @@ async def add_participante_curso(
 
 @router.get("/grupos-curso")
 async def get_grupos_curso(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(text(
             """
@@ -1742,11 +1852,11 @@ async def get_grupos_curso(
 @router.post("/grupos-curso")
 async def create_grupo_curso(
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(text("CREATE TABLE IF NOT EXISTS grupos_curso (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE, nombre VARCHAR(200) NOT NULL, descripcion TEXT, precio_base NUMERIC(10,2) DEFAULT 0, precio_promocional NUMERIC(10,2), estado VARCHAR(20) DEFAULT 'activo', fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)"))
         await db.execute(text("CREATE TABLE IF NOT EXISTS grupo_curso_items (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), grupo_id UUID NOT NULL REFERENCES grupos_curso(id) ON DELETE CASCADE, tipo_curso_id UUID NOT NULL REFERENCES tipos_curso(id) ON DELETE CASCADE, UNIQUE(grupo_id, tipo_curso_id))"))
@@ -1765,6 +1875,10 @@ async def create_grupo_curso(
         ins = await db.execute(text("INSERT INTO grupos_curso (id, cliente_id, nombre, descripcion, precio_base, precio_promocional, estado) VALUES (gen_random_uuid(), :cid, :nombre, :descripcion, :precio_base, :precio_promocional, 'activo') RETURNING id"), {"cid": cid, "nombre": nombre, "descripcion": descripcion, "precio_base": precio_base, "precio_promocional": precio_promocional})
         gid = ins.scalar()
         for tid in items:
+            # Los tipos deben pertenecer a la organización (no basta conocer el id).
+            ok = await db.execute(text("SELECT 1 FROM tipos_curso WHERE id = :tid AND cliente_id = :cid"), {"tid": tid, "cid": cid})
+            if ok.scalar() is None:
+                raise HTTPException(status_code=404, detail="Tipo de curso no encontrado")
             await db.execute(text("INSERT INTO grupo_curso_items (grupo_id, tipo_curso_id) VALUES (:gid, :tid) ON CONFLICT (grupo_id, tipo_curso_id) DO NOTHING"), {"gid": gid, "tid": tid})
         await db.commit()
         it = await db.execute(text("SELECT i.tipo_curso_id, t.nombre FROM grupo_curso_items i JOIN tipos_curso t ON t.id = i.tipo_curso_id WHERE i.grupo_id = :gid ORDER BY t.nombre"), {"gid": gid})
@@ -1780,11 +1894,11 @@ async def create_grupo_curso(
 async def update_grupo_curso(
     grupo_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM grupos_curso WHERE id = :id AND cliente_id = :cid"), {"id": grupo_id, "cid": cid})
         if own.scalar() is None:
@@ -1815,6 +1929,9 @@ async def update_grupo_curso(
         if "items" in payload and isinstance(payload.get("items"), list):
             await db.execute(text("DELETE FROM grupo_curso_items WHERE grupo_id = :id"), {"id": grupo_id})
             for tid in payload.get("items"):
+                ok = await db.execute(text("SELECT 1 FROM tipos_curso WHERE id = :tid AND cliente_id = :cid"), {"tid": tid, "cid": cid})
+                if ok.scalar() is None:
+                    raise HTTPException(status_code=404, detail="Tipo de curso no encontrado")
                 await db.execute(text("INSERT INTO grupo_curso_items (grupo_id, tipo_curso_id) VALUES (:gid, :tid) ON CONFLICT (grupo_id, tipo_curso_id) DO NOTHING"), {"gid": grupo_id, "tid": tid})
         await db.commit()
         it = await db.execute(text("SELECT i.tipo_curso_id, t.nombre FROM grupo_curso_items i JOIN tipos_curso t ON t.id = i.tipo_curso_id WHERE i.grupo_id = :gid ORDER BY t.nombre"), {"gid": grupo_id})
@@ -1833,11 +1950,11 @@ async def update_participante_curso(
     curso_id: str,
     cp_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
@@ -1968,11 +2085,11 @@ async def update_participante_curso(
 async def delete_participante_curso(
     curso_id: str,
     cp_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -1997,11 +2114,11 @@ async def delete_participante_curso(
 @router.get("/cursos/{curso_id}/constancias")
 async def list_constancias_curso(
     curso_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2028,11 +2145,11 @@ async def list_constancias_curso(
 async def create_constancia_curso(
     curso_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2065,11 +2182,11 @@ async def create_constancia_curso(
 @router.get("/cursos/{curso_id}/constancias/asignadas")
 async def list_constancias_asignadas_curso(
     curso_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2129,11 +2246,11 @@ async def asignar_constancia_participante(
     curso_id: str,
     cp_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2201,11 +2318,11 @@ async def asignar_constancia_participante(
 
 @router.get("/dashboard/metrics")
 async def get_cliente_dashboard_metrics(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cliente_id = user_data.get("sub")
+        cliente_id = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_base NUMERIC(10,2) DEFAULT 0"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
@@ -2269,11 +2386,11 @@ async def get_cliente_dashboard_metrics(
 
 @router.get("/constancias")
 async def list_constancias_cliente(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         q = text(
             """
@@ -2336,11 +2453,11 @@ async def create_tipo_curso(
     nombre: str,
     costo_por_persona: float,
     descripcion: Optional[str] = None,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cliente_id = user_data.get("sub")
+        cliente_id = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         await db.execute(
             text(
@@ -2389,11 +2506,11 @@ async def create_tipo_curso(
 async def delete_tipo_curso(
     tipo_id: str,
     migrate_to: Optional[str] = None,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cliente_id = user_data.get("sub")
+        cliente_id = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         row = await db.execute(text("SELECT nombre FROM tipos_curso WHERE id = :id AND cliente_id = :cid"), {"id": tipo_id, "cid": cliente_id})
         r = row.fetchone()
@@ -2428,11 +2545,11 @@ async def delete_tipo_curso(
 @router.get("/tipos-curso/{tipo_id}/migracion-conteo")
 async def conteo_migracion_tipo_curso(
     tipo_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cliente_id = user_data.get("sub")
+        cliente_id = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         row = await db.execute(text("SELECT nombre FROM tipos_curso WHERE id = :id AND cliente_id = :cid"), {"id": tipo_id, "cid": cliente_id})
         r = row.fetchone()
@@ -2449,11 +2566,11 @@ async def conteo_migracion_tipo_curso(
 
 @router.get("/tipos-curso")
 async def list_tipos_curso(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cliente_id = user_data.get("sub")
+        cliente_id = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         res = await db.execute(
             text(
@@ -2489,7 +2606,7 @@ async def list_tipos_curso(
                     text(
                         "SELECT id, nombre, descripcion, costo_por_persona, estado FROM tipos_curso WHERE cliente_id = :cid ORDER BY nombre"
                     ),
-                    {"cid": user_data.get("sub")}
+                    {"cid": cliente_id}
                 )
                 rows = res.fetchall()
                 return [{"id": r[0], "nombre": r[1], "descripcion": r[2], "costo_por_persona": float(r[3] or 0), "estado": r[4]} for r in rows]
@@ -2499,17 +2616,29 @@ async def list_tipos_curso(
 @router.put("/me/password")
 async def change_my_password(
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        uid = user_data.get("sub")
         current = payload.get("current_password")
         new = payload.get("new_password")
         if not new or len(new) < 6:
             raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+        # Tabla según el esquema de identidad (nunca asumir `clientes`).
+        if identity.source == "usuario":
+            tabla, con_must_change = "aaces.usuarios", True
+        elif identity.source == "cliente":
+            tabla, con_must_change = "aaces.clientes", True
+        elif identity.source == "plataforma":
+            tabla, con_must_change = "aaces.usuarios_plataforma", False
+        else:
+            raise HTTPException(status_code=403, detail="Tipo de usuario no soportado")
         # Obtener hash actual
-        res = await db.execute(text("SELECT password_hash, must_change_password FROM clientes WHERE id = :id"), {"id": uid})
+        cols = "password_hash, must_change_password" if con_must_change else "password_hash"
+        res = await db.execute(
+            text(f"SELECT {cols} FROM {tabla} WHERE id = :id"),
+            {"id": identity.user_id},
+        )
         row = res.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -2518,11 +2647,15 @@ async def change_my_password(
         if current:
             if not security_service.verify_password(current, row[0]):
                 raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
-        elif not row[1]:
+        elif con_must_change and not row[1]:
             raise HTTPException(status_code=400, detail="Debe proporcionar la contraseña actual")
         # Actualizar
         new_hash = security_service.hash_password(new)
-        await db.execute(text("UPDATE clientes SET password_hash = :ph, must_change_password = false, intentos_fallidos = 0, bloqueado_hasta = NULL, fecha_actualizacion = now() WHERE id = :id"), {"ph": new_hash, "id": uid})
+        set_extra = ", must_change_password = false" if con_must_change else ""
+        await db.execute(
+            text(f"UPDATE {tabla} SET password_hash = :ph{set_extra}, intentos_fallidos = 0, bloqueado_hasta = NULL, fecha_actualizacion = now() WHERE id = :id"),
+            {"ph": new_hash, "id": identity.user_id},
+        )
         await db.commit()
         return {"updated": 1}
     except HTTPException:
@@ -2532,11 +2665,11 @@ async def change_my_password(
 @router.post("/cursos/{curso_id}/migrar-datos")
 async def migrar_datos_curso(
     curso_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         own = await db.execute(text("SELECT 1 FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:
             raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -2546,147 +2679,13 @@ async def migrar_datos_curso(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error migrando datos del curso: {str(e)}")
 
-# --- Grupos de curso (redeclared to ensure route registration) ---
-@router.get("/grupos-curso")
-async def grupos_curso_list(
-    user_data: dict = Depends(get_current_user_data),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        cid = user_data.get("sub")
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        await db.execute(text(
-            """
-            CREATE TABLE IF NOT EXISTS grupos_curso (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
-              nombre VARCHAR(200) NOT NULL,
-              descripcion TEXT,
-              precio_base NUMERIC(10,2) DEFAULT 0,
-              precio_promocional NUMERIC(10,2),
-              estado VARCHAR(20) DEFAULT 'activo',
-              fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        ))
-        await db.execute(text(
-            """
-            CREATE TABLE IF NOT EXISTS grupo_curso_items (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              grupo_id UUID NOT NULL REFERENCES grupos_curso(id) ON DELETE CASCADE,
-              tipo_curso_id UUID NOT NULL REFERENCES tipos_curso(id) ON DELETE CASCADE,
-              UNIQUE(grupo_id, tipo_curso_id)
-            )
-            """
-        ))
-        res = await db.execute(text("SELECT id, nombre, descripcion, precio_base, precio_promocional, estado FROM grupos_curso WHERE cliente_id = :cid ORDER BY nombre"), {"cid": cid})
-        rows = res.fetchall()
-        data = []
-        for r in rows:
-            gid = r[0]
-            it = await db.execute(text("SELECT i.tipo_curso_id, t.nombre FROM grupo_curso_items i JOIN tipos_curso t ON t.id = i.tipo_curso_id WHERE i.grupo_id = :gid ORDER BY t.nombre"), {"gid": gid})
-            items = [{"id": ir[0], "nombre": ir[1]} for ir in it.fetchall()]
-            data.append({"id": r[0], "nombre": r[1], "descripcion": r[2], "precio_base": float(r[3] or 0), "precio_promocional": float(r[4] or 0) if r[4] is not None else None, "estado": r[5], "items": items})
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo grupos: {str(e)}")
-
-@router.post("/grupos-curso")
-async def grupos_curso_create(
-    payload: dict,
-    user_data: dict = Depends(get_current_user_data),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        cid = user_data.get("sub")
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        await db.execute(text("CREATE TABLE IF NOT EXISTS grupos_curso (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), cliente_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE, nombre VARCHAR(200) NOT NULL, descripcion TEXT, precio_base NUMERIC(10,2) DEFAULT 0, precio_promocional NUMERIC(10,2), estado VARCHAR(20) DEFAULT 'activo', fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP)"))
-        await db.execute(text("CREATE TABLE IF NOT EXISTS grupo_curso_items (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), grupo_id UUID NOT NULL REFERENCES grupos_curso(id) ON DELETE CASCADE, tipo_curso_id UUID NOT NULL REFERENCES tipos_curso(id) ON DELETE CASCADE, UNIQUE(grupo_id, tipo_curso_id))"))
-        nombre = (payload.get("nombre") or "").strip()
-        descripcion = (payload.get("descripcion") or None)
-        precio_base = float(payload.get("precio_base") or 0)
-        precio_promocional = payload.get("precio_promocional")
-        if precio_promocional is not None:
-            try:
-                precio_promocional = float(precio_promocional)
-            except Exception:
-                precio_promocional = None
-        items = payload.get("items") or []
-        if not nombre:
-            raise HTTPException(status_code=400, detail="nombre requerido")
-        ins = await db.execute(text("INSERT INTO grupos_curso (id, cliente_id, nombre, descripcion, precio_base, precio_promocional, estado) VALUES (gen_random_uuid(), :cid, :nombre, :descripcion, :precio_base, :precio_promocional, 'activo') RETURNING id"), {"cid": cid, "nombre": nombre, "descripcion": descripcion, "precio_base": precio_base, "precio_promocional": precio_promocional})
-        gid = ins.scalar()
-        for tid in items:
-            await db.execute(text("INSERT INTO grupo_curso_items (grupo_id, tipo_curso_id) VALUES (:gid, :tid) ON CONFLICT (grupo_id, tipo_curso_id) DO NOTHING"), {"gid": gid, "tid": tid})
-        await db.commit()
-        it = await db.execute(text("SELECT i.tipo_curso_id, t.nombre FROM grupo_curso_items i JOIN tipos_curso t ON t.id = i.tipo_curso_id WHERE i.grupo_id = :gid ORDER BY t.nombre"), {"gid": gid})
-        items_out = [{"id": ir[0], "nombre": ir[1]} for ir in it.fetchall()]
-        return {"id": str(gid), "nombre": nombre, "descripcion": descripcion, "precio_base": precio_base, "precio_promocional": precio_promocional, "estado": "activo", "items": items_out}
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creando grupo: {str(e)}")
-
-@router.put("/grupos-curso/{grupo_id}")
-async def grupos_curso_update(
-    grupo_id: str,
-    payload: dict,
-    user_data: dict = Depends(get_current_user_data),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        cid = user_data.get("sub")
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        own = await db.execute(text("SELECT 1 FROM grupos_curso WHERE id = :id AND cliente_id = :cid"), {"id": grupo_id, "cid": cid})
-        if own.scalar() is None:
-            raise HTTPException(status_code=404, detail="Grupo no encontrado")
-        sets = []
-        params = {"id": grupo_id}
-        if "nombre" in payload:
-            sets.append("nombre = :nombre"); params["nombre"] = (payload.get("nombre") or "").strip()
-        if "descripcion" in payload:
-            sets.append("descripcion = :descripcion"); params["descripcion"] = payload.get("descripcion")
-        if "precio_base" in payload:
-            try:
-                pb = float(payload.get("precio_base") or 0)
-            except Exception:
-                pb = 0
-            sets.append("precio_base = :precio_base"); params["precio_base"] = pb
-        if "precio_promocional" in payload:
-            pp = payload.get("precio_promocional")
-            try:
-                pp = float(pp) if pp is not None else None
-            except Exception:
-                pp = None
-            sets.append("precio_promocional = :precio_promocional"); params["precio_promocional"] = pp
-        if "estado" in payload:
-            sets.append("estado = :estado"); params["estado"] = (payload.get("estado") or "").strip() or "activo"
-        if sets:
-            await db.execute(text(f"UPDATE grupos_curso SET {', '.join(sets)} WHERE id = :id"), params)
-        if "items" in payload and isinstance(payload.get("items"), list):
-            await db.execute(text("DELETE FROM grupo_curso_items WHERE grupo_id = :id"), {"id": grupo_id})
-            for tid in payload.get("items"):
-                await db.execute(text("INSERT INTO grupo_curso_items (grupo_id, tipo_curso_id) VALUES (:gid, :tid) ON CONFLICT (grupo_id, tipo_curso_id) DO NOTHING"), {"gid": grupo_id, "tid": tid})
-        await db.commit()
-        it = await db.execute(text("SELECT i.tipo_curso_id, t.nombre FROM grupo_curso_items i JOIN tipos_curso t ON t.id = i.tipo_curso_id WHERE i.grupo_id = :gid ORDER BY t.nombre"), {"gid": grupo_id})
-        items_out = [{"id": ir[0], "nombre": ir[1]} for ir in it.fetchall()]
-        row = await db.execute(text("SELECT id, nombre, descripcion, precio_base, precio_promocional, estado FROM grupos_curso WHERE id = :id"), {"id": grupo_id})
-        r = row.fetchone()
-        return {"id": r[0], "nombre": r[1], "descripcion": r[2], "precio_base": float(r[3] or 0), "precio_promocional": float(r[4] or 0) if r[4] is not None else None, "estado": r[5], "items": items_out}
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error actualizando grupo: {str(e)}")
-
 @router.post("/cursos/migrar/todos")
 async def migrar_todos_mis_cursos(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         return {"migrados": 0}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error migrando todos los cursos: {str(e)}")
@@ -2694,11 +2693,11 @@ async def migrar_todos_mis_cursos(
 @router.delete("/cursos/{curso_id}")
 async def delete_curso(
     curso_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        cid = user_data.get("sub")
+        cid = await get_current_cliente_id(db, identity)
         await db.execute(text("SET LOCAL search_path TO aaces"))
         own = await db.execute(text("SELECT 1 FROM cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})
         if own.scalar() is None:

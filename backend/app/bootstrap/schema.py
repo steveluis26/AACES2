@@ -390,6 +390,12 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE aaces.curso_participante ALTER COLUMN codigo_validacion TYPE VARCHAR(36)",
         "UPDATE aaces.planes SET activo = true WHERE activo IS NULL",
         "UPDATE aaces.usuarios SET activo = true WHERE activo IS NULL",
+        # Fase 2: validación STPS del Agente Capacitador Externo.
+        # Solo una org con stps_validado puede emitir constancias oficiales
+        # (las de trial llevan marca de agua PRUEBA hasta validarse).
+        "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_registro VARCHAR(50)",
+        "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_validado BOOLEAN DEFAULT false",
+        "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_validado_en TIMESTAMPTZ",
     ]:
         try:
             async with conn.begin_nested():

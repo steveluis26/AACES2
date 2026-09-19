@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, case, text
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, date
+from uuid import UUID
 import secrets
 import string
 
@@ -662,9 +663,30 @@ async def update_admin_cliente(
                 params[k] = payload[k]
         if not sets:
             return {"updated": 0}
+        # Leer valores previos para el audit log (plan, límites, estado, vigencias son sensibles).
+        res_prev = await db.execute(
+            text("SELECT nombre, correo, categoria, estado, ciudad_base, vigencia_desde, vigencia_hasta, plan, cursos_max, descuento_pct FROM clientes WHERE id = :id"),
+            {"id": cliente_id},
+        )
+        row_prev = res_prev.fetchone()
+        if not row_prev:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        keys = ["nombre", "correo", "categoria", "estado", "ciudad_base", "vigencia_desde", "vigencia_hasta", "plan", "cursos_max", "descuento_pct"]
+        prev = {k: str(v) if v is not None else None for k, v in zip(keys, row_prev)}
         q = text(f"UPDATE clientes SET {', '.join(sets)}, fecha_actualizacion = now() WHERE id = :id")
         await db.execute(q, params)
         await db.commit()
+        audit_logger.log_user_action(
+            user_id=user_data["sub"],
+            action="update_admin_cliente",
+            resource="cliente",
+            details={
+                "cliente_id": cliente_id,
+                "campos_modificados": [k for k in allowed if k in payload],
+                "valores_previos": {k: prev[k] for k in allowed if k in payload},
+                "valores_nuevos": {k: payload[k] for k in allowed if k in payload},
+            },
+        )
         return {"updated": 1}
     except Exception as e:
         await db.rollback()
@@ -678,7 +700,7 @@ async def delete_admin_cliente(
     user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
     try:
-        await db.execute(text("UPDATE clientes SET estado = 'eliminado', fecha_eliminacion = now() WHERE id = :id"), {"id": cliente_id})
+        await db.execute(text("UPDATE clientes SET estado = 'eliminado', fecha_eliminacion_logica = now() WHERE id = :id"), {"id": cliente_id})
         await db.commit()
         return {"deleted": 1}
     except Exception as e:
@@ -694,10 +716,16 @@ async def enforce_vigencia(
 ):
     try:
         if ids and len(ids) > 0:
-            tmp_ids = ",".join([f"'{i}'" for i in ids])
-            where_ids = f"id IN ({tmp_ids})"
+            # Validar UUIDs y usar parámetro ligado (ANY) — nunca interpolar.
+            try:
+                uuids = [str(UUID(i)) for i in ids]
+            except (ValueError, AttributeError, TypeError):
+                raise HTTPException(status_code=400, detail="IDs inválidos")
+            where_ids = "id = ANY(:ids)"
+            extra_params = {"ids": uuids}
         else:
             where_ids = "estado <> 'eliminado'"
+            extra_params = {}
         q = text(
             f"""
             UPDATE clientes
@@ -710,7 +738,7 @@ async def enforce_vigencia(
             WHERE {where_ids}
             """
         )
-        await db.execute(q)
+        await db.execute(q, extra_params)
         await db.commit()
         return {"enforced": True}
     except Exception as e:
@@ -731,9 +759,13 @@ async def bulk_update_estado(
             raise HTTPException(status_code=400, detail="Estado inválido")
         if not ids:
             return {"updated": 0}
-        tmp_ids = ",".join([f"'{i}'" for i in ids])
-        q = text(f"UPDATE clientes SET estado = :estado, fecha_actualizacion = now() WHERE id IN ({tmp_ids})")
-        await db.execute(q, {"estado": estado})
+        # Validar UUIDs y usar parámetro ligado (ANY) — nunca interpolar.
+        try:
+            uuids = [str(UUID(i)) for i in ids]
+        except (ValueError, AttributeError, TypeError):
+            raise HTTPException(status_code=400, detail="IDs inválidos")
+        q = text("UPDATE clientes SET estado = :estado, fecha_actualizacion = now() WHERE id = ANY(:ids)")
+        await db.execute(q, {"estado": estado, "ids": uuids})
         await db.commit()
         return {"updated": len(ids)}
     except HTTPException:
@@ -833,7 +865,8 @@ async def get_participantes_por_cliente(
         rows = res.all()
         participantes = [
             {
-                "id": r[0], "nombre": r[1], "apellido": r[2], "nombres": r[3], "apellido_paterno": r[4], "apellido_materno": r[5], "correo": r[6], "ciudad": r[7], "profesion": r[8]
+                "id": r[0], "nombre": r[1], "apellido": r[2], "apellido_paterno": r[3],
+                "apellido_materno": r[4], "correo": r[5], "ciudad_origen": r[6], "nivel_educacion": r[7]
             } for r in rows
         ]
         return {"data": participantes}
@@ -1203,6 +1236,64 @@ async def suspender_organizacion(
     await db.commit()
 
     return {"success": True, "message": "Organización suspendida"}
+
+
+@router.put("/organizaciones/{org_id}/validar-stps")
+async def validar_stps_organizacion(
+    org_id: str,
+    payload: Dict[str, Any],
+    user_data: Dict[str, Any] = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Valida (o revoca) el registro STPS de una organización.
+
+    Solo la plataforma, tras comprobar que la org es un Agente Capacitador
+    Externo real. Una org con stps_validado=true puede emitir constancias
+    oficiales; sin validar, sus constancias llevan marca de agua PRUEBA.
+    """
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    res = await db.execute(
+        text("SELECT id FROM aaces.organizaciones WHERE id = :id"),
+        {"id": org_id}
+    )
+    if not res.fetchone():
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    validado = bool(payload.get("validado", True))
+    stps_registro = (payload.get("stps_registro") or "").strip().upper() or None
+    if validado and not stps_registro:
+        actual = await db.execute(
+            text("SELECT stps_registro FROM aaces.organizaciones WHERE id = :id"),
+            {"id": org_id}
+        )
+        if not (actual.fetchone() or [None])[0]:
+            raise HTTPException(
+                status_code=400,
+                detail="Se requiere el número de registro STPS para validar"
+            )
+
+    await db.execute(
+        text("""
+            UPDATE aaces.organizaciones
+            SET stps_registro = COALESCE(:stps_registro, stps_registro),
+                stps_validado = :validado,
+                stps_validado_en = CASE WHEN :validado THEN CURRENT_TIMESTAMP ELSE NULL END,
+                notas_admin = COALESCE(:notas, notas_admin)
+            WHERE id = :id
+        """),
+        {
+            "id": org_id,
+            "stps_registro": stps_registro,
+            "validado": validado,
+            "notas": payload.get("notas_admin"),
+        }
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": "Registro STPS validado" if validado else "Validación STPS revocada",
+    }
 
 
 @router.put("/organizaciones/{org_id}/suscripcion")

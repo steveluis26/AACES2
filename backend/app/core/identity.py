@@ -36,7 +36,8 @@ class Identity:
 
     Attributes:
         user_id: ID del usuario (= JWT ``sub``). Siempre un user id.
-        source: "plataforma" (super admin) | "usuario" (org).
+        source: "plataforma" (super admin) | "usuario" (org, esquema nuevo)
+            | "cliente" (org, esquema legacy).
         role: rol del claim del token.
         email: correo del claim (o del registro).
         org_id: ID de la organización resuelto desde la BD.
@@ -115,8 +116,8 @@ async def get_current_identity(
 
 
 async def get_current_cliente_id(
-    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
+    identity: Identity = Depends(get_current_identity),
 ) -> str:
     """Resuelve el ``cliente_id`` legacy para la organización del usuario.
 
@@ -130,7 +131,7 @@ async def get_current_cliente_id(
         )
 
     row = await db.execute(
-        text("SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id LIMIT 1"),
+        text("SELECT id FROM aaces.clientes WHERE organizacion_id = :org_id ORDER BY fecha_creacion LIMIT 1"),
         {"org_id": identity.org_id},
     )
     rec = row.fetchone()
@@ -180,3 +181,33 @@ async def require_org_identity(
             detail="Se requiere un usuario con organización asociada",
         )
     return identity
+
+
+async def require_org_id(
+    db: AsyncSession,
+    identity: Identity,
+) -> str:
+    """Resuelve el org_id del usuario desde la BD.
+
+    - source=usuario → identity.org_id (ya validado contra usuarios.organizacion_id).
+    - source=cliente (legacy) → puente vía clientes.organizacion_id.
+    - source=plataforma → 403: la plataforma no tiene organización propia;
+      los endpoints multi-org deben manejar ese caso explícitamente.
+
+    Si no hay organización vinculada, lanza 403 con error explícito
+    (nunca fallback a otra organización).
+    """
+    if identity.source == "usuario" and identity.org_id:
+        return identity.org_id
+    if identity.source == "cliente":
+        row = await db.execute(
+            text("SELECT organizacion_id FROM aaces.clientes WHERE id = :id"),
+            {"id": identity.user_id},
+        )
+        rec = row.fetchone()
+        if rec and rec[0]:
+            return str(rec[0])
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Se requiere una organización asociada",
+    )

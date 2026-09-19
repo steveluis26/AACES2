@@ -8,7 +8,7 @@ from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.api.v1.endpoints.auth import get_current_user_data
+from app.core.identity import get_current_identity, get_current_cliente_id, Identity
 
 router = APIRouter()
 
@@ -31,12 +31,10 @@ class AcreditarSchema(BaseModel):
 async def participantes_proximos_a_vencer(
     dias: int = Query(60, ge=1, le=365),
     empresa: str = Query(""),
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     if empresa:
@@ -113,12 +111,10 @@ async def participantes_proximos_a_vencer(
 
 @router.get("/vencimientos-por-empresa")
 async def vencimientos_por_empresa(
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     rows = (
@@ -161,12 +157,10 @@ async def buscar_posibles_duplicados(
     nombre: str = Query(""),
     correo: str = Query(""),
     telefono: str = Query(""),
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     rows = (
@@ -211,12 +205,10 @@ async def buscar_posibles_duplicados(
 @router.get("")
 async def list_participantes(
     q: str = Query(""),
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     if q:
@@ -266,12 +258,10 @@ async def list_participantes(
 @router.get("/{participante_id}", response_model=None)
 async def get_participante(
     participante_id: str,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     p = (
@@ -374,12 +364,10 @@ async def get_participante(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_participante(
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     nombre = (payload.get("nombre") or "").strip()
@@ -421,12 +409,10 @@ async def create_participante(
 async def update_participante(
     participante_id: str,
     payload: dict,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
     existing = await db.execute(
@@ -461,12 +447,10 @@ async def update_participante(
 async def acreditar_participante(
     participante_id: str,
     payload: AcreditarSchema,
-    user_data: dict = Depends(get_current_user_data),
+    identity: Identity = Depends(get_current_identity),
     db: AsyncSession = Depends(get_db),
 ):
-    cid = user_data.get("sub")
-    if not cid:
-        raise HTTPException(status_code=401, detail="Usuario no autenticado")
+    cid = await get_current_cliente_id(db, identity)
 
     await db.execute(text("SET LOCAL search_path TO aaces"))
 
