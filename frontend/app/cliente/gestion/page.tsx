@@ -73,10 +73,10 @@ export default function GestionClientePage() {
     if (!nombre || !ciudad) return
     if ((nuevoCurso.estado || 'pendiente') === 'activo' && !fi) { alert('Para estado Activo, debes asignar al menos la fecha de inicio'); return }
     const payload: Record<string, unknown> = { nombre, ciudad, empresa_contratante: (nuevoCurso.empresa_contratante || '').trim() }
-    if ((nuevoCurso.estado || 'pendiente') === 'activo') {
-      if (fi) payload.fecha_inicio = fi
-      if (ff) payload.fecha_fin = ff
-    }
+    // Las fechas se envían siempre que estén capturadas; el backend deriva
+    // el estado (en_espera/activo) a partir de ellas e ignora el 'estado' del form.
+    if (fi) payload.fecha_inicio = fi
+    if (ff) payload.fecha_fin = ff
     const precioBaseStr = (nuevoCurso.precio_base || '').trim()
     const precioPromoStr = (nuevoCurso.precio_promocional || '').trim()
     if (precioBaseStr) { const n = Number(precioBaseStr); if (Number.isFinite(n) && n >= 0) payload.precio_base = n }
