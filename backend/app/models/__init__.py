@@ -555,3 +555,76 @@ class Notificacion(Base):
         Index('idx_notificaciones_org_leida', 'organizacion_id', 'leida'),
         Index('idx_notificaciones_fecha', 'fecha_creacion'),
     )
+
+
+class CatalogoCurso(Base):
+    """Catálogo de cursos que imparte una organización (definición reutilizable).
+
+    Un curso programado (``cursos``) nace opcionalmente de una entrada del
+    catálogo; el prellenado es una copia editable y no modifica el catálogo.
+    ``publicado`` marca lo que la org quiere mostrar en el futuro directorio
+    público (búsqueda por curso + ciudad/estado). Privado por defecto.
+    """
+    __tablename__ = "catalogo_cursos"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    nombre = Column(String(200), nullable=False)
+    descripcion = Column(Text)
+    duracion_horas = Column(Integer, nullable=False, default=8)
+    vigencia_meses = Column(Integer, nullable=False, default=24)
+    precio = Column(Numeric(10, 2), nullable=False, default=0)
+    moneda = Column(String(3), nullable=False, default='MXN')
+    ciudad = Column(String(100))
+    estado = Column(String(100))
+    modalidad = Column(String(20), nullable=False, default='presencial')
+    publicado = Column(Boolean, nullable=False, default=False)
+    activo = Column(Boolean, nullable=False, default=True)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    organizacion = relationship("Organizacion", foreign_keys=[organizacion_id])
+
+    __table_args__ = (
+        CheckConstraint("modalidad IN ('presencial', 'virtual', 'mixta')", name="check_modalidad_catalogo"),
+        CheckConstraint("duracion_horas > 0", name="check_duracion_catalogo"),
+        CheckConstraint("vigencia_meses > 0", name="check_vigencia_catalogo"),
+        CheckConstraint("precio >= 0", name="check_precio_catalogo"),
+        Index('idx_catalogo_org', 'organizacion_id'),
+        Index('idx_catalogo_publicado', 'publicado'),
+        Index('idx_catalogo_ciudad', 'ciudad'),
+        Index('idx_catalogo_estado', 'estado'),
+    )
+
+
+class Paquete(Base):
+    """Paquete de cursos del catálogo con precio propio definido por la org."""
+    __tablename__ = "paquetes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organizacion_id = Column(UUID(as_uuid=True), ForeignKey("organizaciones.id", ondelete="CASCADE"), nullable=False)
+    nombre = Column(String(200), nullable=False)
+    descripcion = Column(Text)
+    precio = Column(Numeric(10, 2), nullable=False, default=0)
+    moneda = Column(String(3), nullable=False, default='MXN')
+    publicado = Column(Boolean, nullable=False, default=False)
+    activo = Column(Boolean, nullable=False, default=True)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    organizacion = relationship("Organizacion", foreign_keys=[organizacion_id])
+    cursos = relationship("CatalogoCurso", secondary="paquete_cursos")
+
+    __table_args__ = (
+        CheckConstraint("precio >= 0", name="check_precio_paquete"),
+        Index('idx_paquetes_org', 'organizacion_id'),
+        Index('idx_paquetes_publicado', 'publicado'),
+    )
+
+
+class PaqueteCurso(Base):
+    """Relación muchos-a-muchos paquete <-> curso del catálogo."""
+    __tablename__ = "paquete_cursos"
+
+    paquete_id = Column(UUID(as_uuid=True), ForeignKey("paquetes.id", ondelete="CASCADE"), primary_key=True)
+    catalogo_curso_id = Column(UUID(as_uuid=True), ForeignKey("catalogo_cursos.id", ondelete="CASCADE"), primary_key=True)

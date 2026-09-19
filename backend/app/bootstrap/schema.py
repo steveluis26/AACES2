@@ -414,6 +414,87 @@ async def create_notificaciones(conn: AsyncConnection) -> None:
         await conn.execute(text(idx))
 
 
+async def create_catalogo(conn: AsyncConnection) -> None:
+    # V008: catálogo de cursos + paquetes por organización.
+    # Tablas nuevas: CREATE TABLE IF NOT EXISTS es suficiente (no hay drift
+    # legacy). Además se agrega la columna opcional catalogo_curso_id a cursos
+    # con su FK, porque la tabla legacy no la tiene (lección: toda columna
+    # nueva en tabla existente necesita reparación explícita).
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.catalogo_cursos (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          nombre VARCHAR(200) NOT NULL,
+          descripcion TEXT,
+          duracion_horas INTEGER NOT NULL DEFAULT 8,
+          vigencia_meses INTEGER NOT NULL DEFAULT 24,
+          precio NUMERIC(10,2) NOT NULL DEFAULT 0,
+          moneda VARCHAR(3) NOT NULL DEFAULT 'MXN',
+          ciudad VARCHAR(100),
+          estado VARCHAR(100),
+          modalidad VARCHAR(20) NOT NULL DEFAULT 'presencial',
+          publicado BOOLEAN NOT NULL DEFAULT false,
+          activo BOOLEAN NOT NULL DEFAULT true,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT check_modalidad_catalogo CHECK (modalidad IN ('presencial', 'virtual', 'mixta')),
+          CONSTRAINT check_duracion_catalogo CHECK (duracion_horas > 0),
+          CONSTRAINT check_vigencia_catalogo CHECK (vigencia_meses > 0),
+          CONSTRAINT check_precio_catalogo CHECK (precio >= 0)
+        )
+    """))
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.paquetes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          nombre VARCHAR(200) NOT NULL,
+          descripcion TEXT,
+          precio NUMERIC(10,2) NOT NULL DEFAULT 0,
+          moneda VARCHAR(3) NOT NULL DEFAULT 'MXN',
+          publicado BOOLEAN NOT NULL DEFAULT false,
+          activo BOOLEAN NOT NULL DEFAULT true,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT check_precio_paquete CHECK (precio >= 0)
+        )
+    """))
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.paquete_cursos (
+          paquete_id UUID NOT NULL REFERENCES aaces.paquetes(id) ON DELETE CASCADE,
+          catalogo_curso_id UUID NOT NULL REFERENCES aaces.catalogo_cursos(id) ON DELETE CASCADE,
+          PRIMARY KEY (paquete_id, catalogo_curso_id)
+        )
+    """))
+    # Columna de vínculo en cursos (tabla legacy): ADD COLUMN IF NOT EXISTS + FK.
+    await conn.execute(text(
+        "ALTER TABLE IF EXISTS aaces.cursos ADD COLUMN IF NOT EXISTS catalogo_curso_id UUID"
+    ))
+    try:
+        async with conn.begin_nested():
+            await conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_cursos_catalogo_curso') THEN
+                        ALTER TABLE aaces.cursos
+                            ADD CONSTRAINT fk_cursos_catalogo_curso
+                            FOREIGN KEY (catalogo_curso_id) REFERENCES aaces.catalogo_cursos(id)
+                            ON DELETE SET NULL;
+                    END IF;
+                END $$;
+            """))
+    except Exception:
+        pass
+    for idx in [
+        "CREATE INDEX IF NOT EXISTS idx_catalogo_org ON aaces.catalogo_cursos (organizacion_id)",
+        "CREATE INDEX IF NOT EXISTS idx_catalogo_publicado ON aaces.catalogo_cursos (publicado)",
+        "CREATE INDEX IF NOT EXISTS idx_catalogo_ciudad ON aaces.catalogo_cursos (ciudad)",
+        "CREATE INDEX IF NOT EXISTS idx_catalogo_estado ON aaces.catalogo_cursos (estado)",
+        "CREATE INDEX IF NOT EXISTS idx_paquetes_org ON aaces.paquetes (organizacion_id)",
+        "CREATE INDEX IF NOT EXISTS idx_paquetes_publicado ON aaces.paquetes (publicado)",
+    ]:
+        await conn.execute(text(idx))
+
+
 async def create_legacy_fixes(conn: AsyncConnection) -> None:
     for stmt in [
         "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS organizacion_id UUID REFERENCES aaces.organizaciones(id) ON DELETE SET NULL",
@@ -511,6 +592,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_documentos_emitidos,
         create_verificaciones,
         create_notificaciones,
+        create_catalogo,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

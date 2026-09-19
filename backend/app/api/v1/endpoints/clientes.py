@@ -112,6 +112,7 @@ class CursoCreatePayload(BaseModel):
     precio_promocional: Optional[float] = None
     vigencia_meses: Optional[int] = None
     modalidad: Optional[str] = 'presencial'
+    catalogo_curso_id: Optional[str] = None
 
 @router.get("/clientes", response_model=PaginatedResponse[ClienteResponse])
 async def get_clientes(
@@ -993,11 +994,12 @@ async def crear_curso(
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS vigencia_meses INTEGER"))
         await db.execute(text("ALTER TABLE IF EXISTS cursos ALTER COLUMN vigencia_meses DROP DEFAULT"))
+        await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS catalogo_curso_id UUID"))
 
         q = text(
             """
-            INSERT INTO cursos (id, cliente_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, creado_por, fecha_creacion)
-            VALUES (gen_random_uuid(), :cid, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :cid, now())
+            INSERT INTO cursos (id, cliente_id, codigo_curso, nombre, ciudad, fecha_inicio, fecha_fin, duracion_horas, modalidad, estado, empresa_contratante, grupo_id, precio_base, precio_promocional, vigencia_meses, catalogo_curso_id, creado_por, fecha_creacion)
+            VALUES (gen_random_uuid(), :cid, :code, :nombre, :ciudad, :fi, :ff, :duracion, :modalidad, :estado, :empresa, :grupo_id, :precio_base, :precio_promocional, :vigencia_meses, :catalogo_curso_id, :cid, now())
             RETURNING id
             """
         )
@@ -1017,8 +1019,18 @@ async def crear_curso(
             except Exception:
                 vigm = None
         modalidad_in = str(data.get("modalidad") or "presencial").strip().lower()
-        modalidad_val = "virtual" if modalidad_in == "virtual" else "presencial"
-        res = await db.execute(q, {"cid": cid, "code": f"CUR-{code_base}-{suffix}", "nombre": nombre, "ciudad": ciudad, "fi": fi_dt, "ff": ff_dt, "empresa": empresa, "duracion": duracion, "estado": estado_ins, "grupo_id": grupo_id, "precio_base": precio_base, "precio_promocional": precio_promocional, "vigencia_meses": vigm, "modalidad": modalidad_val})
+        modalidad_val = modalidad_in if modalidad_in in ("presencial", "virtual", "mixta") else "presencial"
+        # Vínculo opcional al catálogo: el curso del catálogo debe ser de la
+        # propia organización (el FK solo valida existencia, no propiedad).
+        catalogo_curso_id = data.get("catalogo_curso_id") or None
+        if catalogo_curso_id and org_id:
+            own = await db.execute(
+                text("SELECT 1 FROM aaces.catalogo_cursos WHERE id = :cid AND organizacion_id = :org_id AND activo = true LIMIT 1"),
+                {"cid": catalogo_curso_id, "org_id": org_id},
+            )
+            if not own.fetchone():
+                raise HTTPException(status_code=400, detail="Curso del catálogo inválido")
+        res = await db.execute(q, {"cid": cid, "code": f"CUR-{code_base}-{suffix}", "nombre": nombre, "ciudad": ciudad, "fi": fi_dt, "ff": ff_dt, "empresa": empresa, "duracion": duracion, "estado": estado_ins, "grupo_id": grupo_id, "precio_base": precio_base, "precio_promocional": precio_promocional, "vigencia_meses": vigm, "modalidad": modalidad_val, "catalogo_curso_id": catalogo_curso_id})
         parent_id = res.scalar()
 
         # Subcursos

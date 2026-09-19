@@ -44,6 +44,7 @@ const MENU_SUPERADMIN = [
 
 const MENU_CLIENTE = [
   { title: "Dashboard",  url: "/cliente/dashboard",   icon: LayoutDashboardIcon },
+  { title: "Catálogo",   url: "/cliente/catalogo",    icon: FolderIcon },
   { title: "Cursos",        url: "/cliente/cursos",          icon: ListIcon },
   { title: "Participantes", url: "/cliente/participantes",    icon: UsersIcon },
   { title: "Renovaciones", url: "/cliente/renovaciones",      icon: RefreshCwIcon },

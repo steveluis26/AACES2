@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 
 async def ensure_schema_version(conn: AsyncConnection) -> None:
@@ -22,6 +22,6 @@ async def ensure_schema_version(conn: AsyncConnection) -> None:
             VALUES (:v, :desc)
             ON CONFLICT (version) DO NOTHING
         """),
-        {"v": CURRENT_SCHEMA_VERSION, "desc": "tabla notificaciones: centro de avisos + recordatorios (V007)"},
+        {"v": CURRENT_SCHEMA_VERSION, "desc": "catalogo de cursos + paquetes por organizacion (V008)"},
     )
     logger.info("Schema version %d ensured.", CURRENT_SCHEMA_VERSION)

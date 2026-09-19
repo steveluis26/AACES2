@@ -14,7 +14,9 @@ export default function GestionClientePage() {
   const [grupos, setGrupos] = useState<GrupoCurso[]>([])
   const [cursos, setCursos] = useState<CursoAgenda[]>([])
   const [editCurso, setEditCurso] = useState<Record<string, { precio_base?: string; precio_promocional?: string }>>({})
-  const [nuevoCurso, setNuevoCurso] = useState<{ nombre: string; grupo_id?: string; estado?: 'activo' | 'pendiente'; modalidad?: 'presencial' | 'virtual'; ciudad: string; empresa_contratante: string; fecha_inicio: string; fecha_fin: string; precio_base: string; precio_promocional: string; vigencia_meses: string }>({ nombre: '', grupo_id: '', estado: 'pendiente', modalidad: 'presencial', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '' })
+  const [nuevoCurso, setNuevoCurso] = useState<{ nombre: string; grupo_id?: string; estado?: 'activo' | 'pendiente'; modalidad?: 'presencial' | 'virtual' | 'mixta'; ciudad: string; empresa_contratante: string; fecha_inicio: string; fecha_fin: string; precio_base: string; precio_promocional: string; vigencia_meses: string }>({ nombre: '', grupo_id: '', estado: 'pendiente', modalidad: 'presencial', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '' })
+  const [catalogo, setCatalogo] = useState<Array<{ id: string; nombre: string; ciudad: string | null; estado: string | null; modalidad: string; duracion_horas: number; vigencia_meses: number; precio: number }>>([])
+  const [catalogoSel, setCatalogoSel] = useState('')
   const [nuevoConstancias, setNuevoConstancias] = useState<Array<{ nombre: string; norma?: string }>>([])
   const [nuevoConstNombre, setNuevoConstNombre] = useState('')
   const [nuevoConstNorma, setNuevoConstNorma] = useState('')
@@ -48,7 +50,32 @@ export default function GestionClientePage() {
     }
   }, [])
 
-  useEffect(() => { loadGrupos(); loadCursos() }, [loadGrupos, loadCursos])
+  const loadCatalogo = useCallback(async () => {
+    try {
+      const data = await apiRequest('/catalogo/cursos')
+      setCatalogo(Array.isArray(data) ? data : [])
+    } catch {
+      setCatalogo([])
+    }
+  }, [])
+
+  useEffect(() => { loadGrupos(); loadCursos(); loadCatalogo() }, [loadGrupos, loadCursos, loadCatalogo])
+
+  const usarDelCatalogo = (id: string) => {
+    setCatalogoSel(id)
+    if (!id) return
+    const c = catalogo.find(x => x.id === id)
+    if (!c) return
+    // Prefill editable: copia los datos, no modifica el catálogo.
+    setNuevoCurso(s => ({
+      ...s,
+      nombre: c.nombre,
+      ciudad: c.ciudad || s.ciudad,
+      modalidad: (c.modalidad as 'presencial' | 'virtual' | 'mixta') || 'presencial',
+      vigencia_meses: String(c.vigencia_meses || ''),
+      precio_base: c.precio != null ? String(c.precio) : s.precio_base,
+    }))
+  }
 
   
 
@@ -92,6 +119,7 @@ export default function GestionClientePage() {
     { const n = Number(vigStr); if (!Number.isFinite(n) || n <= 0) { setCursoError('La vigencia debe ser un número mayor a 0'); return } payload.vigencia_meses = n }
     const modalidad = (nuevoCurso.modalidad || 'presencial')
     payload.modalidad = modalidad
+    if (catalogoSel) payload.catalogo_curso_id = catalogoSel
     if (nuevoCurso.grupo_id && nuevoCurso.grupo_id.trim()) payload.grupo_id = nuevoCurso.grupo_id.trim()
     if (nuevoConstancias.length > 0) payload.constancias = nuevoConstancias.map(c => ({ nombre: String(c.nombre).trim(), norma: String(c.norma || '').trim() || undefined }))
     try {
@@ -102,6 +130,7 @@ export default function GestionClientePage() {
     }
     setCursoError('')
     setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', modalidad: 'presencial', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '' })
+    setCatalogoSel('')
     setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma('')
     await loadCursos()
   }
@@ -130,15 +159,28 @@ export default function GestionClientePage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
+            {catalogo.length > 0 && (
+              <Select value={catalogoSel} onValueChange={usarDelCatalogo}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={'Usar curso del catálogo (opcional) — prellena el formulario'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {catalogo.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nombre}{c.ciudad ? ` — ${c.ciudad}` : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
               <Input placeholder="Nombre del curso" value={nuevoCurso.nombre} onChange={(e) => setNuevoCurso(s => ({ ...s, nombre: e.target.value }))} />
-              <Select value={String(nuevoCurso.modalidad || 'presencial')} onValueChange={(val: string) => setNuevoCurso(s => ({ ...s, modalidad: (val as 'presencial' | 'virtual') }))}>
+              <Select value={String(nuevoCurso.modalidad || 'presencial')} onValueChange={(val: string) => setNuevoCurso(s => ({ ...s, modalidad: (val as 'presencial' | 'virtual' | 'mixta') }))}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Modalidad" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="presencial">Presencial</SelectItem>
                   <SelectItem value="virtual">Virtual</SelectItem>
+                  <SelectItem value="mixta">Mixta</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={String(nuevoCurso.grupo_id || '')} onValueChange={(val: string) => setNuevoCurso(s => ({ ...s, grupo_id: val }))}>
@@ -194,7 +236,7 @@ export default function GestionClientePage() {
           </div>
           <div className="mt-3 flex gap-2">
             <Button onClick={crearCurso}>Crear curso</Button>
-            <Button variant="outline" onClick={() => { setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '24' }); setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma(''); setCursoError(''); setConstanciaError('') }}>Limpiar</Button>
+            <Button variant="outline" onClick={() => { setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '24' }); setCatalogoSel(''); setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma(''); setCursoError(''); setConstanciaError('') }}>Limpiar</Button>
           </div>
           {cursoError && (
             <Alert className="alert-error mt-3">{cursoError}</Alert>
