@@ -385,6 +385,15 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS plan VARCHAR(20) NOT NULL DEFAULT 'trial'",
         "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS categoria VARCHAR(20) NOT NULL DEFAULT 'basico'",
         "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS estado VARCHAR(20) NOT NULL DEFAULT 'activo'",
+        # La tabla real tiene estas columnas NOT NULL pero sin DEFAULT
+        # (el CREATE TABLE sí les pone DEFAULT). Sin esto, cualquier INSERT
+        # a clientes que no las incluya truena con NotNullViolation.
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS cursos_creados INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS cursos_max INTEGER NOT NULL DEFAULT 10",
+        "ALTER TABLE IF EXISTS aaces.clientes ADD COLUMN IF NOT EXISTS descuento_pct INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE IF EXISTS aaces.clientes ALTER COLUMN cursos_creados SET DEFAULT 0",
+        "ALTER TABLE IF EXISTS aaces.clientes ALTER COLUMN cursos_max SET DEFAULT 10",
+        "ALTER TABLE IF EXISTS aaces.clientes ALTER COLUMN descuento_pct SET DEFAULT 0",
         "ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS curso_padre_id UUID REFERENCES cursos(id) ON DELETE CASCADE",
         "ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES grupos_curso(id) ON DELETE SET NULL",
         "ALTER TABLE IF EXISTS curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0",
