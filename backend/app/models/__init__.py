@@ -106,7 +106,7 @@ class Curso(Base):
     actualizado_por = Column(UUID(as_uuid=True), ForeignKey("clientes.id"))
     
     # Relationships
-    cliente = relationship("Cliente", foreign_keys=[cliente_id])
+    cliente = relationship("Cliente", foreign_keys=[cliente_id], overlaps="cursos")
     capacitador = relationship("Capacitador", back_populates="cursos")
     participantes = relationship("CursoParticipante", back_populates="curso")
     

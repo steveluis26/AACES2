@@ -155,8 +155,8 @@ export default function GestionClientePage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
               <Input placeholder="Ciudad" value={nuevoCurso.ciudad} onChange={(e) => setNuevoCurso(s => ({ ...s, ciudad: e.target.value }))} />
               <Input placeholder="Empresa" value={nuevoCurso.empresa_contratante} onChange={(e) => setNuevoCurso(s => ({ ...s, empresa_contratante: e.target.value }))} />
-              <Input type="date" placeholder="Inicio" value={nuevoCurso.fecha_inicio} onChange={(e) => setNuevoCurso(s => ({ ...s, fecha_inicio: e.target.value }))} disabled={(nuevoCurso.estado || 'pendiente') === 'pendiente'} />
-              <Input type="date" placeholder="Fin" value={nuevoCurso.fecha_fin} onChange={(e) => setNuevoCurso(s => ({ ...s, fecha_fin: e.target.value }))} disabled={(nuevoCurso.estado || 'pendiente') === 'pendiente'} />
+              <Input type="date" placeholder="Inicio" value={nuevoCurso.fecha_inicio} onChange={(e) => setNuevoCurso(s => ({ ...s, fecha_inicio: e.target.value }))} />
+              <Input type="date" placeholder="Fin" value={nuevoCurso.fecha_fin} onChange={(e) => setNuevoCurso(s => ({ ...s, fecha_fin: e.target.value }))} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <Input type="number" step="0.01" placeholder="Precio normal" value={nuevoCurso.precio_base || ''} onChange={(e) => setNuevoCurso(s => ({ ...s, precio_base: e.target.value }))} />
