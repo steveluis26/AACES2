@@ -16,6 +16,7 @@ export default function AdminClientesPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [editData, setEditData] = useState<any>({})
+  const [error, setError] = useState('')
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('aaces_token') : null
   const headers = useMemo(() => {
@@ -25,9 +26,18 @@ export default function AdminClientesPage() {
   }, [token])
 
   const load = useCallback(async () => {
-    const r = await fetch('/api/v1/admin/clientes?limit=200', { headers })
-    const data = await r.json()
-    setClientes(data.data ?? [])
+    setError('')
+    try {
+      const r = await fetch('/api/v1/admin/clientes?limit=200', { headers })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data.detail || `Error ${r.status} al cargar clientes`)
+      setClientes(data.data ?? [])
+    } catch (e: any) {
+      // Antes: el error se tragaba en silencio y la tabla quedaba vacía.
+      // Ahora se muestra para poder diagnosticar (ej. 500 del backend).
+      setError(e.message || 'No se pudieron cargar los clientes')
+      setClientes([])
+    }
   }, [headers])
 
   useEffect(() => { load() }, [load])
@@ -112,6 +122,11 @@ export default function AdminClientesPage() {
         <Card>
           <CardHeader><CardTitle>Listado</CardTitle></CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 rounded border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+                <span className="font-semibold">No se pudo cargar la lista:</span> {error}
+              </div>
+            )}
             <Table>
               <THead>
                 <TR>
