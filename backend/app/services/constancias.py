@@ -86,7 +86,7 @@ class ConstanciasService:
     ) -> Dict[str, Any]:
         cp_row = await db.execute(
             text("""
-                SELECT cp.id, cp.codigo_validacion, cp.curso_id, cp.participante_id, cp.estado_acreditacion,
+                SELECT cp.id, cp.codigo_validacion, cp.id_certificado, cp.curso_id, cp.participante_id, cp.estado_acreditacion,
                        cp.calificacion, cp.asistencia,
                        cp.fecha_inicio_vigencia, cp.fecha_expiracion,
                        c.nombre as curso_nombre,
