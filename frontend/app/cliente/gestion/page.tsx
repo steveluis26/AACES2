@@ -18,6 +18,7 @@ export default function GestionClientePage() {
   const [nuevoConstancias, setNuevoConstancias] = useState<Array<{ nombre: string; norma?: string }>>([])
   const [nuevoConstNombre, setNuevoConstNombre] = useState('')
   const [nuevoConstNorma, setNuevoConstNorma] = useState('')
+  const [cursoError, setCursoError] = useState<string>('')
   const [authError] = useState<string>('')
 
 
@@ -60,6 +61,7 @@ export default function GestionClientePage() {
   }
 
   const crearCurso = async () => {
+    setCursoError('')
     const nombre = (nuevoCurso.nombre || '').trim()
     const ciudad = (nuevoCurso.ciudad || '').trim()
     const norm = (s: unknown) => {
@@ -70,8 +72,8 @@ export default function GestionClientePage() {
     }
     const fi = norm(nuevoCurso.fecha_inicio)
     const ff = norm(nuevoCurso.fecha_fin)
-    if (!nombre || !ciudad) return
-    if ((nuevoCurso.estado || 'pendiente') === 'activo' && !fi) { alert('Para estado Activo, debes asignar al menos la fecha de inicio'); return }
+    if (!nombre || !ciudad) { setCursoError('Nombre y ciudad son requeridos'); return }
+    if ((nuevoCurso.estado || 'pendiente') === 'activo' && !fi) { setCursoError('Para estado Activo, debes asignar al menos la fecha de inicio'); return }
     const payload: Record<string, unknown> = { nombre, ciudad, empresa_contratante: (nuevoCurso.empresa_contratante || '').trim() }
     // Las fechas se envían siempre que estén capturadas; el backend deriva
     // el estado (en_espera/activo) a partir de ellas e ignora el 'estado' del form.
@@ -82,8 +84,8 @@ export default function GestionClientePage() {
     if (precioBaseStr) { const n = Number(precioBaseStr); if (Number.isFinite(n) && n >= 0) payload.precio_base = n }
     if (precioPromoStr) { const n = Number(precioPromoStr); if (Number.isFinite(n) && n >= 0) payload.precio_promocional = n }
     const vigStr = (nuevoCurso.vigencia_meses || '').trim()
-    if (!vigStr) { alert('Ingresa la vigencia en meses'); return }
-    { const n = Number(vigStr); if (!Number.isFinite(n) || n <= 0) { alert('La vigencia debe ser un número mayor a 0'); return } payload.vigencia_meses = n }
+    if (!vigStr) { setCursoError('Ingresa la vigencia en meses'); return }
+    { const n = Number(vigStr); if (!Number.isFinite(n) || n <= 0) { setCursoError('La vigencia debe ser un número mayor a 0'); return } payload.vigencia_meses = n }
     const modalidad = (nuevoCurso.modalidad || 'presencial')
     payload.modalidad = modalidad
     if (nuevoCurso.grupo_id && nuevoCurso.grupo_id.trim()) payload.grupo_id = nuevoCurso.grupo_id.trim()
@@ -91,9 +93,10 @@ export default function GestionClientePage() {
     try {
       await apiRequest('/clientes/cursos', { method: 'POST', body: JSON.stringify(payload) })
     } catch (e) {
-      alert((e as Error)?.message || 'No se pudo crear el curso')
+      setCursoError((e as Error)?.message || 'No se pudo crear el curso')
       return
     }
+    setCursoError('')
     setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', modalidad: 'presencial', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '' })
     setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma('')
     await loadCursos()
@@ -161,7 +164,7 @@ export default function GestionClientePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <Input type="number" step="0.01" placeholder="Precio normal" value={nuevoCurso.precio_base || ''} onChange={(e) => setNuevoCurso(s => ({ ...s, precio_base: e.target.value }))} />
               <Input type="number" step="0.01" placeholder="Precio especial (opcional)" value={nuevoCurso.precio_promocional || ''} onChange={(e) => setNuevoCurso(s => ({ ...s, precio_promocional: e.target.value }))} />
-              <Input type="number" placeholder="Vigencia (meses)" value={nuevoCurso.vigencia_meses} onChange={(e) => setNuevoCurso(s => ({ ...s, vigencia_meses: e.target.value }))} />
+              <Input type="number" placeholder="Vigencia (meses) *" value={nuevoCurso.vigencia_meses} onChange={(e) => setNuevoCurso(s => ({ ...s, vigencia_meses: e.target.value }))} />
             </div>
           </div>
           <div className="space-y-2 mt-3">
@@ -184,8 +187,11 @@ export default function GestionClientePage() {
           </div>
           <div className="mt-3 flex gap-2">
             <Button onClick={crearCurso}>Crear curso</Button>
-            <Button variant="outline" onClick={() => { setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '24' }); setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma('') }}>Limpiar</Button>
+            <Button variant="outline" onClick={() => { setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '24' }); setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma(''); setCursoError('') }}>Limpiar</Button>
           </div>
+          {cursoError && (
+            <Alert className="alert-error mt-3">{cursoError}</Alert>
+          )}
         </CardContent>
       </Card>
 
