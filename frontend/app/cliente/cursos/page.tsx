@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useCallback, useMemo, Fragment, Suspense } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@/components/ui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Alert } from '@/components/ui'
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { apiRequest } from '@/app/services/api'
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from '@/components/ui/table'
@@ -58,6 +58,7 @@ export default function CursosClientePage() {
   const [nuevoConstanciaNombre, setNuevoConstanciaNombre] = useState('')
   const [nuevoConstanciaNorma, setNuevoConstanciaNorma] = useState('')
   const [nuevoAsignacion, setNuevoAsignacion] = useState<Record<string, { constancia_id?: string; id_certificado?: string; codigo_validacion?: string; fecha_emision_certificado?: string; fecha_expiracion?: string; estado_acreditacion?: boolean }>>({})
+  const [detalleError, setDetalleError] = useState<string>('')
 
   const reload = useCallback(async () => {
     try {
@@ -105,6 +106,7 @@ export default function CursosClientePage() {
 
   const saveSelected = async () => {
     if (!selected) return
+    setDetalleError('')
     const norm = (s: unknown) => {
       const v = String(s ?? '').trim()
       if (!v) return ''
@@ -117,7 +119,7 @@ export default function CursosClientePage() {
     const fi = norm(selected.fecha_inicio)
     const ff = norm(selected.fecha_fin)
     if (estadoEditar === 'activo') {
-      if (!fi) { alert('Para estado Activo, debes asignar al menos la fecha de inicio'); return }
+      if (!fi) { setDetalleError('Para estado Activo, debes asignar al menos la fecha de inicio'); return }
       payload.fecha_inicio = fi
       if (ff) payload.fecha_fin = ff
     } else {
@@ -865,6 +867,9 @@ export default function CursosClientePage() {
               <Button onClick={saveSelected}>Guardar</Button>
               <Button onClick={() => setSelected(null)}>Cancelar</Button>
             </div>
+            {detalleError && (
+              <Alert className="alert-error mt-3">{detalleError}</Alert>
+            )}
             <div id="participantes-section" className="mt-8 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-lg font-semibold">Participantes</div>

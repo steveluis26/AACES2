@@ -19,6 +19,8 @@ export default function GestionClientePage() {
   const [nuevoConstNombre, setNuevoConstNombre] = useState('')
   const [nuevoConstNorma, setNuevoConstNorma] = useState('')
   const [cursoError, setCursoError] = useState<string>('')
+  const [constanciaError, setConstanciaError] = useState<string>('')
+  const [cursosError, setCursosError] = useState<string>('')
   const [authError] = useState<string>('')
 
 
@@ -174,8 +176,11 @@ export default function GestionClientePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <Input placeholder="Nombre de constancia" value={nuevoConstNombre} onChange={(e) => setNuevoConstNombre(e.target.value)} />
               <Input placeholder="Norma/NOM (opcional)" value={nuevoConstNorma} onChange={(e) => setNuevoConstNorma(e.target.value)} />
-              <Button onClick={() => { const n = nuevoConstNombre.trim(); const norma = nuevoConstNorma.trim(); if (!n) { alert('Ingresa un nombre'); return } setNuevoConstancias(arr => [...arr, { nombre: n, norma: norma || undefined }]); setNuevoConstNombre(''); setNuevoConstNorma('') }}>Agregar constancia</Button>
+              <Button onClick={() => { const n = nuevoConstNombre.trim(); const norma = nuevoConstNorma.trim(); if (!n) { setConstanciaError('Ingresa un nombre para la constancia'); return } setConstanciaError(''); setNuevoConstancias(arr => [...arr, { nombre: n, norma: norma || undefined }]); setNuevoConstNombre(''); setNuevoConstNorma('') }}>Agregar constancia</Button>
             </div>
+            {constanciaError && (
+              <Alert className="alert-error">{constanciaError}</Alert>
+            )}
             {nuevoConstancias.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {nuevoConstancias.map((c, idx) => (
@@ -189,7 +194,7 @@ export default function GestionClientePage() {
           </div>
           <div className="mt-3 flex gap-2">
             <Button onClick={crearCurso}>Crear curso</Button>
-            <Button variant="outline" onClick={() => { setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '24' }); setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma(''); setCursoError('') }}>Limpiar</Button>
+            <Button variant="outline" onClick={() => { setNuevoCurso({ nombre: '', grupo_id: '', estado: 'pendiente', ciudad: '', empresa_contratante: '', fecha_inicio: '', fecha_fin: '', precio_base: '', precio_promocional: '', vigencia_meses: '24' }); setNuevoConstancias([]); setNuevoConstNombre(''); setNuevoConstNorma(''); setCursoError(''); setConstanciaError('') }}>Limpiar</Button>
           </div>
           {cursoError && (
             <Alert className="alert-error mt-3">{cursoError}</Alert>
@@ -202,6 +207,9 @@ export default function GestionClientePage() {
           <CardTitle>Mis cursos (próximos)</CardTitle>
         </CardHeader>
         <CardContent>
+          {cursosError && (
+            <Alert className="alert-error mb-3">{cursosError}</Alert>
+          )}
           <Table>
             <TableHeader>
               <TableRow>
@@ -227,7 +235,7 @@ export default function GestionClientePage() {
                   </TableCell>
                   <TableCell>
                     <Button size="sm" onClick={() => saveCursoPrecio(c.id)}>Actualizar</Button>
-                    <Button size="sm" variant="destructive" className="ml-2" onClick={async () => { if (!confirm('¿Eliminar este curso?')) return; try { await apiRequest(`/clientes/cursos/${c.id}`, { method: 'DELETE' }); await loadCursos(); } catch (e) { alert((e as Error)?.message || 'No se pudo eliminar el curso') } }}>Eliminar</Button>
+                    <Button size="sm" variant="destructive" className="ml-2" onClick={async () => { if (!confirm('¿Eliminar este curso?')) return; try { await apiRequest(`/clientes/cursos/${c.id}`, { method: 'DELETE' }); setCursosError(''); await loadCursos(); } catch (e) { setCursosError((e as Error)?.message || 'No se pudo eliminar el curso') } }}>Eliminar</Button>
                   </TableCell>
                 </TableRow>
               ))}
