@@ -138,7 +138,7 @@ class ConstanciasService:
             "calificacion": float(cp.calificacion) if cp.calificacion else 0,
             "asistencia": float(cp.asistencia) if cp.asistencia else 0,
             "codigo_validacion": codigo_validacion,
-            "fecha_emision": now.isoformat(),
+            "fecha_emision": now.strftime("%d/%m/%Y"),
             "fecha_inicio_vigencia": cp.fecha_inicio_vigencia.isoformat() if cp.fecha_inicio_vigencia else "",
             "fecha_expiracion": cp.fecha_expiracion.isoformat() if cp.fecha_expiracion else "",
             "verification_url": settings.PUBLIC_VERIFICATION_URL,
