@@ -19,6 +19,39 @@ router = APIRouter()
 security = HTTPBearer()
 
 
+def _build_access_token_claims(user, source: str) -> Dict[str, Any]:
+    """Construye los claims del access token — única fuente de verdad.
+
+    Contrato Fase 1:
+    - ``sub`` es SIEMPRE el ID del usuario (nunca org_id ni cliente_id).
+    - ``org_id`` se incluye siempre que el usuario tenga organización
+      (resuelto desde ``usuarios.organizacion_id``).
+    - ``source`` es obligatorio: "plataforma" | "usuario".
+    """
+    if source == "plataforma":
+        role = Role.ADMIN
+        category = "super_admin"
+        org_id = None
+    else:
+        role = user.rol if user.rol == "admin" else Role.CLIENTE
+        category = user.rol
+        raw_org = getattr(user, "organizacion_id", None)
+        org_id = str(raw_org) if raw_org else None
+
+    claims: Dict[str, Any] = {
+        "sub": str(user.id),
+        "email": user.correo,
+        "role": role,
+        "name": user.nombre,
+        "source": source,
+    }
+    if org_id:
+        claims["org_id"] = org_id
+    if category:
+        claims["category"] = category
+    return claims
+
+
 @router.post("/login", response_model=Token)
 async def login(
     request: LoginRequest,
@@ -61,26 +94,12 @@ async def login(
         if source == "plataforma":
             # Usuario de plataforma (super_admin)
             role = Role.ADMIN
-            org_id = None
-            category = "super_admin"
         else:
             # Usuario de organización (admin/staff)
-            role = user.rol if user.rol == "admin" else Role.CLIENT
-            org_id = str(user.organizacion_id) if user.organizacion_id else None
-            category = user.rol
-        
-        # Crear tokens JWT con claim 'source' OBLIGATORIO
-        token_data = {
-            "sub": str(user.id),
-            "email": user.correo,
-            "role": role,
-            "name": user.nombre,
-            "source": source,  # OBLIGATORIO
-        }
-        if org_id:
-            token_data["org_id"] = org_id
-        if category:
-            token_data["category"] = category
+            role = user.rol if user.rol == "admin" else Role.CLIENTE
+
+        # Crear tokens JWT con claim 'source' OBLIGATORIO (claims centralizados)
+        token_data = _build_access_token_claims(user, source)
         
         access_token = auth_service.create_access_token(data=token_data)
         
@@ -152,24 +171,10 @@ async def refresh_token(
                 detail="Usuario no válido"
             )
         
-        # Determinar role para nuevo token
-        if source == "plataforma":
-            role = Role.ADMIN
-            category = "super_admin"
-        else:
-            role = user.rol if user.rol == "admin" else Role.CLIENT
-            category = user.rol
-        
-        # Crear nuevo access token con source claim
+        # Crear nuevo access token con los mismos claims que en login
+        # (incluye org_id; antes se perdía al refrescar)
         new_access_token = auth_service.create_access_token(
-            data={
-                "sub": str(user.id),
-                "email": user.correo,
-                "role": role,
-                "name": user.nombre,
-                "source": source,
-                "category": category,
-            }
+            data=_build_access_token_claims(user, source)
         )
         
         return {
