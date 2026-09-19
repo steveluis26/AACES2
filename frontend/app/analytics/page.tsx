@@ -23,18 +23,25 @@ import {
 } from "recharts"
 
 type AdminMetrics = {
-  total_clientes?: number
-  clientes_por_categoria?: { categoria: string; count: number }[]
-  total_cursos?: number
-  total_capacitadores?: number
-  total_participantes?: number
-  total_certificados?: number
-  ingresos_por_mes?: { mes: string; total: number; cantidad: number }[]
-  validaciones_mes?: { total: number; exitosas: number; fallidas: number; tasa_exito: number }
-  certificados_proximos_vencer?: number
-  ingresos_totales?: number
-  ingresos_pendientes?: number
-  ingresos_por_modalidad?: { modalidad: string | null; total: number; cantidad: number }[]
+  mrr?: number
+  organizaciones?: {
+    total: number
+    activas: number
+    pendientes: number
+    por_estatus: { estatus: string; cantidad: number }[]
+    nuevas_por_mes: { mes: string; cantidad: number }[]
+  }
+  suscripciones?: {
+    activas: number
+    por_plan: { plan: string; cantidad: number; mrr: number }[]
+    por_vencer_30d: number
+  }
+  constancias?: {
+    total: number
+    ultimos_30d: number
+    por_mes: { mes: string; cantidad: number }[]
+  }
+  verificaciones_30d?: { total: number; validas: number; tasa_exito: number }
 }
 
 type ClienteMetrics = {
@@ -108,12 +115,11 @@ export default function AnalyticsPage() {
 
   const cardsData = useMemo(() => {
     if (role === "admin") {
-      const ingresos = (adminMetrics?.ingresos_por_mes ?? []).reduce((s, r) => s + (r.total || 0), 0)
       return {
-        pagos_recibidos: (adminMetrics?.ingresos_totales ?? ingresos),
-        participantes_total: adminMetrics?.total_participantes,
-        cursos_activos: adminMetrics?.total_cursos,
-        cursos_total: adminMetrics?.total_cursos,
+        pagos_recibidos: adminMetrics?.mrr,
+        participantes_total: adminMetrics?.organizaciones?.activas,
+        cursos_activos: adminMetrics?.suscripciones?.activas,
+        cursos_total: adminMetrics?.organizaciones?.total,
       }
     }
     const r = clienteMetrics?.resumen
@@ -126,7 +132,14 @@ export default function AnalyticsPage() {
   }, [role, adminMetrics, clienteMetrics])
 
   const ingresosPorMes = useMemo(() => {
-    return (role === "admin" ? (adminMetrics?.ingresos_por_mes ?? []) : (clienteMetrics?.ingresos_mes ?? [])).map((r) => ({
+    if (role === "admin") {
+      return (adminMetrics?.constancias?.por_mes ?? []).map((r) => ({
+        mes: r.mes,
+        total: r.cantidad,
+        cantidad: r.cantidad,
+      }))
+    }
+    return (clienteMetrics?.ingresos_mes ?? []).map((r) => ({
       mes: r.mes,
       total: r.total,
       cantidad: r.cantidad,
@@ -134,18 +147,27 @@ export default function AnalyticsPage() {
   }, [role, adminMetrics, clienteMetrics])
 
   const cursosPorEstado = useMemo(() => {
+    if (role === "admin") {
+      return (adminMetrics?.organizaciones?.por_estatus ?? []).map((r) => ({ estado: r.estatus, cantidad: r.cantidad }))
+    }
     return (clienteMetrics?.cursos_por_estado ?? []).map((r) => ({ estado: r.estado, cantidad: r.cantidad }))
-  }, [clienteMetrics])
+  }, [role, adminMetrics, clienteMetrics])
 
   const ingresosPorModalidad = useMemo(() => {
-    const data = role === "admin" ? (adminMetrics?.ingresos_por_modalidad ?? []) : (clienteMetrics?.ingresos_por_modalidad ?? [])
+    if (role === "admin") {
+      return (adminMetrics?.suscripciones?.por_plan ?? []).map((r) => ({
+        modalidad: r.plan,
+        total: r.mrr,
+        cantidad: r.cantidad,
+      }))
+    }
+    const data = clienteMetrics?.ingresos_por_modalidad ?? []
     return data.map((r) => ({ modalidad: r.modalidad ?? "N/A", total: r.total, cantidad: r.cantidad }))
   }, [role, adminMetrics, clienteMetrics])
 
   const tasaConversion = useMemo(() => {
     if (role === "admin") {
-      // Si no hay conversión de pagos en admin, mostrar tasa de éxito de validaciones
-      const t = adminMetrics?.validaciones_mes?.tasa_exito
+      const t = adminMetrics?.verificaciones_30d?.tasa_exito
       return typeof t === "number" ? t : 0
     }
     const t = clienteMetrics?.pagos_conversion_30d?.tasa_conversion
@@ -154,12 +176,19 @@ export default function AnalyticsPage() {
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <SectionCards data={cardsData} />
+      <SectionCards
+        data={cardsData}
+        labels={
+          role === "admin"
+            ? { ingresos: 'MRR', clientes: 'Organizaciones activas', cuentas: 'Suscripciones activas', crecimiento: '% orgs activas' }
+            : undefined
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 px-4 lg:grid-cols-2 lg:px-6">
         <Card className="@container/card">
           <CardHeader>
-            <CardTitle>Ingresos por mes</CardTitle>
+            <CardTitle>{role === "admin" ? "Constancias por mes" : "Ingresos por mes"}</CardTitle>
           </CardHeader>
           <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
             <ChartContainer
@@ -183,7 +212,7 @@ export default function AnalyticsPage() {
 
         <Card className="@container/card">
           <CardHeader>
-            <CardTitle>Distribución de cursos por estado</CardTitle>
+            <CardTitle>{role === "admin" ? "Organizaciones por estatus" : "Distribución de cursos por estado"}</CardTitle>
           </CardHeader>
           <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
             <ChartContainer
@@ -213,7 +242,7 @@ export default function AnalyticsPage() {
 
         <Card className="@container/card">
           <CardHeader>
-            <CardTitle>Ingresos por modalidad</CardTitle>
+            <CardTitle>{role === "admin" ? "MRR por plan" : "Ingresos por modalidad"}</CardTitle>
           </CardHeader>
           <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
             <ChartContainer

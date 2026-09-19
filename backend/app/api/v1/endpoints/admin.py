@@ -43,90 +43,169 @@ async def get_admin_dashboard_metrics(
     user_data: Dict[str, Any] = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Obtener métricas generales del dashboard administrativo"""
+    """Métricas de PLATAFORMA para el dashboard del superadmin (Steve).
+
+    A diferencia del dashboard de clientes (que ve cada organización sobre
+    sus propios datos), aquí se agregan métricas del negocio AACES:
+    MRR, organizaciones, suscripciones, constancias emitidas y verificaciones.
+    """
+    from app.db.errors import is_undefined_table
+    from sqlalchemy.exc import ProgrammingError
+
+    async def safe_scalar(sql, params=None, default=0):
+        try:
+            r = await db.execute(text(sql), params or {})
+            return r.scalar() or default
+        except ProgrammingError as e:
+            if is_undefined_table(e):
+                return default
+            raise
+
+    async def safe_rows(sql, params=None):
+        try:
+            r = await db.execute(text(sql), params or {})
+            return r.fetchall()
+        except ProgrammingError as e:
+            if is_undefined_table(e):
+                return []
+            raise
+
     try:
-        hoy = datetime.utcnow()
-        seis_meses_atras = hoy - timedelta(days=180)
         await db.execute(text("SET LOCAL search_path TO aaces"))
-        await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_base NUMERIC(10,2) DEFAULT 0"))
-        await db.execute(text("ALTER TABLE IF EXISTS cursos ADD COLUMN IF NOT EXISTS precio_promocional NUMERIC(10,2)"))
-        tc = await db.execute(text("SELECT count(*) FROM clientes WHERE estado='activo'"))
-        total_clientes = tc.scalar()
-        cats = await db.execute(text("SELECT categoria, count(*) FROM clientes WHERE estado='activo' GROUP BY categoria"))
-        categorias_data = cats.fetchall()
-        tcu = await db.execute(text("SELECT count(*) FROM cursos WHERE estado='activo'"))
-        total_cursos = tcu.scalar()
-        tcap = await db.execute(text("SELECT count(*) FROM capacitadores WHERE acceso_activo = true"))
-        total_capacitadores = tcap.scalar()
-        tpar = await db.execute(text("SELECT count(distinct participante_id) FROM curso_participante"))
-        total_participantes = tpar.scalar()
-        tcert = await db.execute(text("SELECT count(*) FROM curso_participante WHERE estado_acreditacion = true"))
-        total_certificados = tcert.scalar()
-        ingresos = await db.execute(text("SELECT date_trunc('month', fecha_pago) as mes, sum(monto) as total, count(*) as cantidad FROM pagos WHERE estado_pago='completado' AND fecha_pago >= :desde GROUP BY 1 ORDER BY 1"), {"desde": seis_meses_atras})
-        ingresos_data = ingresos.fetchall()
-        val = await db.execute(text("SELECT count(*) as total, sum(CASE WHEN resultado = true THEN 1 ELSE 0 END) as exitosas, sum(CASE WHEN resultado = false THEN 1 ELSE 0 END) as fallidas FROM validaciones_publicas WHERE fecha_validacion >= :desde"), {"desde": hoy - timedelta(days=30)})
-        validaciones_data = val.fetchone()
-        prox = await db.execute(text("SELECT count(*) FROM curso_participante WHERE estado_acreditacion = true AND fecha_expiracion BETWEEN now() AND now() + interval '30 days'"))
-        proximos_vencer = prox.scalar()
-        precios_row = await db.execute(text("SELECT avg(precio_base) AS avg_base, avg(precio_promocional) AS avg_promo, sum(CASE WHEN precio_promocional IS NOT NULL THEN 1 ELSE 0 END) AS con_promo, count(*) AS total FROM cursos"))
-        precios = precios_row.fetchone()
-        cursos_estado_rows = await db.execute(text("SELECT estado, count(*) AS cantidad FROM cursos GROUP BY estado"))
-        cursos_estado = cursos_estado_rows.fetchall()
-        pagos_estado_rows = await db.execute(text("SELECT estado_pago, count(*) AS cantidad, sum(monto) AS total FROM pagos GROUP BY estado_pago"))
-        pagos_estado = pagos_estado_rows.fetchall()
-        pagos_30d_rows = await db.execute(text("SELECT sum(CASE WHEN estado_pago = 'completado' THEN 1 ELSE 0 END) AS completados, sum(CASE WHEN estado_pago = 'fallido' THEN 1 ELSE 0 END) AS fallidos FROM pagos WHERE fecha_pago >= now() - interval '30 days'"))
-        pagos_30d = pagos_30d_rows.fetchone()
-        ingresos_total_row = await db.execute(text("SELECT coalesce(sum(monto), 0) FROM pagos WHERE estado_pago = 'completado'"))
-        ingresos_total = ingresos_total_row.scalar()
-        ingresos_pendientes_row = await db.execute(text("SELECT coalesce(sum(monto), 0) FROM pagos WHERE estado_pago = 'pendiente'"))
-        ingresos_pendientes = ingresos_pendientes_row.scalar()
-        ingresos_estimados_rows = await db.execute(text("SELECT sum(COALESCE(c.precio_promocional, c.precio_base) * (SELECT count(*) FROM curso_participante cp WHERE cp.curso_id = c.id)) AS estimado FROM cursos c WHERE c.curso_padre_id IS NULL AND ((c.fecha_inicio IS NOT NULL AND c.fecha_inicio >= CURRENT_DATE) OR (c.fecha_inicio IS NULL AND c.fecha_fin IS NOT NULL AND c.fecha_fin >= CURRENT_DATE))"))
-        ingresos_estimados = ingresos_estimados_rows.scalar()
-        part_prom_rows = await db.execute(text("SELECT COALESCE(avg(cnt), 0) FROM (SELECT count(*) AS cnt FROM curso_participante GROUP BY curso_id) t"))
-        participantes_promedio = part_prom_rows.scalar()
-        tasa_acr_rows = await db.execute(text("SELECT COALESCE(sum(CASE WHEN estado_acreditacion = true THEN 1 ELSE 0 END)::float / NULLIF(count(*), 0) * 100, 0) FROM curso_participante"))
-        tasa_acreditacion = tasa_acr_rows.scalar()
-        mod_rows = await db.execute(text("SELECT c.modalidad, sum(p.monto) AS total, count(p.id) AS cantidad FROM cursos c LEFT JOIN curso_participante cp ON cp.curso_id = c.id LEFT JOIN pagos p ON p.curso_participante_id = cp.id AND p.estado_pago = 'completado' GROUP BY c.modalidad"))
-        ingresos_por_modalidad_rows = mod_rows.fetchall()
+        seis_meses = datetime.utcnow() - timedelta(days=180)
+        hace_30d = datetime.utcnow() - timedelta(days=30)
+
+        # --- MRR: suma del precio mensual de suscripciones activas ---
+        mrr = await safe_scalar("""
+            SELECT COALESCE(SUM(p.precio_mensual), 0)
+            FROM suscripciones s
+            JOIN planes p ON p.id = s.plan_id
+            WHERE s.estatus = 'activa'
+        """)
+
+        # --- Organizaciones por estatus ---
+        org_estatus = await safe_rows("""
+            SELECT estatus, COUNT(*) FROM organizaciones GROUP BY estatus
+        """)
+        total_orgs = sum(int(r[1] or 0) for r in org_estatus)
+        orgs_activas = next((int(r[1] or 0) for r in org_estatus if r[0] == 'activa'), 0)
+        orgs_pendientes = next((int(r[1] or 0) for r in org_estatus if r[0] == 'pendiente'), 0)
+
+        # --- Organizaciones nuevas por mes (últimos 6 meses) ---
+        orgs_mes = await safe_rows("""
+            SELECT to_char(fecha_creacion, 'YYYY-MM') AS mes, COUNT(*)
+            FROM organizaciones
+            WHERE fecha_creacion >= :desde
+            GROUP BY 1 ORDER BY 1
+        """, {"desde": seis_meses})
+
+        # --- Pendientes de activación (accionable) ---
+        pendientes = await safe_rows("""
+            SELECT id, razon_social, rfc, fecha_creacion
+            FROM organizaciones
+            WHERE estatus = 'pendiente'
+            ORDER BY fecha_creacion DESC
+            LIMIT 20
+        """)
+
+        # --- Suscripciones por estatus ---
+        subs_estatus = await safe_rows("""
+            SELECT estatus, COUNT(*) FROM suscripciones GROUP BY estatus
+        """)
+        subs_activas = next((int(r[1] or 0) for r in subs_estatus if r[0] == 'activa'), 0)
+
+        # --- Suscripciones por plan (con MRR por plan) ---
+        subs_plan = await safe_rows("""
+            SELECT p.nombre, COUNT(*), COALESCE(SUM(p.precio_mensual), 0)
+            FROM suscripciones s
+            JOIN planes p ON p.id = s.plan_id
+            WHERE s.estatus = 'activa'
+            GROUP BY p.nombre ORDER BY 2 DESC
+        """)
+
+        # --- Suscripciones por vencer en 30 días (accionable) ---
+        subs_por_vencer = await safe_scalar("""
+            SELECT COUNT(*)
+            FROM suscripciones
+            WHERE estatus = 'activa'
+              AND fecha_fin IS NOT NULL
+              AND fecha_fin BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+        """)
+
+        # --- Constancias emitidas ---
+        const_total = await safe_scalar("SELECT COUNT(*) FROM documentos_emitidos")
+        const_30d = await safe_scalar(
+            "SELECT COUNT(*) FROM documentos_emitidos WHERE fecha_emision >= :d",
+            {"d": hace_30d},
+        )
+        const_mes = await safe_rows("""
+            SELECT to_char(fecha_emision, 'YYYY-MM') AS mes, COUNT(*)
+            FROM documentos_emitidos
+            WHERE fecha_emision >= :desde
+            GROUP BY 1 ORDER BY 1
+        """, {"desde": seis_meses})
+
+        # --- Verificaciones públicas (corazón anti-fraude) ---
+        verif = await safe_rows("""
+            SELECT COUNT(*),
+                   SUM(CASE WHEN resultado = 'VALIDA' THEN 1 ELSE 0 END)
+            FROM verificaciones
+            WHERE fecha >= :d
+        """, {"d": hace_30d})
+        verif_total = int((verif[0][0] if verif else 0) or 0)
+        verif_ok = int((verif[0][1] if verif else 0) or 0)
+
+        # --- Usuarios de organizaciones ---
+        total_usuarios = await safe_scalar("SELECT COUNT(*) FROM usuarios")
+
         return {
-            "total_clientes": int(total_clientes or 0),
-            "clientes_por_categoria": [
-                {"categoria": r[0], "count": int(r[1] or 0)} for r in categorias_data
-            ],
-            "total_cursos": int(total_cursos or 0),
-            "total_capacitadores": int(total_capacitadores or 0),
-            "total_participantes": int(total_participantes or 0),
-            "total_certificados": int(total_certificados or 0),
-            "ingresos_por_mes": [
-                {"mes": r[0].strftime("%Y-%m"), "total": float(r[1] or 0), "cantidad": int(r[2] or 0)} for r in ingresos_data
-            ],
-            "validaciones_mes": {
-                "total": int((validaciones_data or (0,0,0))[0] or 0),
-                "exitosas": int((validaciones_data or (0,0,0))[1] or 0),
-                "fallidas": int((validaciones_data or (0,0,0))[2] or 0),
-                "tasa_exito": round(((validaciones_data or (0,0,0))[1] or 0) / max(((validaciones_data or (0,0,0))[0] or 1), 1) * 100, 2)
+            "mrr": float(mrr or 0),
+            "organizaciones": {
+                "total": int(total_orgs),
+                "activas": int(orgs_activas),
+                "pendientes": int(orgs_pendientes),
+                "por_estatus": [
+                    {"estatus": r[0], "cantidad": int(r[1] or 0)} for r in org_estatus
+                ],
+                "nuevas_por_mes": [
+                    {"mes": r[0], "cantidad": int(r[1] or 0)} for r in orgs_mes
+                ],
+                "pendientes_activacion": [
+                    {
+                        "id": str(r[0]),
+                        "razon_social": r[1],
+                        "rfc": r[2],
+                        "fecha_creacion": r[3].isoformat() if r[3] else None,
+                    }
+                    for r in pendientes
+                ],
             },
-            "certificados_proximos_vencer": int(proximos_vencer or 0),
-            "ingresos_totales": float(ingresos_total or 0),
-            "ingresos_pendientes": float(ingresos_pendientes or 0),
-            "precios": {
-                "promedio_base": float((precios or (0,))[0] or 0),
-                "promedio_promocional": float((precios or (0,0))[1] or 0),
-                "porcentaje_con_promocion": round((float((precios or (0,0,0,0))[2] or 0) / max(int((precios or (0,0,0,0))[3] or 1), 1)) * 100, 2),
+            "suscripciones": {
+                "activas": int(subs_activas),
+                "por_estatus": [
+                    {"estatus": r[0], "cantidad": int(r[1] or 0)} for r in subs_estatus
+                ],
+                "por_plan": [
+                    {"plan": r[0], "cantidad": int(r[1] or 0), "mrr": float(r[2] or 0)}
+                    for r in subs_plan
+                ],
+                "por_vencer_30d": int(subs_por_vencer or 0),
             },
-            "cursos_por_estado": [{"estado": r[0], "cantidad": int(r[1] or 0)} for r in cursos_estado],
-            "pagos_por_estado": [{"estado": r[0], "cantidad": int(r[1] or 0), "total": float(r[2] or 0)} for r in pagos_estado],
-            "pagos_conversion_30d": {
-                "completados": int((pagos_30d or (0,0))[0] or 0),
-                "fallidos": int((pagos_30d or (0,0))[1] or 0),
-                "tasa_conversion": round((int((pagos_30d or (0,0))[0] or 0) / max(int(((pagos_30d or (0,0))[0] or 0)) + int(((pagos_30d or (0,0))[1] or 0)), 1)) * 100, 2)
+            "constancias": {
+                "total": int(const_total or 0),
+                "ultimos_30d": int(const_30d or 0),
+                "por_mes": [
+                    {"mes": r[0], "cantidad": int(r[1] or 0)} for r in const_mes
+                ],
             },
-            "ingresos_estimados_proximos": float(ingresos_estimados or 0),
-            "participantes_promedio_por_curso": float(participantes_promedio or 0),
-            "tasa_acreditacion_global": float(tasa_acreditacion or 0),
-            "ingresos_por_modalidad": [{"modalidad": r[0], "total": float(r[1] or 0), "cantidad": int(r[2] or 0)} for r in ingresos_por_modalidad_rows]
+            "verificaciones_30d": {
+                "total": verif_total,
+                "validas": verif_ok,
+                "tasa_exito": round(verif_ok / max(verif_total, 1) * 100, 1),
+            },
+            "usuarios_organizaciones": int(total_usuarios or 0),
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo métricas del dashboard: {e}")
         raise HTTPException(
@@ -605,26 +684,50 @@ async def get_monthly_report(
 
 @router.get("/dashboard/ciudad")
 async def get_stats_por_ciudad(
-    periodo: str = Query("mes", regex="^(semana|mes|anio)$"),
     db: AsyncSession = Depends(get_db),
     user_data: Dict[str, Any] = Depends(require_superadmin)
 ):
+    """Organizaciones por ciudad (normalizada) para el dashboard del superadmin.
+
+    Los clientes escriben la ciudad en texto libre ("Monterrey", "monterrey",
+    "MONTERREY "), así que se normaliza en la query: minúsculas, sin acentos
+    y sin espacios extra. Como display se usa la variante más frecuente.
+    """
     try:
-        tabla = "mv_finanzas_ciudad_mes" if periodo == "mes" else ("mv_finanzas_ciudad_semana" if periodo == "semana" else "mv_finanzas_ciudad_anio")
-        await db.execute(text(f"REFRESH MATERIALIZED VIEW aaces.{tabla}"))
-        q = f"SELECT ciudad, periodo, total_monto, total_pagado, cantidad FROM aaces.{tabla} ORDER BY periodo, ciudad"
+        await db.execute(text("SET LOCAL search_path TO aaces"))
+        q = """
+            WITH base AS (
+                SELECT
+                    COALESCE(
+                        NULLIF(
+                            translate(lower(trim(ciudad)), 'áéíóúüñ', 'aeiouun'),
+                            ''
+                        ),
+                        'sin ciudad'
+                    ) AS ciudad_norm,
+                    NULLIF(trim(ciudad), '') AS ciudad_raw,
+                    estatus
+                FROM organizaciones
+            )
+            SELECT
+                ciudad_norm,
+                mode() WITHIN GROUP (ORDER BY ciudad_raw) AS ciudad,
+                COUNT(*) AS total,
+                SUM(CASE WHEN estatus = 'activa' THEN 1 ELSE 0 END) AS activas
+            FROM base
+            GROUP BY ciudad_norm
+            ORDER BY total DESC
+        """
         data = await db.execute(text(q))
         rows = data.fetchall()
         return {
-            "periodo": periodo,
             "data": [
                 {
-                    "ciudad": r[0],
-                    "periodo": r[1].strftime("%Y-%m-%d"),
-                    "total_monto": float(r[2] or 0),
-                    "total_pagado": float(r[3] or 0),
-                    "cantidad": int(r[4] or 0),
-                } for r in rows
+                    "ciudad": r[1] or r[0],
+                    "total": int(r[2] or 0),
+                    "activas": int(r[3] or 0),
+                }
+                for r in rows
             ]
         }
     except Exception as e:
