@@ -445,7 +445,10 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         try:
             async with conn.begin_nested():
                 await conn.execute(text(stmt))
-        except Exception:
+        except Exception as e:
+            # Log solo para el fix crítico de documentos_emitidos (debug producción)
+            if "documentos_emitidos" in stmt and "codigo_validacion" in stmt:
+                logger.warning(f"LEGACY_FIX documentos_emitidos falló: {stmt[:80]} | Error: {e}")
             pass
 
 
