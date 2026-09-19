@@ -398,6 +398,11 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_registro VARCHAR(50)",
         "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_validado BOOLEAN DEFAULT false",
         "ALTER TABLE IF EXISTS aaces.organizaciones ADD COLUMN IF NOT EXISTS stps_validado_en TIMESTAMPTZ",
+        # Participantes: el modelo declara pax_id pero la tabla legacy no la tiene.
+        # Se agrega nullable + backfill para no romper filas existentes.
+        "ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS pax_id VARCHAR(20)",
+        "UPDATE aaces.participantes SET pax_id = 'PAX-' || upper(substr(md5(random()::text || id::text), 1, 9)) WHERE pax_id IS NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_participantes_pax_id ON aaces.participantes(pax_id)",
     ]:
         try:
             async with conn.begin_nested():
