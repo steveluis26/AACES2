@@ -38,13 +38,18 @@ export default function VerificarPage() {
     e.preventDefault()
     if (!code.trim()) { toast.error("Ingresa un código de validación"); return }
     setLoading(true)
+    // Timeout de 20s: sin esto, si el backend no responde el fetch se queda
+    // colgado para siempre y el botón queda deshabilitado sin explicación.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 20000)
     try {
       const raw = code.trim().toUpperCase()
       const c = raw.startsWith("CERT-") ? raw.slice(5) : raw
       const res = await fetch("/api/v1/validaciones/validar-certificado", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo_validacion: c, ip_address: "127.0.0.1", user_agent: navigator.userAgent })
+        body: JSON.stringify({ codigo_validacion: c, ip_address: "127.0.0.1", user_agent: navigator.userAgent }),
+        signal: controller.signal,
       })
       const data = await res.json()
       const norm = data?.certificado ? { ...data, datos_certificado: data.datos_certificado ?? data.certificado } : data
@@ -52,9 +57,14 @@ export default function VerificarPage() {
       if (norm.intentos_restantes !== undefined) setAttempts(norm.intentos_restantes)
       if (norm.valido) toast.success("Certificado verificado exitosamente")
       else toast.error(norm.mensaje)
-    } catch {
-      toast.error("Error al verificar el certificado")
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("La verificación tardó demasiado. Intenta de nuevo.")
+      } else {
+        toast.error("Error al verificar el certificado")
+      }
     } finally {
+      clearTimeout(timer)
       setLoading(false)
     }
   }, [code])
@@ -81,8 +91,14 @@ export default function VerificarPage() {
             />
             <div className="md:pr-1.5">
               <Button type="submit" size="sm" className="rounded-[1.5rem] bg-black text-white dark:bg-white dark:text-black" disabled={loading || attempts <= 0}>
-                <span className="hidden md:block">Verificar</span>
-                <SendHorizonal className="relative mx-auto h-5 w-5 md:hidden" strokeWidth={2} />
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />
+                ) : (
+                  <>
+                    <span className="hidden md:block">Verificar</span>
+                    <SendHorizonal className="relative mx-auto h-5 w-5 md:hidden" strokeWidth={2} />
+                  </>
+                )}
               </Button>
             </div>
           </div>

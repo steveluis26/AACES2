@@ -432,6 +432,27 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
         "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS costo_asignado NUMERIC(10,2) DEFAULT 0",
         "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS descuento NUMERIC(10,2) DEFAULT 0",
         "ALTER TABLE IF EXISTS aaces.curso_participante ADD COLUMN IF NOT EXISTS empresa_participacion VARCHAR(200)",
+        # documentos_emitidos.codigo_validacion es UUID pero el flujo legacy
+        # "asignar constancia" genera códigos públicos de 8 chars (VARCHAR).
+        # El servicio /constancias/emitir reutiliza el código existente →
+        # el INSERT truena con "invalid input syntax for type uuid" (500).
+        # Se unifica a VARCHAR(20) para que ambos flujos usen el mismo formato.
+        """DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'aaces'
+                  AND table_name = 'documentos_emitidos'
+                  AND column_name = 'codigo_validacion'
+                  AND data_type = 'uuid'
+            ) THEN
+                ALTER TABLE aaces.documentos_emitidos
+                    ALTER COLUMN codigo_validacion TYPE VARCHAR(20)
+                    USING codigo_validacion::text;
+                ALTER TABLE aaces.documentos_emitidos
+                    ALTER COLUMN codigo_validacion DROP DEFAULT;
+            END IF;
+        END $$""",
     ]:
         try:
             async with conn.begin_nested():

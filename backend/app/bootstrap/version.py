@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 logger = logging.getLogger(__name__)
 
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 
 
 async def ensure_schema_version(conn: AsyncConnection) -> None:
@@ -22,6 +22,6 @@ async def ensure_schema_version(conn: AsyncConnection) -> None:
             VALUES (:v, :desc)
             ON CONFLICT (version) DO NOTHING
         """),
-        {"v": CURRENT_SCHEMA_VERSION, "desc": "Validación STPS de organizaciones (V005)"},
+        {"v": CURRENT_SCHEMA_VERSION, "desc": "documentos_emitidos.codigo_validacion a VARCHAR(20) (V006)"},
     )
     logger.info("Schema version %d ensured.", CURRENT_SCHEMA_VERSION)

@@ -116,7 +116,11 @@ class ConstanciasService:
         # Reusar el codigo de validacion ya emitido (si existe) para no regenerarlo
         # en cada re-emision. validaciones_publicas es FK a curso_participante.codigo_validacion,
         # asi que cambiarlo romperia las validaciones previas del mismo participante.
-        codigo_validacion = cp.codigo_validacion if cp.codigo_validacion else str(uuid.uuid4())
+        # El formato es 8 chars hex mayúsculas (ej. 9F41F3BE), igual que el flujo
+        # legacy "asignar constancia", para que la verificación pública funcione igual.
+        codigo_validacion = cp.codigo_validacion if cp.codigo_validacion else uuid.uuid4().hex[:8].upper()
+        # Folio con formato CERT-XXXXXXXX, igual que el flujo legacy.
+        folio = cp.id_certificado if cp.id_certificado else f"CERT-{uuid.uuid4().hex[:8].upper()}"
         now = datetime.utcnow()
 
         participante_nombre = f"{cp.part_nombre or ''} {cp.part_apellido or ''}".strip()
@@ -210,17 +214,17 @@ class ConstanciasService:
             text("""
                 INSERT INTO aaces.documentos_emitidos
                     (id, organizacion_id, template_id, template_version, tipo_documento,
-                     codigo_validacion, storage_provider, storage_key, pdf_hash,
+                     codigo_validacion, folio, storage_provider, storage_key, pdf_hash,
                      html_snapshot, documento_metadata, emitido_por, estatus)
                 VALUES
                     (:id, :org_id, :template_id, :version, 'CONSTANCIA',
-                     :codigo, :provider, :skey, :hash,
+                     :codigo, :folio, :provider, :skey, :hash,
                      :snapshot, :meta, :emitido_por, 'emitido')
             """),
             {
                 "id": doc_id, "org_id": organizacion_id,
                 "template_id": t_id, "version": t_version,
-                "codigo": codigo_validacion,
+                "codigo": codigo_validacion, "folio": folio,
                 "provider": result.storage_provider,
                 "skey": result.storage_key,
                 "hash": result.pdf_hash,
@@ -264,6 +268,7 @@ class ConstanciasService:
         return {
             "id": doc_id,
             "codigo_validacion": codigo_validacion,
+            "folio": folio,
             "pdf_hash": result.pdf_hash,
             "descarga_url": storage_url,
             "participante_nombre": participante_nombre,
