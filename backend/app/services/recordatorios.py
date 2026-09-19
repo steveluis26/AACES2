@@ -91,7 +91,7 @@ async def constancias_por_vencer(db: AsyncSession, ref: date) -> list[dict]:
         await db.execute(
             text(
                 """
-                SELECT cp.id AS cp_id, cp.fecha_expiracion, cp.folio,
+                SELECT cp.id AS cp_id, cp.fecha_expiracion, cp.id_certificado AS folio,
                        p.nombre, p.apellido_paterno, p.apellido_materno,
                        p.correo AS p_correo, p.telefono AS p_telefono,
                        c.nombre AS curso_nombre, c.codigo_curso,
@@ -101,7 +101,7 @@ async def constancias_por_vencer(db: AsyncSession, ref: date) -> list[dict]:
                 JOIN aaces.cursos c ON c.id = cp.curso_id
                 JOIN aaces.clientes cl ON cl.id = c.cliente_id
                 WHERE cp.fecha_expiracion IN :fechas
-                  AND cp.folio IS NOT NULL
+                  AND cp.id_certificado IS NOT NULL
                   AND cl.organizacion_id IS NOT NULL
                 """
             ).bindparams(bindparam("fechas", expanding=True)),
@@ -338,6 +338,10 @@ async def ejecutar_recordatorios(db: AsyncSession, ref: date | None = None) -> d
             avisos.extend(await colector(db, ref))
         except Exception:  # noqa: BLE001 - un colector no tumba a los demás
             logger.exception("Colector de recordatorios falló: %s", colector.__name__)
+            try:
+                await db.rollback()  # la transacción pudo quedar abortada
+            except Exception:
+                pass
 
     for aviso in avisos:
         # Resolver destinatarios (admins de la org) al momento de generar

@@ -286,3 +286,52 @@ async def test_correos_admin_org_fallback_a_contacto():
     ])
     correos = await rec.correos_admin_org(db, "org1")
     assert correos == ["contacto@org.com"]
+
+
+@pytest.mark.asyncio
+async def test_job_colector_fallido_no_tumba_a_los_demas(monkeypatch):
+    # Regresión: un colector con error de BD (ej. columna inexistente) no debe
+    # impedir que los demás colectores generen sus avisos.
+    async def colector_roto(db, ref):
+        raise RuntimeError("column cp.folio does not exist")
+
+    async def colector_ok(db, ref):
+        return [{"organizacion_id": "org1", "tipo": "curso_proximo",
+                 "clave": "curso_proximo:c1:7", "titulo": "t", "mensaje": "m",
+                 "asunto": "a", "referencia_tipo": "curso",
+                 "referencia_id": "c1", "dias_restantes": 7}]
+
+    async def vacio(db, ref):
+        return []
+
+    monkeypatch.setattr(rec, "constancias_por_vencer", colector_roto)
+    monkeypatch.setattr(rec, "cursos_proximos", colector_ok)
+    monkeypatch.setattr(rec, "suscripciones_por_vencer", vacio)
+    monkeypatch.setattr(rec, "cursos_sin_participantes", vacio)
+    monkeypatch.setattr(rec, "_registrar_aviso", lambda db, aviso: _nid("nid-x"))
+    monkeypatch.setattr(rec, "_enviar_correo", lambda d, a, m: _ok())
+    monkeypatch.setattr(rec, "correos_admin_org", lambda db, org: _admins2())
+
+    async def _nid(x):
+        return x
+
+    async def _ok():
+        return False, "SMTP no configurado en el servidor"
+
+    async def _admins2():
+        return ["admin@org1.com"]
+
+    db = FakeDB([FakeResult(row=None)])  # UPDATE email_estado
+    resumen = await rec.ejecutar_recordatorios(db, REF)
+    assert resumen["generados"] == 1
+    assert resumen["omitidos"] == 1
+
+
+@pytest.mark.asyncio
+async def test_constancias_usa_id_certificado():
+    # La columna real es id_certificado (no folio)
+    db = FakeDB([FakeResult(rows=[])])
+    await rec.constancias_por_vencer(db, REF)
+    sql, _ = db.executed[0]
+    assert "cp.id_certificado AS folio" in sql
+    assert "cp.folio" not in sql
