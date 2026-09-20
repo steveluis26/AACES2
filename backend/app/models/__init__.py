@@ -601,6 +601,19 @@ class CatalogoCurso(Base):
     )
 
 
+class PaqueteCurso(Base):
+    """Relación muchos-a-muchos paquete <-> curso del catálogo.
+
+    Declarada antes de Paquete para que la relación M:N use la tabla
+    real del metadata con esquema explícito (aaces.paquete_cursos),
+    evitando que secondary="paquete_cursos" falle al resolver el mapper.
+    """
+    __tablename__ = "paquete_cursos"
+
+    paquete_id = Column(UUID(as_uuid=True), ForeignKey("paquetes.id", ondelete="CASCADE"), primary_key=True)
+    catalogo_curso_id = Column(UUID(as_uuid=True), ForeignKey("catalogo_cursos.id", ondelete="CASCADE"), primary_key=True)
+
+
 class Paquete(Base):
     """Paquete de cursos del catálogo con precio propio definido por la org."""
     __tablename__ = "paquetes"
@@ -617,21 +630,13 @@ class Paquete(Base):
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     organizacion = relationship("Organizacion", foreign_keys=[organizacion_id])
-    cursos = relationship("CatalogoCurso", secondary="paquete_cursos")
+    cursos = relationship("CatalogoCurso", secondary=PaqueteCurso.__table__)
 
     __table_args__ = (
         CheckConstraint("precio >= 0", name="check_precio_paquete"),
         Index('idx_paquetes_org', 'organizacion_id'),
         Index('idx_paquetes_publicado', 'publicado'),
     )
-
-
-class PaqueteCurso(Base):
-    """Relación muchos-a-muchos paquete <-> curso del catálogo."""
-    __tablename__ = "paquete_cursos"
-
-    paquete_id = Column(UUID(as_uuid=True), ForeignKey("paquetes.id", ondelete="CASCADE"), primary_key=True)
-    catalogo_curso_id = Column(UUID(as_uuid=True), ForeignKey("catalogo_cursos.id", ondelete="CASCADE"), primary_key=True)
 
 
 class ListaEspera(Base):
