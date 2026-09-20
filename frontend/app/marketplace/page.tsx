@@ -3,10 +3,7 @@ import { useState } from "react"
 import { MapPin, Search, Building2, Star } from "lucide-react"
 import Link from "next/link"
 
-type TipoLead = "agencia"
-
 export default function MarketplacePage() {
-  const tipo: TipoLead = "agencia"
   const [nombre, setNombre] = useState("")
   const [email, setEmail] = useState("")
   const [empresa, setEmpresa] = useState("")
@@ -20,7 +17,7 @@ export default function MarketplacePage() {
     setError("")
     if (!nombre.trim()) { setError("Escribe tu nombre"); return }
     if (!email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError("Escribe un correo válido"); return }
-    if (!empresa.trim()) { setError("Escribe el nombre de tu agencia"); return }
+    if (!empresa.trim()) { setError("Escribe el nombre de tu empresa"); return }
     setEnviando(true)
     try {
       const res = await fetch("/api/v1/public/lista-espera", {
@@ -29,9 +26,9 @@ export default function MarketplacePage() {
         body: JSON.stringify({
           nombre: nombre.trim(),
           email: email.trim(),
-          empresa: empresa.trim() || null,
+          empresa: empresa.trim(),
           ciudad: ciudad.trim() || null,
-          tipo,
+          tipo: "empresa",
           mensaje: mensaje.trim() || null,
         }),
       })
@@ -57,10 +54,10 @@ export default function MarketplacePage() {
             Próximamente disponible
           </span>
           <h1 className="mt-6 text-3xl sm:text-4xl md:text-5xl font-semibold">
-            Haz que las empresas encuentren tu agencia
+            Encuentra capacitación confiable para tu empresa
           </h1>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            Estamos construyendo el directorio nacional de agencias capacitadoras para conectar empresas con proveedores confiables de capacitación.
+            El directorio nacional de agencias capacitadoras validadas. Busca por especialidad y ubicación, y contrata con la confianza de que sus constancias son verificables.
           </p>
 
           <div className="mt-12 grid gap-6 sm:grid-cols-3 text-left">
@@ -83,9 +80,9 @@ export default function MarketplacePage() {
 
           <div className="mt-12 rounded-2xl border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20 p-8">
             <Building2 className="h-10 w-10 text-orange-500 mx-auto" />
-            <h2 className="mt-4 text-2xl font-semibold">Sé de las primeras agencias</h2>
+            <h2 className="mt-4 text-2xl font-semibold">Sé de las primeras empresas en usarlo</h2>
             <p className="mt-2 text-muted-foreground max-w-lg mx-auto">
-              Únete al directorio desde el inicio. Cuando una empresa busque capacitación en tu ciudad, aparecerás entre los primeros resultados.
+              Déjanos tus datos y te avisaremos en cuanto puedas buscar capacitación para tu empresa en el directorio.
             </p>
 
             {listo ? (
@@ -98,10 +95,10 @@ export default function MarketplacePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input className={inputCls} placeholder="Tu nombre *" value={nombre} onChange={e => setNombre(e.target.value)} />
                   <input className={inputCls} placeholder="Correo *" type="email" value={email} onChange={e => setEmail(e.target.value)} />
-                  <input className={inputCls} placeholder="Nombre de tu agencia *" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+                  <input className={inputCls} placeholder="Nombre de tu empresa *" value={empresa} onChange={e => setEmpresa(e.target.value)} />
                   <input className={inputCls} placeholder="Ciudad" value={ciudad} onChange={e => setCiudad(e.target.value)} />
                 </div>
-                <textarea className={inputCls} rows={2} placeholder="¿Qué capacitación ofreces? (opcional)" value={mensaje} onChange={e => setMensaje(e.target.value)} />
+                <textarea className={inputCls} rows={2} placeholder="¿Qué capacitación buscas? (opcional)" value={mensaje} onChange={e => setMensaje(e.target.value)} />
                 {error && <p className="text-sm text-red-600">{error}</p>}
                 <div className="text-center">
                   <button
@@ -113,7 +110,7 @@ export default function MarketplacePage() {
                   </button>
                 </div>
                 <p className="text-center text-xs text-muted-foreground">
-                  ¿Ya eres cliente de AACES? <Link href="/cliente/catalogo" className="underline hover:text-orange-500">Publica tus cursos desde tu panel</Link>
+                  ¿Tienes una agencia capacitadora? <Link href="/cliente/catalogo" className="underline hover:text-orange-500">Publica tus cursos desde tu panel</Link>
                 </p>
               </div>
             )}
