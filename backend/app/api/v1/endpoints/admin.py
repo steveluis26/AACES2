@@ -486,6 +486,46 @@ async def admin_update_cliente_password(
         logger.error(f"Error actualizando contraseña de cliente: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
+
+@router.put("/usuarios/{usuario_id}/password")
+async def admin_update_usuario_password(
+    usuario_id: str,
+    payload: Dict[str, Any],
+    user_data: Dict[str, Any] = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Actualizar contraseña de un usuario de organización (solo superadmin)"""
+    try:
+        new_password = payload.get("new_password") or payload.get("password")
+        if not new_password or len(new_password) < 6:
+            raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+
+        password_hash = security_service.hash_password(new_password)
+        result = await db.execute(
+            text(
+                "UPDATE aaces.usuarios SET password_hash = :ph, intentos_fallidos = 0, bloqueado_hasta = NULL, "
+                "must_change_password = true, fecha_actualizacion = now() WHERE id = :id"
+            ),
+            {"ph": password_hash, "id": usuario_id}
+        )
+        await db.commit()
+        if (result.rowcount or 0) == 0:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        audit_logger.log_user_action(
+            user_id=user_data["sub"],
+            action="admin_update_usuario_password",
+            resource="usuario",
+            details={"usuario_id": usuario_id}
+        )
+        return {"updated": 1}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error actualizando contraseña de usuario de org: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
 @router.post("/clientes/{cliente_id}/password/temp")
 async def admin_generate_temp_password(
     cliente_id: str,
