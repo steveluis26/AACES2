@@ -471,6 +471,21 @@ async def admin_update_cliente_password(
             ),
             {"ph": password_hash, "id": cliente_id}
         )
+        # Puente: el login real usa aaces.usuarios, asi que propagar el cambio
+        # a todos los usuarios de la organizacion vinculada a este cliente legacy.
+        org_row = await db.execute(
+            text("SELECT organizacion_id FROM clientes WHERE id = :id"),
+            {"id": cliente_id}
+        )
+        org = org_row.fetchone()
+        if org and org[0]:
+            await db.execute(
+                text(
+                    "UPDATE aaces.usuarios SET password_hash = :ph, intentos_fallidos = 0, bloqueado_hasta = NULL, "
+                    "must_change_password = true, fecha_actualizacion = now() WHERE organizacion_id = :org_id"
+                ),
+                {"ph": password_hash, "org_id": org[0]}
+            )
         await db.commit()
 
         audit_logger.log_user_action(
@@ -543,6 +558,20 @@ async def admin_generate_temp_password(
             ),
             {"ph": password_hash, "id": cliente_id}
         )
+        # Puente: propagar la temporal a los usuarios reales de la organizacion.
+        org_row = await db.execute(
+            text("SELECT organizacion_id FROM clientes WHERE id = :id"),
+            {"id": cliente_id}
+        )
+        org = org_row.fetchone()
+        if org and org[0]:
+            await db.execute(
+                text(
+                    "UPDATE aaces.usuarios SET password_hash = :ph, must_change_password = true, intentos_fallidos = 0, "
+                    "bloqueado_hasta = NULL, fecha_actualizacion = now() WHERE organizacion_id = :org_id"
+                ),
+                {"ph": password_hash, "org_id": org[0]}
+            )
         await db.commit()
         audit_logger.log_user_action(user_id=user_data["sub"], action="admin_generate_temp_password", resource="cliente", details={"cliente_id": cliente_id})
         return {"temp_password": temp_password}
