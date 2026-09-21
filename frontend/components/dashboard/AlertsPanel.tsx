@@ -17,10 +17,10 @@ const LABELS: Record<string, string> = {
   cursos_sin_empresa: "Cursos sin empresa contratante",
 }
 
-const PRIORITY_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
-  alta: { icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-950/20" },
-  media: { icon: AlertCircle, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/20" },
-  baja: { icon: Info, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/20" },
+const PRIORITY_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string; text: string }> = {
+  alta: { icon: AlertTriangle, color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-950", text: "text-red-950 dark:text-red-100" },
+  media: { icon: AlertCircle, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-950", text: "text-amber-950 dark:text-amber-100" },
+  baja: { icon: Info, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-950", text: "text-blue-950 dark:text-blue-100" },
 }
 
 export function AlertsPanel({ alertas }: { alertas: Alerta[] }) {
@@ -52,7 +52,7 @@ export function AlertsPanel({ alertas }: { alertas: Alerta[] }) {
           return (
             <div
               key={`${a.tipo}-${i}`}
-              className={cn("flex items-center gap-3 rounded-lg p-3 text-sm", cfg.bg)}
+              className={cn("flex items-center gap-3 rounded-lg p-3 text-sm", cfg.bg, cfg.text)}
             >
               <Icon className={cn("h-5 w-5 shrink-0", cfg.color)} />
               <div className="flex-1">

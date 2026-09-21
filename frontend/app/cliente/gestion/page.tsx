@@ -252,7 +252,8 @@ export default function GestionClientePage() {
           {cursosError && (
             <Alert className="alert-error mb-3">{cursosError}</Alert>
           )}
-          <Table>
+          <div className="overflow-x-auto">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Curso</TableHead>
@@ -287,7 +288,8 @@ export default function GestionClientePage() {
                 </TableRow>
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

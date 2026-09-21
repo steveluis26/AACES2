@@ -138,7 +138,7 @@ export default function ReportesPage() {
       </div>
 
       <Tabs defaultValue="constancias" className="w-full">
-        <TabsList className="flex flex-wrap">
+        <TabsList className="flex h-auto flex-wrap">
           <TabsTrigger value="constancias">Constancias por período</TabsTrigger>
           <TabsTrigger value="cursos">Cursos top</TabsTrigger>
           <TabsTrigger value="empresas">Empresas top</TabsTrigger>

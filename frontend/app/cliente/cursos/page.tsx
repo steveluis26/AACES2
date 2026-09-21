@@ -912,9 +912,9 @@ export default function CursosClientePage() {
               <Alert className="alert-error mt-3">{detalleError}</Alert>
             )}
             <div id="participantes-section" className="mt-8 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-lg font-semibold">Participantes</div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => aplicarPrecioGrupo('solo_vacios')}>Aplicar precio grupo (vacíos)</Button>
                   <Button variant="outline" onClick={() => aplicarPrecioGrupo('todos')}>Aplicar precio grupo (todos)</Button>
                   <Button variant="secondary" onClick={exportarCSV}>Exportar CSV</Button>
