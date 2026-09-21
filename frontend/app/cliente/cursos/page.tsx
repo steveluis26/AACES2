@@ -745,8 +745,8 @@ export default function CursosClientePage() {
                   {new Date(currentYear, currentMonth, 1).toLocaleString('es-MX', { month: 'long', year: 'numeric' })}
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { const m = currentMonth - 1; if (m < 0) { setCurrentMonth(11); setCurrentYear(y => y - 1) } else setCurrentMonth(m) }}><ChevronLeftIcon className="size-4" /></Button>
-                  <Button variant="outline" size="sm" onClick={() => { const m = currentMonth + 1; if (m > 11) { setCurrentMonth(0); setCurrentYear(y => y + 1) } else setCurrentMonth(m) }}><ChevronRightIcon className="size-4" /></Button>
+                  <Button variant="outline" onClick={() => { const m = currentMonth - 1; if (m < 0) { setCurrentMonth(11); setCurrentYear(y => y - 1) } else setCurrentMonth(m) }}><ChevronLeftIcon className="size-4" /></Button>
+                  <Button variant="outline" onClick={() => { const m = currentMonth + 1; if (m > 11) { setCurrentMonth(0); setCurrentYear(y => y + 1) } else setCurrentMonth(m) }}><ChevronRightIcon className="size-4" /></Button>
                 </div>
               </div>
               {/* Agenda por día en móvil */}
@@ -763,7 +763,7 @@ export default function CursosClientePage() {
                           <button key={`${ev.id}-${String(ev.fecha_inicio).slice(0,10)}-${iidx}`} type="button"
                             className="w-full text-left text-sm px-2.5 py-1.5 rounded-md bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 truncate"
                             onClick={() => { setSelected(ev); setOpenEventDialog(true) }}>
-                            <Badge variant="secondary" className="mr-1.5">{String(ev.ciudad || '').slice(0, 12)}</Badge>
+                            <Badge variant="secondary" className="mr-1.5 max-w-[130px] truncate align-middle">{ev.ciudad || ''}</Badge>
                             {ev.nombre}
                           </button>
                         ))}
@@ -808,7 +808,7 @@ export default function CursosClientePage() {
                                 : ''
                         return (
                           <div key={`${ev.id}-${String(ev.fecha_inicio).slice(0,10)}-${iidx}`} className={`text-xs truncate cursor-pointer px-2 py-0.5 w-full ${base} ${ribbon}`} onClick={() => { setSelected(ev); setOpenEventDialog(true) }}>
-                            <Badge variant="secondary" className="mr-1">{String(ev.ciudad || '').slice(0,10)}</Badge>
+                            <Badge variant="secondary" className="mr-1 max-w-[110px] truncate align-middle">{ev.ciudad || ''}</Badge>
                             {ev.nombre}
                           </div>
                         )
@@ -837,13 +837,13 @@ export default function CursosClientePage() {
               </Select>
             </div>
             {proximosFiltered.map(c => (
-              <div key={c.id} className={`flex items-center justify-between p-2 border rounded cursor-pointer ${selected?.id === c.id ? 'bg-primary-50 dark:bg-neutral-800' : ''}`} onClick={() => setSelected(c)}>
-                <div>
-                  <div className="font-medium">{c.codigo_curso} · {c.nombre}</div>
-                  <div className="text-sm">{c.ciudad || '-'} · Inicio: {c.fecha_inicio ? String(c.fecha_inicio).slice(0,10) : '-'} · Fin: {c.fecha_fin ? String(c.fecha_fin).slice(0,10) : '-'} · Precio: {fmtMXN.format(Number((c.precio_promocional ?? c.precio_base ?? 0) || 0))}</div>
+              <div key={c.id} className={`flex items-center justify-between gap-2 p-2 border rounded cursor-pointer ${selected?.id === c.id ? 'bg-primary-50 dark:bg-neutral-800' : ''}`} onClick={() => setSelected(c)}>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{c.codigo_curso} · {c.nombre}</div>
+                  <div className="text-sm truncate">{c.ciudad || '-'} · Inicio: {c.fecha_inicio ? String(c.fecha_inicio).slice(0,10) : '-'} · Fin: {c.fecha_fin ? String(c.fecha_fin).slice(0,10) : '-'} · Precio: {fmtMXN.format(Number((c.precio_promocional ?? c.precio_base ?? 0) || 0))}</div>
                   
                 </div>
-                <div className="text-sm">Estado: {c.estado === 'en_espera' ? 'pendiente' : c.estado}</div>
+                <div className="text-sm shrink-0">Estado: {c.estado === 'en_espera' ? 'pendiente' : c.estado}</div>
               </div>
             ))}
             {proximosFiltered.length === 0 && (

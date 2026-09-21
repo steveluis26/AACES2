@@ -338,6 +338,7 @@ class Token(BaseSchema):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    must_change_password: bool = False
 
 class TokenData(BaseSchema):
     correo: Optional[str] = None
