@@ -268,8 +268,8 @@ export default function GestionClientePage() {
               {cursos.map(c => (
                 <TableRow key={c.id}>
                   <TableCell>{c.codigo_curso} · {c.nombre}</TableCell>
-                  <TableCell>{c.ciudad || '-'}</TableCell>
-                  <TableCell>{c.fecha_inicio ? String(c.fecha_inicio).slice(0,10) : '-'} → {c.fecha_fin ? String(c.fecha_fin).slice(0,10) : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{c.ciudad || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap">{c.fecha_inicio ? String(c.fecha_inicio).slice(0,10) : '-'} → {c.fecha_fin ? String(c.fecha_fin).slice(0,10) : '-'}</TableCell>
                   <TableCell>
                     <Input type="number" step="0.01" value={editCurso[c.id]?.precio_base ?? ''} onChange={(e) => setEditCurso(s => ({ ...s, [c.id]: { ...(s[c.id] || {}), precio_base: e.target.value } }))} />
                   </TableCell>
@@ -277,8 +277,10 @@ export default function GestionClientePage() {
                     <Input type="number" step="0.01" value={editCurso[c.id]?.precio_promocional ?? ''} onChange={(e) => setEditCurso(s => ({ ...s, [c.id]: { ...(s[c.id] || {}), precio_promocional: e.target.value } }))} />
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" className="w-24" onClick={() => saveCursoPrecio(c.id)}>Actualizar</Button>
-                    <Button size="sm" variant="destructive" className="ml-2 w-24" onClick={async () => { if (!confirm('¿Eliminar este curso?')) return; try { await apiRequest(`/clientes/cursos/${c.id}`, { method: 'DELETE' }); setCursosError(''); await loadCursos(); } catch (e) { setCursosError((e as Error)?.message || 'No se pudo eliminar el curso') } }}>Eliminar</Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" className="w-24" onClick={() => saveCursoPrecio(c.id)}>Actualizar</Button>
+                      <Button size="sm" variant="destructive" className="w-24" onClick={async () => { if (!confirm('¿Eliminar este curso?')) return; try { await apiRequest(`/clientes/cursos/${c.id}`, { method: 'DELETE' }); setCursosError(''); await loadCursos(); } catch (e) { setCursosError((e as Error)?.message || 'No se pudo eliminar el curso') } }}>Eliminar</Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
