@@ -115,24 +115,24 @@ export default function DocumentosPage() {
         <div className="grid gap-3">
           {documentos.map((doc) => (
             <Card key={doc.id}>
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="space-y-1">
+              <CardContent className="flex items-center justify-between gap-2 p-4">
+                <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{TIPO_LABELS[doc.tipo_documento] || doc.tipo_documento}</span>
-                    <Badge variant={ESTATUS_VARIANTS[doc.estatus] || 'outline'}>
+                    <span className="font-medium truncate">{TIPO_LABELS[doc.tipo_documento] || doc.tipo_documento}</span>
+                    <Badge variant={ESTATUS_VARIANTS[doc.estatus] || 'outline'} className="shrink-0">
                       {doc.estatus}
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground truncate">
                     Código: {doc.codigo_validacion}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground truncate">
                     {new Date(doc.fecha_emision).toLocaleDateString('es-MX', {
                       year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
                     })}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button size="sm" variant="outline" onClick={() => handleDownload(doc)}>
                     Descargar PDF
                   </Button>

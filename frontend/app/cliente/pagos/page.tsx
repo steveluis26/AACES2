@@ -143,7 +143,7 @@ export default function ClientePagosPage() {
           <Loader2 className="h-4 w-4 animate-spin" /> Cargando planes…
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid-cards">
           {planes.map((plan) => {
             const features = FEATURES_BY_PLAN[plan.codigo] || []
             const esActual = suscripcion?.plan_codigo === plan.codigo && suscripcion.estatus !== "cancelada"

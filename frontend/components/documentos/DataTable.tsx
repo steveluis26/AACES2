@@ -150,14 +150,16 @@ export function DataTable({ items, loading, onView, onDownload }: DataTableProps
             className="rounded-lg border p-4"
             onClick={() => onView(item.id)}
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-medium">{item.participante_nombre || "—"}</p>
-                <p className="text-sm text-muted-foreground">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">{item.participante_nombre || "—"}</p>
+                <p className="text-sm text-muted-foreground truncate">
                   {item.curso_nombre || "—"}
                 </p>
               </div>
-              <DocumentStatusBadge estado={item.estatus} />
+              <div className="shrink-0">
+                <DocumentStatusBadge estado={item.estatus} />
+              </div>
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
               <span className="font-mono">

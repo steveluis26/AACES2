@@ -81,8 +81,8 @@ export default function NotificacionesPage() {
         {items.map(n => (
           <Card key={n.id} className={n.leida ? 'opacity-70' : ''}>
             <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
-              <CardTitle className="text-base leading-snug">{n.titulo}</CardTitle>
-              <Badge variant={TIPO_VARIANT[n.tipo] ?? 'outline'}>
+              <CardTitle className="min-w-0 flex-1 truncate text-base leading-snug">{n.titulo}</CardTitle>
+              <Badge variant={TIPO_VARIANT[n.tipo] ?? 'outline'} className="shrink-0">
                 {TIPO_LABEL[n.tipo] ?? n.tipo}
               </Badge>
             </CardHeader>

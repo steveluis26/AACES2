@@ -118,12 +118,12 @@ export default function ParticipanteDetallePage() {
 
   return (
     <div className="space-y-6 px-4 lg:px-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{p.nombre}</h1>
-          <p className="text-sm text-muted-foreground font-mono">{p.pax_id}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold truncate">{p.nombre}</h1>
+          <p className="text-sm text-muted-foreground font-mono truncate">{p.pax_id}</p>
         </div>
-        <Button variant="outline" onClick={() => {
+        <Button variant="outline" className="shrink-0" onClick={() => {
           if (!editando) {
             setEditNombre(p.nombre); setEditCorreo(p.correo || '')
             setEditTelefono(p.telefono || ''); setEditEmpresa(p.empresa || '')

@@ -107,7 +107,7 @@ export default function ReportesPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid-kpis">
         <StatCard
           title="Constancias (período)"
           value={constanciasRows.reduce((a, r) => a + Number(r.total ?? r.value ?? 0), 0) || "—"}

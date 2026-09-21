@@ -103,7 +103,7 @@ export default function RenovacionesPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -179,6 +179,70 @@ export default function RenovacionesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <div className="grid gap-3 md:hidden">
+        {items.map(i => {
+          const badge = ESTADO_BADGE[i.estado_vigencia] || ESTADO_BADGE.vigente
+          const waLink = i.telefono
+            ? `https://wa.me/52${i.telefono.replace(/\D/g, '')}?text=Hola%20${encodeURIComponent(i.nombre)}.%20Te%20contactamos%20de%20la%20capacitadora%20para%20informarte%20que%20tu%20curso%20de%20${encodeURIComponent(i.curso_nombre)}%20${i.estado_vigencia === 'vencido' ? 'ha%20vencido' : 'está%20próximo%20a%20vencer'}.%20Comunícate%20con%20nosotros%20para%20renovar.`
+            : null
+          const mailLink = i.correo
+            ? `mailto:${i.correo}?subject=Renovación%20${i.curso_nombre}&body=Hola%20${encodeURIComponent(i.nombre)}.%20Te%20contactamos%20para%20informarte%20sobre%20tu%20curso%20de%20${encodeURIComponent(i.curso_nombre)}.`
+            : null
+
+          return (
+            <Card key={`${i.participante_id}-${i.curso_id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <a href={`/cliente/participantes/${i.participante_id}`} className="hover:underline font-medium truncate block">
+                      {i.nombre}
+                    </a>
+                    <p className="text-xs text-muted-foreground font-mono truncate">{i.pax_id}</p>
+                    <p className="text-xs text-muted-foreground truncate">{i.curso_nombre} · {i.codigo_curso}</p>
+                    {i.empresa && <p className="text-xs text-muted-foreground truncate">{i.empresa}</p>}
+                  </div>
+                  <Badge variant={badge.variant} className="shrink-0">{badge.label}</Badge>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    Vence: {i.fecha_expiracion?.slice(0, 10) || '-'}
+                  </span>
+                  <div className="flex gap-1 shrink-0">
+                    {waLink && (
+                      <a href={waLink} target="_blank" rel="noopener noreferrer">
+                        <Button size="sm" variant="outline" className="text-xs">WhatsApp</Button>
+                      </a>
+                    )}
+                    {mailLink && (
+                      <a href={mailLink}>
+                        <Button size="sm" variant="outline" className="text-xs">Correo</Button>
+                      </a>
+                    )}
+                    {!waLink && !mailLink && (
+                      <span className="text-xs text-muted-foreground">Sin contacto</span>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+        {items.length === 0 && !loading && (
+          <Card>
+            <CardContent className="p-6 text-sm text-muted-foreground text-center">
+              Todos los cursos están vigentes. No hay participantes próximos a vencer.
+            </CardContent>
+          </Card>
+        )}
+        {loading && (
+          <Card>
+            <CardContent className="p-6 text-sm text-muted-foreground text-center">
+              Cargando...
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }
