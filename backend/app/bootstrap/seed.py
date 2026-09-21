@@ -70,16 +70,30 @@ async def _ensure_platform_user(conn: AsyncConnection, hash_password_fn) -> uuid
     existing_id = existing.scalar()
     if existing_id:
         logger.info(f"Platform user already exists: {existing_id}")
-        # Update password/name in case they changed, and reset lockout counters
-        await conn.execute(
-            text("""
-                UPDATE aaces.usuarios_plataforma
-                SET password_hash = :ph, nombre = :name, activo = true, fecha_actualizacion = now(),
-                    intentos_fallidos = 0, bloqueado_hasta = NULL
-                WHERE correo = :email
-            """),
-            {"ph": ph, "name": name, "email": email}
-        )
+        # No reescribir el hash en reinicios ordinarios: solo actualizar
+        # nombre/estado y limpiar bloqueo. El password solo se fija al crear,
+        # o si PLATFORM_FORCE_PASSWORD_RESET=true (rotacion explicita).
+        if os.getenv("PLATFORM_FORCE_PASSWORD_RESET", "").lower() == "true":
+            await conn.execute(
+                text("""
+                    UPDATE aaces.usuarios_plataforma
+                    SET password_hash = :ph, nombre = :name, activo = true, fecha_actualizacion = now(),
+                        intentos_fallidos = 0, bloqueado_hasta = NULL
+                    WHERE correo = :email
+                """),
+                {"ph": ph, "name": name, "email": email}
+            )
+            logger.info("Platform user password force-rotated via PLATFORM_FORCE_PASSWORD_RESET")
+        else:
+            await conn.execute(
+                text("""
+                    UPDATE aaces.usuarios_plataforma
+                    SET nombre = :name, activo = true, fecha_actualizacion = now(),
+                        intentos_fallidos = 0, bloqueado_hasta = NULL
+                    WHERE correo = :email
+                """),
+                {"name": name, "email": email}
+            )
         return existing_id
 
     # Create new platform user
@@ -133,23 +147,45 @@ async def _ensure_demo_org_and_admin(conn: AsyncConnection, hash_password_fn, pl
     org_id = org_res.scalar()
     logger.info(f"Demo organization upserted: {org_id} (RFC: {rfc})")
 
-    # 2. Upsert admin user in usuarios (idempotent by UNIQUE(organizacion_id, correo))
-    admin_res = await conn.execute(
-        text("""
-            INSERT INTO aaces.usuarios (organizacion_id, correo, nombre, password_hash, rol, activo)
-            VALUES (:org_id, :email, :name, :ph, 'admin', true)
-            ON CONFLICT (organizacion_id, correo) DO UPDATE SET
-                password_hash = EXCLUDED.password_hash,
-                nombre = EXCLUDED.nombre,
-                rol = EXCLUDED.rol,
-                activo = true,
-                fecha_actualizacion = now(),
-                intentos_fallidos = 0,
-                bloqueado_hasta = NULL
-            RETURNING id
-        """),
-        {"org_id": org_id, "email": admin_email, "name": admin_name, "ph": ph}
-    )
+    # 2. Upsert admin user in usuarios (idempotent by UNIQUE(organizacion_id, correo)).
+    # El password solo se fija al crear el usuario; en reinicios posteriores no
+    # se reescribe (antes cada deploy revertia cambios hechos desde la app).
+    # Rotacion explicita con DEMO_FORCE_PASSWORD_RESET=true.
+    force_reset = os.getenv("DEMO_FORCE_PASSWORD_RESET", "").lower() == "true"
+    if force_reset:
+        admin_res = await conn.execute(
+            text("""
+                INSERT INTO aaces.usuarios (organizacion_id, correo, nombre, password_hash, rol, activo)
+                VALUES (:org_id, :email, :name, :ph, 'admin', true)
+                ON CONFLICT (organizacion_id, correo) DO UPDATE SET
+                    password_hash = EXCLUDED.password_hash,
+                    nombre = EXCLUDED.nombre,
+                    rol = EXCLUDED.rol,
+                    activo = true,
+                    fecha_actualizacion = now(),
+                    intentos_fallidos = 0,
+                    bloqueado_hasta = NULL
+                RETURNING id
+            """),
+            {"org_id": org_id, "email": admin_email, "name": admin_name, "ph": ph}
+        )
+        logger.info("Demo admin password force-rotated via DEMO_FORCE_PASSWORD_RESET")
+    else:
+        admin_res = await conn.execute(
+            text("""
+                INSERT INTO aaces.usuarios (organizacion_id, correo, nombre, password_hash, rol, activo)
+                VALUES (:org_id, :email, :name, :ph, 'admin', true)
+                ON CONFLICT (organizacion_id, correo) DO UPDATE SET
+                    nombre = EXCLUDED.nombre,
+                    rol = EXCLUDED.rol,
+                    activo = true,
+                    fecha_actualizacion = now(),
+                    intentos_fallidos = 0,
+                    bloqueado_hasta = NULL
+                RETURNING id
+            """),
+            {"org_id": org_id, "email": admin_email, "name": admin_name, "ph": ph}
+        )
     admin_id = admin_res.scalar()
     logger.info(f"Demo admin upserted: {admin_id} ({admin_email})")
 
