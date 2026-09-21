@@ -277,8 +277,8 @@ export default function GestionClientePage() {
                     <Input type="number" step="0.01" value={editCurso[c.id]?.precio_promocional ?? ''} onChange={(e) => setEditCurso(s => ({ ...s, [c.id]: { ...(s[c.id] || {}), precio_promocional: e.target.value } }))} />
                   </TableCell>
                   <TableCell>
-                    <Button size="sm" onClick={() => saveCursoPrecio(c.id)}>Actualizar</Button>
-                    <Button size="sm" variant="destructive" className="ml-2" onClick={async () => { if (!confirm('¿Eliminar este curso?')) return; try { await apiRequest(`/clientes/cursos/${c.id}`, { method: 'DELETE' }); setCursosError(''); await loadCursos(); } catch (e) { setCursosError((e as Error)?.message || 'No se pudo eliminar el curso') } }}>Eliminar</Button>
+                    <Button size="sm" className="w-24" onClick={() => saveCursoPrecio(c.id)}>Actualizar</Button>
+                    <Button size="sm" variant="destructive" className="ml-2 w-24" onClick={async () => { if (!confirm('¿Eliminar este curso?')) return; try { await apiRequest(`/clientes/cursos/${c.id}`, { method: 'DELETE' }); setCursosError(''); await loadCursos(); } catch (e) { setCursosError((e as Error)?.message || 'No se pudo eliminar el curso') } }}>Eliminar</Button>
                   </TableCell>
                 </TableRow>
               ))}
