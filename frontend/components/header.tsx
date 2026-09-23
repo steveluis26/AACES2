@@ -28,27 +28,28 @@ export function HeroHeader() {
     setMobileOpen(false)
   }, [pathname])
   if (!visible) return null
+  const isCurrent = (href: string) => !href.includes("#") && (pathname === href || (href !== "/" && (pathname || "").startsWith(href + "/")))
   return (
     <>
-      <div className={`pointer-events-auto fixed left-1/2 top-4 z-50 -translate-x-1/2 transition-all duration-300 ${shrink ? 'w-[min(100%-4rem,980px)]' : 'w-[min(100%-2rem,1100px)]'}`}>
+      <div className={`pointer-events-auto fixed left-1/2 top-4 z-50 -translate-x-1/2 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-4 motion-safe:duration-700 transition-all duration-300 ${shrink ? 'w-[min(100%-4rem,980px)]' : 'w-[min(100%-2rem,1100px)]'}`}>
         <div className="mx-auto flex items-center justify-between rounded-[2rem] border border-[var(--border)] bg-background/70 px-5 py-2 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
           <a href="/" className="group flex items-center gap-2">
             <Image src="/logo.png" alt="AACES" width={24} height={24} className="h-6 w-auto" />
             <span className="text-sm font-semibold transition-colors group-hover:text-orange-500">AACES</span>
           </a>
           <nav className="hidden md:flex items-center gap-6">
-            <a href="/verificar" className="opacity-80 hover:text-orange-500">Verificar</a>
-            <a href="/producto" className="opacity-80 hover:text-orange-500">Producto</a>
-            <a href="/#planes" className="opacity-80 hover:text-orange-500">Precios</a>
-            <a href="/marketplace" className="opacity-80 hover:text-orange-500 flex items-center gap-1">
+            <a href="/verificar" aria-current={isCurrent("/verificar") ? "page" : undefined} className={`relative py-1 transition-colors duration-200 hover:text-orange-500 after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-300 ${isCurrent("/verificar") ? "text-orange-500 after:scale-x-100" : "opacity-80 after:scale-x-0 hover:after:scale-x-100"}`}>Verificar</a>
+            <a href="/producto" aria-current={isCurrent("/producto") ? "page" : undefined} className={`relative py-1 transition-colors duration-200 hover:text-orange-500 after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-300 ${isCurrent("/producto") ? "text-orange-500 after:scale-x-100" : "opacity-80 after:scale-x-0 hover:after:scale-x-100"}`}>Producto</a>
+            <a href="/#planes" aria-current={isCurrent("/#planes") ? "page" : undefined} className={`relative py-1 transition-colors duration-200 hover:text-orange-500 after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-300 ${isCurrent("/#planes") ? "text-orange-500 after:scale-x-100" : "opacity-80 after:scale-x-0 hover:after:scale-x-100"}`}>Precios</a>
+            <a href="/marketplace" aria-current={isCurrent("/marketplace") ? "page" : undefined} className={`relative py-1 transition-colors duration-200 hover:text-orange-500 after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-300 ${isCurrent("/marketplace") ? "text-orange-500 after:scale-x-100" : "opacity-80 after:scale-x-0 hover:after:scale-x-100"} flex items-center gap-1`}>
               Marketplace
               <span className="rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">Próximamente</span>
             </a>
-            <a href="/blog" className="opacity-80 hover:text-orange-500">Blog</a>
-            <a href="/contacto" className="opacity-80 hover:text-orange-500">Contacto</a>
+            <a href="/blog" aria-current={isCurrent("/blog") ? "page" : undefined} className={`relative py-1 transition-colors duration-200 hover:text-orange-500 after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-300 ${isCurrent("/blog") ? "text-orange-500 after:scale-x-100" : "opacity-80 after:scale-x-0 hover:after:scale-x-100"}`}>Blog</a>
+            <a href="/contacto" aria-current={isCurrent("/contacto") ? "page" : undefined} className={`relative py-1 transition-colors duration-200 hover:text-orange-500 after:absolute after:-bottom-0.5 after:left-0 after:h-0.5 after:w-full after:origin-left after:rounded-full after:bg-orange-500 after:transition-transform after:duration-300 ${isCurrent("/contacto") ? "text-orange-500 after:scale-x-100" : "opacity-80 after:scale-x-0 hover:after:scale-x-100"}`}>Contacto</a>
           </nav>
           <div className="flex items-center gap-2">
-            <a href="/login" className="hidden sm:inline-flex items-center rounded-full px-3 py-1 text-sm bg-orange-500 text-white hover:bg-orange-600">
+            <a href="/login" className="hidden sm:inline-flex items-center rounded-full px-3 py-1 text-sm bg-orange-500 text-white shadow-sm shadow-orange-500/30 transition-all duration-200 hover:bg-orange-600 hover:shadow-md hover:shadow-orange-500/30 active:scale-95">
               Ingresar
             </a>
             <button
@@ -77,12 +78,12 @@ export function HeroHeader() {
               </button>
             </div>
             <nav className="flex flex-col gap-1 p-5">
-              <a href="/verificar" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Verificar</a>
-              <a href="/producto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Producto</a>
-              <a href="/#planes" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Precios</a>
-              <a href="/marketplace" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Marketplace</a>
-              <a href="/blog" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Blog</a>
-              <a href="/contacto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Contacto</a>
+              <a href="/verificar" aria-current={isCurrent("/verificar") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/verificar") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Verificar</a>
+              <a href="/producto" aria-current={isCurrent("/producto") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/producto") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Producto</a>
+              <a href="/#planes" aria-current={isCurrent("/#planes") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/#planes") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Precios</a>
+              <a href="/marketplace" aria-current={isCurrent("/marketplace") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/marketplace") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Marketplace</a>
+              <a href="/blog" aria-current={isCurrent("/blog") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/blog") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Blog</a>
+              <a href="/contacto" aria-current={isCurrent("/contacto") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/contacto") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Contacto</a>
             </nav>
             <div className="p-5 border-t border-border">
               <a href="/login" className="flex items-center justify-center rounded-full px-4 py-2.5 text-sm bg-orange-500 text-white hover:bg-orange-600 transition-colors">

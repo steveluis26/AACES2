@@ -1,5 +1,8 @@
 "use client"
 import { ScrollText, QrCode, Users, Clock, BarChart3, Compass } from "lucide-react"
+import { Stagger, StaggerItem } from "@/components/motion/reveal"
+import { FeatureCard } from "@/components/landing/feature-card"
+import { SectionHeading } from "@/components/landing/section-heading"
 
 const features = [
   {
@@ -36,24 +39,20 @@ const features = [
 
 export default function FeaturesSection() {
   return (
-    <section className="py-12 md:py-20">
+    <section id="funcionalidades" className="scroll-mt-24 py-12 md:py-20">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="text-center">
-          <h2 className="text-3xl font-semibold">Todo lo que necesitas para capacitar</h2>
-          <p className="mt-4 text-muted-foreground">Herramientas diseñadas para capacitadores que buscan profesionalizar su servicio.</p>
-        </div>
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <SectionHeading
+          eyebrow="Funcionalidades"
+          title="Todo lo que necesitas para capacitar"
+          description="Herramientas diseñadas para capacitadores que buscan profesionalizar su servicio."
+        />
+        <Stagger className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3" stagger={0.07}>
           {features.map((f, i) => (
-            <div key={i} className="group rounded-2xl border border-border/50 bg-card p-6 transition-shadow hover:shadow-md">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-black dark:bg-orange-500 dark:text-black">
-                <f.icon className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-semibold">{f.title}</h3>
-
-              <p className="mt-2 text-sm text-muted-foreground">{f.description}</p>
-            </div>
+            <StaggerItem key={i}>
+              <FeatureCard icon={f.icon} title={f.title}>{f.description}</FeatureCard>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
     </section>
   )

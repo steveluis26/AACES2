@@ -2,6 +2,7 @@
 import Link from "next/link"
 import { Check } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
+import { SectionHeading } from "@/components/landing/section-heading"
 
 const tiers = [
   {
@@ -54,10 +55,11 @@ export default function PlansSection() {
   return (
     <section id="planes" className="scroll-mt-24 py-12 md:py-20 bg-muted/30">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="text-center">
-          <h2 className="text-3xl font-semibold">Planes</h2>
-          <p className="mt-4 text-muted-foreground">Precios que tienen sentido. Sin límites absurdos de constancias. Paga por lo que usas.</p>
-        </div>
+        <SectionHeading
+          eyebrow="Precios"
+          title="Planes"
+          description="Precios que tienen sentido. Sin límites absurdos de constancias. Paga por lo que usas."
+        />
         <div className="mt-12 grid items-center gap-6 md:grid-cols-3">
           {tiers.map((tier, i) => (
             <motion.div
@@ -66,6 +68,7 @@ export default function PlansSection() {
               whileInView={{ opacity: 1, y: 0, scale: 1 }}
               viewport={{ once: true, amount: 0.3 }}
               transition={{ duration: 0.5, delay: tier.popular ? 0.2 : i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+              whileHover={reduce ? undefined : { y: -6, transition: { duration: 0.25 } }}
               className={`relative flex flex-col rounded-2xl p-6 transition-shadow duration-300 ${
                 tier.popular
                   ? "z-10 border-2 border-orange-500 bg-card shadow-xl shadow-orange-500/15 hover:shadow-2xl hover:shadow-orange-500/20 md:py-9"
