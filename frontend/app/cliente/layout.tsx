@@ -10,12 +10,12 @@ export default function ClienteLayout({ children }: { children: React.ReactNode 
     <SidebarProvider
       defaultOpen={false}
       style={{
-        '--sidebar-width': 'calc(var(--spacing) * 72)',
-        '--header-height': 'calc(var(--spacing) * 12)',
+        '--sidebar-width': '18rem',
+        '--header-height': '3rem',
       } as React.CSSProperties}
     >
       <AppSidebar variant="inset" />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <SiteHeader />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">

@@ -985,7 +985,6 @@ async def crear_curso(
                 ff_dt = fi_dt
             estado_ins = "activo"
         # Generar código
-        import uuid
         code_base = datetime.utcnow().strftime("%Y%m%d")
         suffix = uuid.uuid4().hex[:6].upper()
         # Asegurar columnas de precio
@@ -1769,10 +1768,8 @@ async def add_participante_curso(
         cod_val = (payload.get("codigo_validacion") or "").strip()
         cod_val = cod_val.upper() if cod_val else None
         if id_cert is None:
-            import uuid
             id_cert = f"CERT-{uuid.uuid4().hex[:8].upper()}"
         if cod_val is None:
-            import uuid
             cod_val = uuid.uuid4().hex[:8].upper()
         acreditado = True
         emision_raw = payload.get("fecha_emision_certificado") or None
@@ -2053,7 +2050,6 @@ async def update_participante_curso(
         # Enable validation: generate codes and set vigencia dates
         habilitar = bool(payload.get("habilitar_validacion"))
         if habilitar:
-            import uuid
             cur = await db.execute(text("SELECT fecha_fin, fecha_inicio, vigencia_meses, duracion_validacion FROM cursos WHERE id = :id"), {"id": curso_id})
             r = cur.fetchone()
             fi = r[1] if r else None
@@ -2294,10 +2290,8 @@ async def asignar_constancia_participante(
         emision = payload.get("fecha_emision_certificado") or None
         expiracion = payload.get("fecha_expiracion") or payload.get("fecha_expiracion_certificado") or None
         if id_cert is None:
-            import uuid
             id_cert = f"CERT-{uuid.uuid4().hex[:8].upper()}"
         if cod_val is None:
-            import uuid
             cod_val = uuid.uuid4().hex[:8].upper()
         if emision is None:
             cur = await db.execute(text("SELECT fecha_fin, fecha_inicio FROM cursos WHERE id = :id"), {"id": curso_id})

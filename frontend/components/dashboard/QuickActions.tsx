@@ -15,7 +15,7 @@ type Onboarding = {
 
 const EXISTING_ROUTES: Record<string, string | null> = {
   crear_curso: "/cliente/gestion",
-  registrar_participante: null,
+  registrar_participante: "/cliente/participantes",
   emitir_constancia: null,
   buscar_participante: "/cliente/participantes",
 }
@@ -77,14 +77,14 @@ export function QuickActions({ onboarding }: { onboarding?: Onboarding }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
           {actions.map((action) => (
             <Button
               key={action.id}
               variant={action.variant}
               size="sm"
               onClick={() => handleClick(action)}
-              className={action.highlight ? "ring-2 ring-primary/40" : ""}
+              className={`h-auto min-h-9 justify-start whitespace-normal py-2 text-left sm:justify-center sm:text-center ${action.highlight ? "ring-2 ring-primary/40" : ""}`}
             >
               <action.icon className="h-4 w-4 mr-1.5" />
               {action.label}

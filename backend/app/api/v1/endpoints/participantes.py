@@ -169,7 +169,7 @@ async def buscar_posibles_duplicados(
                 SELECT id, pax_id, nombre, correo, telefono, empresa
                 FROM aaces.participantes
                 WHERE cliente_id = :cid
-                  AND (correo = :correo OR telefono = :telefono)
+                  AND (lower(correo) = lower(NULLIF(:correo, '')) OR telefono = NULLIF(:telefono, ''))
                 LIMIT 10
             """),
             {"cid": cid, "correo": correo, "telefono": telefono},
@@ -179,7 +179,8 @@ async def buscar_posibles_duplicados(
     results = []
     for r in rows:
         score = 0
-        if correo and r[2] and r[2].lower() == correo.lower():
+        # r[3] es el correo (antes comparaba contra r[2], el nombre, y nunca coincidía)
+        if correo and r[3] and r[3].lower() == correo.lower():
             score += 80
         if telefono and r[4] and r[4] == telefono:
             score += 70

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { Button, Input, Card, CardHeader, CardTitle, CardContent } from '@/components/ui'
+import { Field } from '@/components/ui/field'
 
 export default function CambiarPasswordPage() {
   const [current, setCurrent] = useState('')
@@ -33,13 +34,19 @@ export default function CambiarPasswordPage() {
       <Card>
         <CardHeader><CardTitle>Cambiar contraseña</CardTitle></CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Input type="password" placeholder="Contraseña actual" value={current} onChange={(e) => setCurrent(e.target.value)} />
-            <Input type="password" placeholder="Nueva contraseña" value={next} onChange={(e) => setNext(e.target.value)} />
-            <Input type="password" placeholder="Confirmar nueva" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:items-start">
+            <Field label="Contraseña actual" htmlFor="cp_current">
+              <Input id="cp_current" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+            </Field>
+            <Field label="Nueva contraseña" htmlFor="cp_next">
+              <Input id="cp_next" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+            </Field>
+            <Field label="Confirmar nueva contraseña" htmlFor="cp_confirm">
+              <Input id="cp_confirm" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </Field>
           </div>
           <div className="mt-3"><Button onClick={submit}>Guardar</Button></div>
-          {message && <div className="mt-2 text-sm text-gray-900">{message}</div>}
+          {message && <div role="status" className="mt-2 text-sm">{message}</div>}
         </CardContent>
       </Card>
     </div>

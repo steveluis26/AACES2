@@ -1,6 +1,13 @@
 "use client"
 import Image from "next/image"
-import { Shield, BadgeCheck, UserCheck, ScrollText, QrCode, BarChart3, Users, Bell, LayoutDashboard, FileText, Scan } from "lucide-react"
+import { Shield, BadgeCheck, UserCheck, QrCode, BarChart3, Users, Bell, LayoutDashboard, FileText, Scan } from "lucide-react"
+import { motion, useReducedMotion } from "motion/react"
+import { PageHero } from "@/components/landing/page-hero"
+import { SectionHeading } from "@/components/landing/section-heading"
+import { FeatureCard } from "@/components/landing/feature-card"
+import { Reveal, Stagger, StaggerItem } from "@/components/motion/reveal"
+import CtaSection from "@/components/landing/cta-section"
+import FooterSection from "src/components/footer"
 
 const steps = [
   { icon: Shield, label: "La agencia emite la constancia" },
@@ -19,67 +26,88 @@ const features = [
   { icon: BarChart3, title: "Dashboard", desc: "Métricas de cursos, ingresos y participantes en tiempo real." },
 ]
 
-export default function ProductoPage() {
-  return (
-    <div className="min-h-screen bg-background pt-24">
-      {/* Hero producto */}
-      <section className="py-16 md:py-24 bg-gradient-to-b from-background to-muted/20 text-center">
-        <div className="mx-auto max-w-4xl px-6">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold">Todo lo que tu agencia necesita</h1>
-          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            AACES centraliza la operación de tu agencia capacitadora: cursos, participantes, constancias DC-3 y certificados verificables.
-          </p>
-        </div>
-      </section>
+const EASE = [0.22, 1, 0.36, 1] as const
 
-      {/* Features grid */}
-      <section className="py-16">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f, i) => (
-              <div key={i} className="rounded-2xl border border-border/50 bg-card p-6">
-                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-black dark:bg-orange-500 dark:text-black">
-                  <f.icon className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-semibold">{f.title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+export default function ProductoPage() {
+  const reduce = useReducedMotion()
+  return (
+    <div className="min-h-screen bg-background">
+      <PageHero
+        eyebrow="Producto"
+        title="Todo lo que tu agencia necesita"
+        description="AACES centraliza la operación de tu agencia capacitadora: cursos, participantes, constancias DC-3 y certificados verificables."
+      />
+
+      {/* Funcionalidades */}
+      <section className="py-12 md:py-16">
+        <Stagger className="mx-auto grid max-w-6xl gap-6 px-6 sm:grid-cols-2 lg:grid-cols-3" stagger={0.07}>
+          {features.map((f) => (
+            <StaggerItem key={f.title}>
+              <FeatureCard icon={f.icon} title={f.title}>{f.desc}</FeatureCard>
+            </StaggerItem>
+          ))}
+        </Stagger>
       </section>
 
       {/* Cómo funciona la verificación */}
-      <section className="py-16 bg-muted/30">
-        <div className="mx-auto max-w-4xl px-6 text-center">
-          <h2 className="text-3xl font-semibold">Cómo funciona la verificación</h2>
-          <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">
-            Cada certificado conserva la trazabilidad completa desde su emisión hasta su validación.
-          </p>
-          <div className="mt-12 flex flex-col items-center gap-6 md:flex-row md:justify-center md:gap-4">
-            {steps.map((s, i) => (
-              <div key={i} className="flex flex-col items-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-black dark:bg-orange-500 dark:text-black">
-                  <s.icon className="h-6 w-6" />
-                </div>
-                <p className="mt-2 text-xs font-medium max-w-28 text-center">{s.label}</p>
-                {i < steps.length - 1 && (
-                  <div className="hidden md:block w-8 h-0.5 bg-muted-foreground/30 mt-7" />
-                )}
-              </div>
-            ))}
+      <section className="bg-muted/30 py-12 md:py-20">
+        <div className="mx-auto max-w-5xl px-6">
+          <SectionHeading
+            eyebrow="Verificación"
+            title="Cómo funciona la verificación"
+            description="Cada certificado conserva la trazabilidad completa desde su emisión hasta su validación."
+          />
+          <div className="relative mt-14">
+            <motion.div
+              aria-hidden="true"
+              className="absolute left-[10%] right-[10%] top-7 hidden h-0.5 origin-left bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500 md:block"
+              initial={reduce ? false : { scaleX: 0 }}
+              whileInView={{ scaleX: 1 }}
+              viewport={{ once: true, amount: 0.5 }}
+              transition={{ duration: 1.2, ease: EASE, delay: 0.1 }}
+            />
+            <ol className="grid gap-8 md:grid-cols-5 md:gap-4">
+              {steps.map((s, i) => (
+                <motion.li
+                  key={i}
+                  className="relative flex items-center gap-4 md:flex-col md:items-center md:gap-0 md:text-center"
+                  initial={reduce ? false : { opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, amount: 0.5 }}
+                  transition={{ duration: 0.5, ease: EASE, delay: 0.2 + i * 0.18 }}
+                >
+                  <span className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/20 ring-8 ring-orange-100 dark:bg-orange-500 dark:ring-orange-500/10">
+                    <s.icon className="h-6 w-6" />
+                  </span>
+                  <div className="md:mt-4">
+                    <span className="text-xs font-semibold text-orange-500 dark:text-orange-400">Paso {i + 1}</span>
+                    <p className="text-sm font-medium md:mx-auto md:max-w-[9rem]">{s.label}</p>
+                  </div>
+                </motion.li>
+              ))}
+            </ol>
           </div>
         </div>
       </section>
 
-      {/* Screenshot */}
-      <section className="py-16">
-        <div className="mx-auto max-w-3xl px-6">
-          <div className="rounded-2xl border border-border/50 overflow-hidden shadow-xl bg-white">
-            <Image src="/hero-preview.png" alt="Panel AACES" width={800} height={640} className="w-full h-auto" />
-          </div>
+      {/* Ejemplo de certificado */}
+      <section className="py-12 md:py-20">
+        <div className="mx-auto max-w-5xl px-6">
+          <SectionHeading
+            eyebrow="Así se ve"
+            title="Un certificado que cualquiera puede verificar"
+            description="Datos del participante, del curso y su vigencia, con un QR que lleva a la validación pública."
+          />
+          <Reveal y={40} scale={0.97} className="mx-auto mt-12 max-w-2xl">
+            <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-2xl shadow-black/10">
+              <Image src="/hero-preview.png" alt="Ejemplo de certificado AACES" width={800} height={640} className="h-auto w-full" />
+            </div>
+          </Reveal>
         </div>
       </section>
+
+      <CtaSection />
+      <FooterSection />
     </div>
   )
 }

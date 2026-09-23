@@ -1,36 +1,55 @@
 import Link from 'next/link'
+import Image from 'next/image'
 
-const links = [
-    { title: 'Nosotros', href: '/nosotros' },
-    { title: 'Contacto', href: '/contacto' },
-    { title: 'Blog', href: '/blog' },
-    { title: 'Ingresar', href: '/login' },
+const columns = [
+    {
+        title: 'Producto',
+        links: [
+            { title: 'Funcionalidades', href: '/producto' },
+            { title: 'Precios', href: '/#planes' },
+            { title: 'Verificar constancia', href: '/verificar' },
+            { title: 'Marketplace', href: '/marketplace' },
+        ],
+    },
+    {
+        title: 'Empresa',
+        links: [
+            { title: 'Nosotros', href: '/nosotros' },
+            { title: 'Blog', href: '/blog' },
+            { title: 'Contacto', href: '/contacto' },
+        ],
+    },
+    {
+        title: 'Cuenta',
+        links: [
+            { title: 'Ingresar', href: '/login' },
+            { title: 'Crear cuenta', href: '/register?plan=trial' },
+        ],
+    },
 ]
 
 export default function FooterSection() {
     return (
-        <footer className="py-16 md:py-32">
-            <div className="mx-auto max-w-5xl px-6">
-
-                <div className="my-8 flex flex-wrap justify-center gap-6 text-sm">
-                    {links.map((link, index) => (
-                        <Link
-                            key={index}
-                            href={link.href}
-                            className="text-muted-foreground hover:text-primary block duration-150">
-                            <span>{link.title}</span>
+        <footer className="border-t border-border/60">
+            <div className="mx-auto max-w-6xl px-6 py-12 md:py-16">
+                <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+                    <div className="col-span-2 space-y-4 sm:col-span-3 md:col-span-1">
+                        <Link href="/" className="inline-flex items-center gap-2">
+                            <Image src="/logo.png" alt="" width={24} height={24} className="h-6 w-auto" />
+                            <span className="text-sm font-semibold">AACES</span>
                         </Link>
-                    ))}
-                </div>
-                <div className="my-8 flex flex-wrap justify-center gap-6 text-sm">
+                        <p className="max-w-xs text-sm text-muted-foreground">
+                            La plataforma de confianza para la capacitación laboral en México.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
                     <Link
                         href="#"
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="X/Twitter"
-                        className="text-muted-foreground hover:text-primary block">
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:text-orange-500">
                         <svg
-                            className="size-6"
+                            className="size-4"
                             xmlns="http://www.w3.org/2000/svg"
                             width="1em"
                             height="1em"
@@ -45,9 +64,9 @@ export default function FooterSection() {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="LinkedIn"
-                        className="text-muted-foreground hover:text-primary block">
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:text-orange-500">
                         <svg
-                            className="size-6"
+                            className="size-4"
                             xmlns="http://www.w3.org/2000/svg"
                             width="1em"
                             height="1em"
@@ -62,9 +81,9 @@ export default function FooterSection() {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="Facebook"
-                        className="text-muted-foreground hover:text-primary block">
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:text-orange-500">
                         <svg
-                            className="size-6"
+                            className="size-4"
                             xmlns="http://www.w3.org/2000/svg"
                             width="1em"
                             height="1em"
@@ -79,9 +98,9 @@ export default function FooterSection() {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="Threads"
-                        className="text-muted-foreground hover:text-primary block">
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:text-orange-500">
                         <svg
-                            className="size-6"
+                            className="size-4"
                             xmlns="http://www.w3.org/2000/svg"
                             width="1em"
                             height="1em"
@@ -101,9 +120,9 @@ export default function FooterSection() {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="Instagram"
-                        className="text-muted-foreground hover:text-primary block">
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:text-orange-500">
                         <svg
-                            className="size-6"
+                            className="size-4"
                             xmlns="http://www.w3.org/2000/svg"
                             width="1em"
                             height="1em"
@@ -118,9 +137,9 @@ export default function FooterSection() {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label="TikTok"
-                        className="text-muted-foreground hover:text-primary block">
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-orange-500/40 hover:text-orange-500">
                         <svg
-                            className="size-6"
+                            className="size-4"
                             xmlns="http://www.w3.org/2000/svg"
                             width="1em"
                             height="1em"
@@ -131,7 +150,26 @@ export default function FooterSection() {
                         </svg>
                     </Link>
                 </div>
-                <span className="text-muted-foreground block text-center text-sm">© 2026 AACES. Todos los derechos reservados.</span>
+                    </div>
+                    {columns.map((col) => (
+                        <div key={col.title}>
+                            <h3 className="text-sm font-semibold">{col.title}</h3>
+                            <ul className="mt-4 space-y-2.5">
+                                {col.links.map((link) => (
+                                    <li key={link.href}>
+                                        <Link href={link.href} className="text-sm text-muted-foreground transition-colors duration-150 hover:text-orange-500">
+                                            {link.title}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-12 flex flex-col gap-2 border-t border-border/60 pt-6 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>© {new Date().getFullYear()} AACES. Todos los derechos reservados.</span>
+                    <span>Hecho en México</span>
+                </div>
             </div>
         </footer>
     )

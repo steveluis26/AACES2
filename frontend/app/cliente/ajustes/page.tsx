@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@/components/ui'
+import { Field } from '@/components/ui/field'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/app/services/api'
 
 export default function AjustesPage() {
   return (
-    <div className="px-4 lg:px-6">
+    <div className="px-4 py-4 lg:px-6 lg:py-6">
       <h1 className="text-2xl font-semibold mb-6">Ajustes</h1>
       <Tabs defaultValue="perfil">
         <TabsList>
@@ -250,9 +251,15 @@ function SeguridadTab() {
       <CardHeader><CardTitle>Cambiar contraseña</CardTitle></CardHeader>
       <CardContent>
         <div className="space-y-3 max-w-md">
-          <Input type="password" placeholder="Contraseña actual" value={current} onChange={e => setCurrent(e.target.value)} />
-          <Input type="password" placeholder="Nueva contraseña" value={next} onChange={e => setNext(e.target.value)} />
-          <Input type="password" placeholder="Confirmar nueva" value={confirm} onChange={e => setConfirm(e.target.value)} />
+          <Field label="Contraseña actual" htmlFor="aj_current">
+            <Input id="aj_current" type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} />
+          </Field>
+          <Field label="Nueva contraseña" htmlFor="aj_next">
+            <Input id="aj_next" type="password" autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} />
+          </Field>
+          <Field label="Confirmar nueva contraseña" htmlFor="aj_confirm">
+            <Input id="aj_confirm" type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} />
+          </Field>
           <Button onClick={submit}>Guardar contraseña</Button>
           {message && <div className="text-sm">{message}</div>}
         </div>

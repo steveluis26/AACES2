@@ -78,7 +78,7 @@ const data = {
   documents: [
     {
       name: "Organización",
-      url: "#",
+      url: "/cliente/perfil",
       icon: DatabaseIcon,
     },
     {
@@ -117,7 +117,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="#">
+              <a href={navMain === MENU_SUPERADMIN ? "/admin/dashboard" : "/cliente/dashboard"} aria-label="Ir al inicio">
                 <ArrowUpCircleIcon className="h-5 w-5" />
               </a>
             </SidebarMenuButton>

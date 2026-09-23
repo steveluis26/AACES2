@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertTriangle, AlertCircle, Info, TrendingUp } from "lucide-react"
+import { AlertTriangle, AlertCircle, Info, TrendingUp, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Alerta = {
@@ -15,6 +15,13 @@ const LABELS: Record<string, string> = {
   cursos_sin_instructor: "Cursos sin instructor",
   participantes_sin_constancia: "Participantes sin constancia",
   cursos_sin_empresa: "Cursos sin empresa contratante",
+}
+
+const LINKS: Record<string, string> = {
+  constancias_por_vencer: "/cliente/renovaciones",
+  cursos_sin_instructor: "/cliente/cursos",
+  participantes_sin_constancia: "/cliente/participantes",
+  cursos_sin_empresa: "/cliente/cursos",
 }
 
 const PRIORITY_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string; text: string }> = {
@@ -50,16 +57,18 @@ export function AlertsPanel({ alertas }: { alertas: Alerta[] }) {
           const cfg = PRIORITY_CONFIG[a.prioridad] || PRIORITY_CONFIG.baja
           const Icon = cfg.icon
           return (
-            <div
+            <a
               key={`${a.tipo}-${i}`}
-              className={cn("flex items-center gap-3 rounded-lg p-3 text-sm", cfg.bg, cfg.text)}
+              href={LINKS[a.tipo] || "#"}
+              className={cn("flex items-center gap-3 rounded-lg p-3 text-sm transition-opacity hover:opacity-80", cfg.bg, cfg.text)}
             >
               <Icon className={cn("h-5 w-5 shrink-0", cfg.color)} />
               <div className="flex-1">
                 <span className="font-medium">{LABELS[a.tipo] || a.tipo}</span>
                 <span className="ml-2 text-muted-foreground">{a.cantidad}</span>
               </div>
-            </div>
+              <ChevronRight className={cn("h-4 w-4 shrink-0", cfg.color)} />
+            </a>
           )
         })}
       </CardContent>
