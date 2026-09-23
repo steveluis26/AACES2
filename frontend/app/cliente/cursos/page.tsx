@@ -17,6 +17,9 @@ import { ChevronDownIcon, ChevronUpIcon, ChevronLeftIcon, ChevronRightIcon, Load
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { parseFecha } from '@/lib/utils'
+import { Field } from '@/components/ui/field'
+import { FormStep, Segmented } from '@/components/forms/form-bits'
+import { UserPlus as UserPlusIcon } from 'lucide-react'
 
 const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).slice(0, 10) : null); return d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }
 
@@ -65,6 +68,7 @@ export default function CursosClientePage() {
   const [detalleError, setDetalleError] = useState<string>('')
   const [csvError, setCsvError] = useState<string>('')
   const [participanteError, setParticipanteError] = useState<string>('')
+  const [agregando, setAgregando] = useState(false)
   const [precioGrupoError, setPrecioGrupoError] = useState<string>('')
   const [constanciaError, setConstanciaError] = useState<string>('')
   const [filaError, setFilaError] = useState<Record<string, string>>({})
@@ -564,7 +568,10 @@ export default function CursosClientePage() {
     if (emision) (payload as any).fecha_emision_certificado = emision
     if (expiracion) (payload as any).fecha_expiracion_certificado = expiracion
     
-    if (!payload.nombres || !payload.correo) return
+    // Antes regresaba sin avisar si faltaba nombre o correo.
+    if (!payload.nombres) { setParticipanteError('Escribe el nombre del participante'); return }
+    if (!payload.correo) { setParticipanteError('Escribe el correo del participante'); return }
+    setAgregando(true)
     try {
       const res = await apiRequest<{ id: string; participante_id: string }>(`/clientes/cursos/${selected.id}/participantes`, { method: 'POST', body: JSON.stringify(payload) })
       const cpId = String(res?.id || '')
@@ -575,8 +582,11 @@ export default function CursosClientePage() {
       }
     } catch (e) {
       setParticipanteError((e as Error)?.message || 'No se pudo agregar')
+      setAgregando(false)
       return
     }
+    setAgregando(false)
+    toast.success('Participante agregado al curso', { description: [payload.nombres, payload.apellido_paterno].filter(Boolean).join(' ') })
     setParticipanteError('')
     setNuevoPart({ nombres: '', apellido_paterno: '', apellido_materno: '', correo: '', ciudad_origen: '', telefono: '', empresa: '', cargo: '', profesion: '', id_certificado: '', codigo_validacion: '', estado_acreditacion: false, fecha_emision_certificado: '', fecha_expiracion: '', precio_modo: 'normal' })
     await loadParticipantes()
@@ -985,27 +995,77 @@ export default function CursosClientePage() {
                   </CardContent>
                 </Card>
               )}
-              <div className="text-sm font-semibold pt-2">Agregar participante al curso</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                <div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Nombres<Input placeholder="Nombres" value={String(nuevoPart.nombres ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, nombres: e.target.value }))} /></label></div>
-                <div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido paterno<Input placeholder="Apellido paterno" value={String(nuevoPart.apellido_paterno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_paterno: e.target.value }))} /></label></div>
-                <div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido materno<Input placeholder="Apellido materno" value={String(nuevoPart.apellido_materno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_materno: e.target.value }))} /></label></div>
-                
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Correo<Input placeholder="Correo" value={nuevoPart.correo} onChange={(e) => setNuevoPart(s => ({ ...s, correo: e.target.value }))} /></label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Ciudad<Input placeholder="Ciudad" value={nuevoPart.ciudad_origen} onChange={(e) => setNuevoPart(s => ({ ...s, ciudad_origen: e.target.value }))} /></label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Teléfono<Input placeholder="Teléfono" value={String(nuevoPart.telefono ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, telefono: e.target.value }))} /></label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Empresa<Input placeholder="Empresa" value={String(nuevoPart.empresa ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, empresa: e.target.value }))} /></label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Cargo<Input placeholder="Cargo" value={String(nuevoPart.cargo ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, cargo: e.target.value }))} /></label>
-                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Profesión<Input placeholder="Profesión" value={String(nuevoPart.profesion ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, profesion: e.target.value }))} /></label>
-                <div className="flex flex-wrap items-center gap-2 sm:col-span-2 md:col-span-3">
-                  <ToggleGroup type="single" value={String(nuevoPart.precio_modo || 'normal')} onValueChange={(val) => val && setNuevoPart(s => ({ ...s, precio_modo: val as 'normal' | 'descuento' }))}>
-                    <ToggleGroupItem value="normal">Normal {fmtMXN.format(Number(selected?.precio_base || 0))}</ToggleGroupItem>
-                    <ToggleGroupItem value="descuento" disabled={selected?.precio_promocional == null}>Descuento {fmtMXN.format(Number(selected?.precio_promocional ?? selected?.precio_base ?? 0))}</ToggleGroupItem>
-                  </ToggleGroup>
+              <div className="rounded-2xl border bg-muted/20 p-4 sm:p-6">
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500 text-white"><UserPlusIcon className="h-4 w-4" /></span>
+                  <div>
+                    <h3 className="text-sm font-semibold">Agregar participante al curso</h3>
+                    <p className="text-xs text-muted-foreground">Se registra y queda inscrito en {selected?.nombre || 'este curso'}.</p>
+                  </div>
                 </div>
+                <form noValidate className="space-y-6" onSubmit={(e) => { e.preventDefault(); if (!agregando) crearParticipante() }}>
+                  <FormStep n={1} title="Nombre">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Field label={<>Nombres<span className="ml-0.5 text-orange-500">*</span></>} htmlFor="np_nombres">
+                        <Input id="np_nombres" autoComplete="given-name" placeholder="Nombre(s)" value={String(nuevoPart.nombres ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, nombres: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Apellido paterno</>} htmlFor="np_apellido_paterno">
+                        <Input id="np_apellido_paterno" autoComplete="family-name" placeholder="" value={String(nuevoPart.apellido_paterno ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, apellido_paterno: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Apellido materno</>} htmlFor="np_apellido_materno">
+                        <Input id="np_apellido_materno" placeholder="" value={String(nuevoPart.apellido_materno ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, apellido_materno: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                    </div>
+                  </FormStep>
+                  <FormStep n={2} title="Contacto">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field label={<>Correo<span className="ml-0.5 text-orange-500">*</span></>} htmlFor="np_correo">
+                        <Input id="np_correo" type="email" inputMode="email" autoComplete="email" placeholder="nombre@empresa.com" value={String(nuevoPart.correo ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, correo: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Teléfono</>} htmlFor="np_telefono">
+                        <Input id="np_telefono" type="tel" inputMode="tel" autoComplete="tel" placeholder="10 dígitos" value={String(nuevoPart.telefono ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, telefono: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                    </div>
+                  </FormStep>
+                  <FormStep n={3} title="Trabajo">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Field label={<>Empresa</>} htmlFor="np_empresa">
+                        <Input id="np_empresa" autoComplete="organization" placeholder="" value={String(nuevoPart.empresa ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, empresa: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Cargo</>} htmlFor="np_cargo">
+                        <Input id="np_cargo" placeholder="" value={String(nuevoPart.cargo ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, cargo: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Profesión</>} htmlFor="np_profesion">
+                        <Input id="np_profesion" placeholder="" value={String(nuevoPart.profesion ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, profesion: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Ciudad</>} htmlFor="np_ciudad_origen">
+                        <Input id="np_ciudad_origen" placeholder="" value={String(nuevoPart.ciudad_origen ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, ciudad_origen: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                    </div>
+                  </FormStep>
+                  <FormStep n={4} title="Precio" desc="Se asigna como costo del participante en este curso.">
+                    <Segmented
+                      ariaLabel="Precio"
+                      className="sm:w-fit"
+                      value={(String(nuevoPart.precio_modo || 'normal') as 'normal' | 'descuento')}
+                      onChange={(val) => { if (val === 'descuento' && selected?.precio_promocional == null) return; setNuevoPart(s => ({ ...s, precio_modo: val })) }}
+                      options={[
+                        { value: 'normal', label: <span>Normal <strong className="font-semibold">{fmtMXN.format(Number(selected?.precio_base || 0))}</strong></span> },
+                        { value: 'descuento', label: <span className={selected?.precio_promocional == null ? 'opacity-50' : ''}>Especial <strong className="font-semibold">{fmtMXN.format(Number(selected?.precio_promocional ?? selected?.precio_base ?? 0))}</strong></span> },
+                      ]}
+                    />
+                    {selected?.precio_promocional == null && <p className="mt-2 text-xs text-muted-foreground">Este curso no tiene precio especial.</p>}
+                  </FormStep>
+                  <div className="flex flex-col-reverse gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-h-5 text-sm" aria-live="polite">
+                      {participanteError && <span role="alert" className="text-[var(--destructive)]">{participanteError}</span>}
+                    </div>
+                    <Button type="submit" disabled={agregando} className="transition-transform active:scale-[0.98]">
+                      {agregando ? <><Loader2 className="h-4 w-4 animate-spin" /> Agregando…</> : <><UserPlusIcon className="h-4 w-4" /> Agregar participante</>}
+                    </Button>
+                  </div>
+                </form>
               </div>
-              <div className="flex gap-2"><Button onClick={crearParticipante}>Agregar participante</Button></div>
-              {participanteError && (<Alert className="alert-error mt-2">{participanteError}</Alert>)}
               <div className="text-xs text-muted-foreground">Los montos representan: Costo y Pagado. Saldo = Costo − Pagado.</div>
               <div className="space-y-3">
                 {displayed.length > 0 ? (
@@ -1077,11 +1137,11 @@ export default function CursosClientePage() {
                         ))}
                       </TableBody>
                     </Table>
-                    <div className="mt-2 flex items-center justify-between">
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="text-sm">
                         Seleccionadas {table.getSelectedRowModel().rows.length} de {table.getPrePaginationRowModel().rows.length} · Página {table.getState().pagination.pageIndex + 1} de {table.getPageCount()}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => table.setPageIndex(0)} disabled={!table.getCanPreviousPage()}>«</Button>
                         <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>‹</Button>
                         <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>›</Button>
