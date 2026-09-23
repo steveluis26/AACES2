@@ -19,7 +19,8 @@ import { toast } from 'sonner'
 import { parseFecha } from '@/lib/utils'
 import { Field } from '@/components/ui/field'
 import { FormStep, Segmented } from '@/components/forms/form-bits'
-import { UserPlus as UserPlusIcon } from 'lucide-react'
+import { UserPlus as UserPlusIcon, CalendarDays, List as ListIcon, MapPin as MapPinIcon, Pencil as PencilIcon, Users as UsersIcon, X as XIcon } from 'lucide-react'
+import { CalendarioMensual } from '@/components/cursos/calendario-mensual'
 
 const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).slice(0, 10) : null); return d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }
 
@@ -290,60 +291,6 @@ export default function CursosClientePage() {
     }
   }, [proximos, searchParams])
 
-  const parseLocalDate = (s: string): Date | null => {
-    const parts = String(s || '').slice(0, 10).split('-')
-    if (parts.length !== 3) return null
-    const y = Number(parts[0])
-    const m = Number(parts[1])
-    const d = Number(parts[2])
-    if (!y || !m || !d) return null
-    return new Date(y, m - 1, d)
-  }
-  const sameDate = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-
-  const calendarCells: Array<{ date: Date | null; items: CursoProximo[] }> = useMemo(() => {
-    const first = new Date(currentYear, currentMonth, 1)
-    const startIdx = first.getDay()
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-    const cells: Array<{ date: Date | null; items: CursoProximo[] }> = []
-    const byKey: Record<string, CursoProximo[]> = {}
-    const keyOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const source = calendarCursos
-    for (const c of source) {
-      const start = parseLocalDate(c.fecha_inicio as string)
-      const end = parseLocalDate((c.fecha_fin ?? c.fecha_inicio) as string)
-      if (start && end) {
-        let dcur = new Date(start.getFullYear(), start.getMonth(), start.getDate())
-        while (dcur <= end) {
-          const k = keyOf(dcur)
-          if (!byKey[k]) byKey[k] = []
-          byKey[k].push(c)
-          dcur = new Date(dcur.getFullYear(), dcur.getMonth(), dcur.getDate() + 1)
-        }
-      }
-      for (const sc of c.subcursos || []) {
-        const ssc = parseLocalDate(sc.fecha_inicio as string)
-        const sec = parseLocalDate((sc.fecha_fin ?? sc.fecha_inicio) as string)
-        if (ssc && sec) {
-          let dcur = new Date(ssc.getFullYear(), ssc.getMonth(), ssc.getDate())
-          while (dcur <= sec) {
-            const k = keyOf(dcur)
-            if (!byKey[k]) byKey[k] = []
-            byKey[k].push({ ...c, nombre: sc.nombre, ciudad: sc.ciudad, fecha_inicio: sc.fecha_inicio, fecha_fin: sc.fecha_fin })
-            dcur = new Date(dcur.getFullYear(), dcur.getMonth(), dcur.getDate() + 1)
-          }
-        }
-      }
-    }
-    for (let i = 0; i < startIdx; i++) cells.push({ date: null, items: [] })
-    for (let d = 1; d <= daysInMonth; d++) {
-      const date = new Date(currentYear, currentMonth, d)
-      const k = keyOf(date)
-      cells.push({ date, items: byKey[k] || [] })
-    }
-    while (cells.length % 7 !== 0) cells.push({ date: null, items: [] })
-    return cells
-  }, [currentMonth, currentYear, calendarCursos])
 
   useEffect(() => {
     try {
@@ -706,26 +653,46 @@ export default function CursosClientePage() {
     <Suspense fallback={<div className="flex min-h-svh items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" /></div>}>
     <div className="space-y-6 px-4 py-4 lg:px-6 lg:py-6">
       <Dialog open={openEventDialog} onClose={() => setOpenEventDialog(false)}>
-        <DialogHeader>
-          <DialogTitle>{selected ? `${selected.codigo_curso} · ${selected.nombre}` : 'Evento'}</DialogTitle>
-        </DialogHeader>
-        <DialogContent>
-          {selected ? (
-            <div className="space-y-2 text-sm">
-              <div><span className="font-medium">Ciudad:</span> {selected.ciudad || '-'}</div>
-              <div><span className="font-medium">Inicio:</span> {selected.fecha_inicio ? String(selected.fecha_inicio).slice(0,10) : '-'}</div>
-              <div><span className="font-medium">Fin:</span> {selected.fecha_fin ? String(selected.fecha_fin).slice(0,10) : '-'}</div>
-              <div><span className="font-medium">Estado:</span> {selected.estado === 'en_espera' ? 'pendiente' : selected.estado}</div>
-              <div><span className="font-medium">Precio:</span> {fmtMXN.format(Number((selected.precio_promocional ?? selected.precio_base ?? 0) || 0))}</div>
-              
-            </div>
-          ) : null}
-        </DialogContent>
-        <DialogFooter>
-          <Button variant="secondary" onClick={() => setOpenEventDialog(false)}>Cerrar</Button>
-          <Button onClick={() => { setOpenEventDialog(false); const el = typeof window !== 'undefined' ? document.getElementById('editar-curso') : null; if (el) { el.scrollIntoView({ behavior: 'smooth' }); el.classList.add('scroll-highlight'); setTimeout(() => el.classList.remove('scroll-highlight'), 1500) } }}>Ir a edición</Button>
-          <Button variant="outline" onClick={() => { setOpenEventDialog(false); const el = typeof window !== 'undefined' ? document.getElementById('participantes-section') : null; if (el) { el.scrollIntoView({ behavior: 'smooth' }); el.classList.add('scroll-highlight'); setTimeout(() => el.classList.remove('scroll-highlight'), 1500) } }}>Ver participantes</Button>
-      </DialogFooter>
+        {selected ? (() => {
+          const ini = parseFecha(String(selected.fecha_inicio || '').slice(0, 10))
+          const fin = parseFecha(String((selected.fecha_fin || selected.fecha_inicio) || '').slice(0, 10))
+          const dias = ini && fin ? Math.round((fin.getTime() - ini.getTime()) / 86400000) + 1 : 0
+          const est = selected.estado === 'en_espera' ? 'pendiente' : selected.estado
+          const larga = (d: Date | null) => d ? d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }) : '-'
+          const irA = (id: string) => { setOpenEventDialog(false); const el = typeof window !== 'undefined' ? document.getElementById(id) : null; if (el) { el.scrollIntoView({ behavior: 'smooth' }); el.classList.add('scroll-highlight'); setTimeout(() => el.classList.remove('scroll-highlight'), 1500) } }
+          return (
+            <>
+              <div className="h-1.5 bg-orange-500" />
+              <div className="flex items-start justify-between gap-3 px-6 pb-2 pt-5">
+                <div className="min-w-0">
+                  <p className="font-mono text-xs text-muted-foreground">{selected.codigo_curso}</p>
+                  <h3 className="mt-1 text-lg font-semibold leading-snug">{selected.nombre}</h3>
+                </div>
+                <button type="button" onClick={() => setOpenEventDialog(false)} aria-label="Cerrar" className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                  <XIcon className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="space-y-3 px-6 pb-5 pt-2 text-sm">
+                <div className="flex items-start gap-3">
+                  <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <p className="first-letter:uppercase">{larga(ini)}{fin && ini && fin.getTime() !== ini.getTime() ? ` – ${larga(fin)}` : ''}</p>
+                    {dias > 0 && <p className="text-xs text-muted-foreground">{dias} {dias === 1 ? 'día' : 'días'}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3"><MapPinIcon className="h-4 w-4 shrink-0 text-muted-foreground" />{selected.ciudad || '—'}{selected.empresa_contratante ? <span className="text-muted-foreground">· {selected.empresa_contratante}</span> : null}</div>
+                <div className="flex items-center justify-between border-t pt-3">
+                  <Badge variant="outline" className="capitalize">{est}</Badge>
+                  <span className="text-base font-semibold">{fmtMXN.format(Number((selected.precio_promocional ?? selected.precio_base ?? 0) || 0))}</span>
+                </div>
+              </div>
+              <div className="flex flex-col-reverse gap-2 border-t bg-muted/30 px-6 py-4 sm:flex-row sm:justify-end">
+                <Button variant="outline" onClick={() => irA('participantes-section')}><UsersIcon className="h-4 w-4" /> Ver participantes</Button>
+                <Button onClick={() => irA('editar-curso')}><PencilIcon className="h-4 w-4" /> Editar curso</Button>
+              </div>
+            </>
+          )
+        })() : null}
       </Dialog>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Próximos cursos</h1>
@@ -741,100 +708,36 @@ export default function CursosClientePage() {
 
       <Card>
         <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle>Agenda</CardTitle>
               <div className="flex items-center gap-2">
-                <ToggleGroup type="single" value={agendaView} onValueChange={(val) => val && setAgendaView(val as 'lista' | 'calendario')}>
-                  <ToggleGroupItem value="lista">Lista</ToggleGroupItem>
-                  <ToggleGroupItem value="calendario">Calendario</ToggleGroupItem>
-                </ToggleGroup>
+                <Segmented
+                  ariaLabel="Vista de la agenda"
+                  value={agendaView}
+                  onChange={(v) => setAgendaView(v)}
+                  options={[
+                    { value: 'lista', label: <span className="inline-flex items-center gap-1.5"><ListIcon className="h-4 w-4" />Lista</span> },
+                    { value: 'calendario', label: <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />Calendario</span> },
+                  ]}
+                />
               </div>
             </div>
         </CardHeader>
         <CardContent>
           {agendaView === 'calendario' ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-semibold">
-                  {new Date(currentYear, currentMonth, 1).toLocaleString('es-MX', { month: 'long', year: 'numeric' })}
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { const m = currentMonth - 1; if (m < 0) { setCurrentMonth(11); setCurrentYear(y => y - 1) } else setCurrentMonth(m) }}><ChevronLeftIcon className="size-4" /></Button>
-                  <Button variant="outline" onClick={() => { const m = currentMonth + 1; if (m > 11) { setCurrentMonth(0); setCurrentYear(y => y + 1) } else setCurrentMonth(m) }}><ChevronRightIcon className="size-4" /></Button>
-                </div>
-              </div>
-              {/* Agenda por día en móvil */}
-              <div className="md:hidden space-y-2">
-                {calendarCells.filter(c => c.date && c.items.length > 0).map((c, idx) => {
-                  const d = c.date as Date
-                  return (
-                    <div key={idx} className="border rounded-md p-3">
-                      <div className="text-sm font-semibold capitalize">
-                        {d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
-                      </div>
-                      <div className="mt-2 space-y-1.5">
-                        {c.items.map((ev, iidx) => (
-                          <button key={`${ev.id}-${String(ev.fecha_inicio).slice(0,10)}-${iidx}`} type="button"
-                            className="w-full text-left text-sm px-2.5 py-1.5 rounded-md bg-[var(--accent)]/20 hover:bg-[var(--accent)]/30 truncate"
-                            onClick={() => { setSelected(ev); setOpenEventDialog(true) }}>
-                            <Badge variant="secondary" className="mr-1.5 max-w-[130px] truncate align-middle">{ev.ciudad || ''}</Badge>
-                            {ev.nombre}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-                {calendarCells.every(c => !c.date || c.items.length === 0) && (
-                  <div className="text-sm text-muted-foreground text-center py-6">No hay cursos programados este mes.</div>
-                )}
-              </div>
-              {/* Calendario mensual en escritorio */}
-              <div className="hidden md:grid grid-cols-7 gap-2 text-xs font-medium">
-                {['D','L','M','X','J','V','S'].map(d => (<div key={d} className="text-center">{d}</div>))}
-              </div>
-              <div className="hidden md:grid grid-cols-7 gap-2">
-                {calendarCells.map((c, idx) => (
-                  <div key={idx} className="min-h-[120px] border rounded-md p-2">
-                    {c.date ? (
-                      <div className="text-xs font-semibold">{c.date.getDate()}</div>
-                    ) : (
-                      <div className="text-xs opacity-50">·</div>
-                    )}
-                    <div className="mt-1 space-y-1">
-                      {c.items.slice(0,3).map((ev, iidx) => {
-                        const start = parseLocalDate(ev.fecha_inicio as string)
-                        const end = parseLocalDate((ev.fecha_fin ?? ev.fecha_inicio) as string)
-                        const day = c.date as Date
-                        const isStart = !!(start && day && sameDate(start, day))
-                        const isEnd = !!(end && day && sameDate(end, day))
-                        const isMiddle = !!(start && end && day && day > start && day < end)
-                        const isSingle = !!(start && end && sameDate(start, end))
-                        const base = 'bg-[var(--accent)]/20'
-                        const ribbon = isSingle
-                          ? 'rounded-md'
-                          : isStart
-                            ? 'rounded-l-md -mr-2'
-                            : isEnd
-                              ? 'rounded-r-md -ml-2'
-                              : isMiddle
-                                ? 'rounded-none -mx-2 border-l-2 border-r-2 border-[var(--accent)] bg-[var(--accent)]/10'
-                                : ''
-                        return (
-                          <div key={`${ev.id}-${String(ev.fecha_inicio).slice(0,10)}-${iidx}`} className={`text-xs truncate cursor-pointer px-2 py-0.5 w-full ${base} ${ribbon}`} onClick={() => { setSelected(ev); setOpenEventDialog(true) }}>
-                            <Badge variant="secondary" className="mr-1 max-w-[110px] truncate align-middle">{ev.ciudad || ''}</Badge>
-                            {ev.nombre}
-                          </div>
-                        )
-                      })}
-                      {c.items.length > 3 && (
-                        <div className="text-[11px] text-muted-foreground">+{c.items.length - 3} más</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <CalendarioMensual
+              eventos={calendarCursos}
+              year={currentYear}
+              month={currentMonth}
+              onCambiarMes={(d) => {
+                const m = currentMonth + d
+                if (m < 0) { setCurrentMonth(11); setCurrentYear(y => y - 1) }
+                else if (m > 11) { setCurrentMonth(0); setCurrentYear(y => y + 1) }
+                else setCurrentMonth(m)
+              }}
+              onHoy={() => { const h = new Date(); setCurrentMonth(h.getMonth()); setCurrentYear(h.getFullYear()) }}
+              onSeleccionar={(ev) => { setSelected(ev); setOpenEventDialog(true) }}
+            />
           ) : null}
           {agendaView === 'lista' && (
           <div className="space-y-2">
