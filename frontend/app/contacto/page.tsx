@@ -190,7 +190,7 @@ export default function ContactoPage() {
               {info.map((x) => {
                 const inner = (
                   <>
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-600 text-black transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110 dark:bg-orange-500">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
                       <x.icon className="h-5 w-5" />
                     </span>
                     <span>

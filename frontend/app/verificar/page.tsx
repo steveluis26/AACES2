@@ -217,7 +217,7 @@ export default function VerificarPage() {
       <section className="py-12 md:py-20">
         <div className="mx-auto max-w-5xl px-6">
           <Reveal className="mx-auto max-w-2xl text-center">
-            <span className="inline-flex items-center rounded-full bg-orange-500/10 px-3 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">Cómo funciona</span>
+            <span className="inline-flex items-center rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-white">Cómo funciona</span>
             <h2 className="mt-4 text-3xl font-semibold">Verifica en segundos</h2>
             <p className="mt-4 text-muted-foreground">Cualquier persona o empresa puede comprobar si una constancia es auténtica, sin registrarse.</p>
           </Reveal>
@@ -230,10 +230,10 @@ export default function VerificarPage() {
               <StaggerItem key={x.t}>
                 <div className="group h-full rounded-2xl border border-border/50 bg-card p-6 transition-all duration-300 hover:-translate-y-1 hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/5">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-600 text-black transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110 dark:bg-orange-500">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110">
                       <x.icon className="h-5 w-5" />
                     </span>
-                    <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">Paso {i + 1}</span>
+                    <span className="text-xs font-semibold text-orange-500 dark:text-orange-400">Paso {i + 1}</span>
                   </div>
                   <h3 className="mt-4 text-lg font-semibold">{x.t}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">{x.d}</p>

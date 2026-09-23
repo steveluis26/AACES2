@@ -24,7 +24,7 @@ export default function HeroSection() {
         <div className="mx-auto max-w-6xl pt-10 lg:pt-16">
           <div className="mx-auto max-w-4xl text-center">
             <motion.div {...enter(0)} className="mb-6 flex justify-center">
-              <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/5 px-3 py-1 text-xs font-medium text-orange-600 dark:text-orange-400">
+              <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/5 px-3 py-1 text-xs font-medium text-orange-500 dark:text-orange-400">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-orange-500 opacity-60 motion-safe:animate-ping" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-500" />
@@ -128,7 +128,7 @@ export default function HeroSection() {
               animate={reduce ? { opacity: 1 } : { opacity: 1, x: 0, y: [0, 6, 0] }}
               transition={reduce ? undefined : { opacity: { delay: 1.3, duration: 0.5 }, x: { delay: 1.3, duration: 0.5 }, y: { delay: 1.8, duration: 4.5, repeat: Infinity, ease: "easeInOut" } }}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500/10 text-orange-500 dark:text-orange-400">
                 <QrCode className="h-4 w-4" />
               </span>
               <span className="text-left leading-tight">

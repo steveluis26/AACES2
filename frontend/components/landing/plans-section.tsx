@@ -90,7 +90,7 @@ export default function PlansSection() {
               <div className="mb-6">
                 <h3 className="text-lg font-semibold">{tier.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className={`font-bold ${tier.popular ? "text-5xl text-orange-600 dark:text-orange-500" : "text-4xl"}`}>{tier.price}</span>
+                  <span className={`font-bold ${tier.popular ? "text-5xl text-orange-500 dark:text-orange-500" : "text-4xl"}`}>{tier.price}</span>
                   <span className="text-sm text-muted-foreground">/mes</span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{tier.desc}</p>

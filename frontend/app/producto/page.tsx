@@ -76,11 +76,11 @@ export default function ProductoPage() {
                   viewport={{ once: true, amount: 0.5 }}
                   transition={{ duration: 0.5, ease: EASE, delay: 0.2 + i * 0.18 }}
                 >
-                  <span className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-orange-600 text-black shadow-lg shadow-orange-500/20 ring-8 ring-orange-100 dark:bg-orange-500 dark:ring-orange-500/10">
+                  <span className="relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-lg shadow-orange-500/20 ring-8 ring-orange-100 dark:bg-orange-500 dark:ring-orange-500/10">
                     <s.icon className="h-6 w-6" />
                   </span>
                   <div className="md:mt-4">
-                    <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">Paso {i + 1}</span>
+                    <span className="text-xs font-semibold text-orange-500 dark:text-orange-400">Paso {i + 1}</span>
                     <p className="text-sm font-medium md:mx-auto md:max-w-[9rem]">{s.label}</p>
                   </div>
                 </motion.li>

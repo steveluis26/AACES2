@@ -78,12 +78,12 @@ export function HeroHeader() {
               </button>
             </div>
             <nav className="flex flex-col gap-1 p-5">
-              <a href="/verificar" aria-current={isCurrent("/verificar") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/verificar") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Verificar</a>
-              <a href="/producto" aria-current={isCurrent("/producto") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/producto") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Producto</a>
-              <a href="/#planes" aria-current={isCurrent("/#planes") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/#planes") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Precios</a>
-              <a href="/marketplace" aria-current={isCurrent("/marketplace") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/marketplace") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Marketplace</a>
-              <a href="/blog" aria-current={isCurrent("/blog") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/blog") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Blog</a>
-              <a href="/contacto" aria-current={isCurrent("/contacto") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/contacto") ? "bg-orange-500/10 text-orange-600" : "hover:bg-muted"}`}>Contacto</a>
+              <a href="/verificar" aria-current={isCurrent("/verificar") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/verificar") ? "bg-orange-500/10 text-orange-500" : "hover:bg-muted"}`}>Verificar</a>
+              <a href="/producto" aria-current={isCurrent("/producto") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/producto") ? "bg-orange-500/10 text-orange-500" : "hover:bg-muted"}`}>Producto</a>
+              <a href="/#planes" aria-current={isCurrent("/#planes") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/#planes") ? "bg-orange-500/10 text-orange-500" : "hover:bg-muted"}`}>Precios</a>
+              <a href="/marketplace" aria-current={isCurrent("/marketplace") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/marketplace") ? "bg-orange-500/10 text-orange-500" : "hover:bg-muted"}`}>Marketplace</a>
+              <a href="/blog" aria-current={isCurrent("/blog") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/blog") ? "bg-orange-500/10 text-orange-500" : "hover:bg-muted"}`}>Blog</a>
+              <a href="/contacto" aria-current={isCurrent("/contacto") ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${isCurrent("/contacto") ? "bg-orange-500/10 text-orange-500" : "hover:bg-muted"}`}>Contacto</a>
             </nav>
             <div className="p-5 border-t border-border">
               <a href="/login" className="flex items-center justify-center rounded-full px-4 py-2.5 text-sm bg-orange-500 text-white hover:bg-orange-600 transition-colors">

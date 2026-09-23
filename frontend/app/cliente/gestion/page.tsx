@@ -354,7 +354,7 @@ export default function GestionClientePage() {
                     key={m}
                     type="button"
                     onClick={() => setCampo('vigencia_meses', { vigencia_meses: String(m) })}
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors duration-200 ${nuevoCurso.vigencia_meses === String(m) ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400' : 'hover:bg-muted'}`}
+                    className={`rounded-full border px-3 py-1 text-xs transition-colors duration-200 ${nuevoCurso.vigencia_meses === String(m) ? 'border-orange-500 bg-orange-50 text-orange-500 dark:bg-orange-500/10 dark:text-orange-400' : 'hover:bg-muted'}`}
                   >
                     {m} meses
                   </button>
@@ -404,7 +404,7 @@ export default function GestionClientePage() {
         {/* Resumen en vivo */}
         <aside className="lg:sticky lg:top-4 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-2 motion-safe:duration-500">
           <Card className="overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-orange-500 to-orange-400" />
+            <div className="h-1.5 bg-orange-500" />
             <CardHeader className="pb-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Resumen</p>
               <CardTitle className={`text-lg leading-snug transition-colors ${nuevoCurso.nombre ? '' : 'text-muted-foreground'}`}>
@@ -448,7 +448,7 @@ export default function GestionClientePage() {
                   {nuevoCurso.precio_promocional ? (
                     <>
                       <div className="text-xs text-muted-foreground line-through">{fmtMXN.format(Number(nuevoCurso.precio_base || 0))}</div>
-                      <div className="text-xl font-semibold text-orange-600">{fmtMXN.format(Number(nuevoCurso.precio_promocional))}</div>
+                      <div className="text-xl font-semibold text-orange-500">{fmtMXN.format(Number(nuevoCurso.precio_promocional))}</div>
                     </>
                   ) : (
                     <div className="text-xl font-semibold">{fmtMXN.format(Number(nuevoCurso.precio_base || 0))}</div>
@@ -477,7 +477,7 @@ export default function GestionClientePage() {
       <Card className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500">
         <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle>Mis cursos (próximos)</CardTitle>
-          {cursos.length > 0 && <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-500/10 dark:text-orange-400">{cursos.length}</span>}
+          {cursos.length > 0 && <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-500 dark:bg-orange-500/10 dark:text-orange-400">{cursos.length}</span>}
         </CardHeader>
         <CardContent>
           {cursosError && (

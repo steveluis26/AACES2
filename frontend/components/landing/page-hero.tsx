@@ -12,7 +12,7 @@ export function PageHero({ eyebrow, title, description, children }: { eyebrow?: 
       <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-16 h-[320px] w-[620px] -translate-x-1/2 rounded-full bg-orange-500/10 blur-3xl" />
       <div className="relative mx-auto max-w-3xl px-6">
         {eyebrow && (
-          <motion.span {...enter(0)} className="inline-flex items-center rounded-full bg-orange-500/10 px-3 py-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+          <motion.span {...enter(0)} className="inline-flex items-center rounded-full bg-orange-500 px-3 py-1 text-xs font-semibold text-white">
             {eyebrow}
           </motion.span>
         )}
