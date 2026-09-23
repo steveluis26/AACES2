@@ -82,7 +82,7 @@ export default function PlansSection() {
               <ul className="mb-8 flex-1 space-y-3">
                 {tier.features.map((f, j) => (
                   <li key={j} className="flex items-center gap-2 text-sm">
-                    <Check className="h-4 w-4 text-black shrink-0" />
+                    <Check className="h-4 w-4 text-orange-500 shrink-0" />
                     <span>{f}</span>
                   </li>
                 ))}

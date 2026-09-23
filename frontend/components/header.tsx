@@ -53,7 +53,7 @@ export function HeroHeader() {
             </a>
             <button
               onClick={() => setMobileOpen(true)}
-              className="md:hidden inline-flex items-center justify-center rounded-full p-2 text-foreground hover:bg-muted"
+              className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground hover:bg-muted"
               aria-label="Abrir menú"
             >
               <Menu className="h-5 w-5" />
@@ -79,6 +79,7 @@ export function HeroHeader() {
             <nav className="flex flex-col gap-1 p-5">
               <a href="/verificar" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Verificar</a>
               <a href="/producto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Producto</a>
+              <a href="/#planes" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Precios</a>
               <a href="/marketplace" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Marketplace</a>
               <a href="/blog" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Blog</a>
               <a href="/contacto" className="rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted transition-colors">Contacto</a>

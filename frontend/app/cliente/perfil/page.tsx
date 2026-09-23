@@ -53,7 +53,7 @@ export default function PerfilPage() {
   
 
   return (
-    <div className="px-4 lg:px-6">
+    <div className="px-4 py-4 lg:px-6 lg:py-6">
       <Card>
         <CardHeader><CardTitle>Perfil</CardTitle></CardHeader>
         <CardContent>

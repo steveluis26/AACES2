@@ -56,7 +56,7 @@ export function AgendaPanel({ agenda }: { agenda: Curso[] }) {
             className="flex items-center justify-between rounded-lg border p-3"
           >
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate">{curso.nombre}</p>
+              <p className="font-medium line-clamp-2 sm:truncate">{curso.nombre}</p>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <CalendarDays className="h-3 w-3" />

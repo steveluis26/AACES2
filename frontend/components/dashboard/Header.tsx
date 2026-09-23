@@ -22,7 +22,7 @@ export function DashboardHeader({ nombre, organizacion }: HeaderProps) {
           {saludo}, {nombre}
         </h1>
         <p className="text-sm text-muted-foreground">{organizacion}</p>
-        <p className="text-xs text-muted-foreground capitalize">{fecha}</p>
+        <p className="text-xs text-muted-foreground">{fecha.charAt(0).toUpperCase() + fecha.slice(1)}</p>
       </div>
     </Card>
   )

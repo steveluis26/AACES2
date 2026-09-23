@@ -14,6 +14,14 @@ export default function HeroSection() {
             <p className="mx-auto mt-6 max-w-2xl text-pretty text-lg text-muted-foreground">
               Centraliza la operación de tu agencia capacitadora, emite constancias verificables y demuestra la autenticidad de cada certificación con AACES.
             </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link href="/register?plan=trial" className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:w-auto">
+                Comenzar gratis
+              </Link>
+              <Link href="/verificar" className="inline-flex w-full items-center justify-center rounded-full border border-border bg-background px-6 py-3 text-sm font-semibold transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:w-auto">
+                Verificar una constancia
+              </Link>
+            </div>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">Ideal para:</span>
               <span className="rounded-full border border-border px-3 py-1">Capacitadores independientes</span>

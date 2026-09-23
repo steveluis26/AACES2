@@ -12,16 +12,17 @@ type Kpis = {
 
 export function SummaryCards({ kpis }: { kpis: Kpis }) {
   const cards = [
-    { label: "Cursos activos", value: kpis.cursos_activos, icon: BookOpen, color: "text-blue-600" },
-    { label: "Participantes", value: kpis.participantes, icon: Users, color: "text-green-600" },
-    { label: "Constancias del mes", value: kpis.constancias_mes, icon: FileText, color: "text-purple-600" },
-    { label: "Por vencer", value: kpis.por_vencer, icon: AlertTriangle, color: "text-amber-600" },
+    { label: "Cursos activos", value: kpis.cursos_activos, icon: BookOpen, color: "text-blue-600", href: "/cliente/cursos" },
+    { label: "Participantes", value: kpis.participantes, icon: Users, color: "text-green-600", href: "/cliente/participantes" },
+    { label: "Constancias del mes", value: kpis.constancias_mes, icon: FileText, color: "text-purple-600", href: "/cliente/constancias" },
+    { label: "Por vencer", value: kpis.por_vencer, icon: AlertTriangle, color: "text-amber-600", href: "/cliente/renovaciones" },
   ]
 
   return (
     <div className="grid-kpis">
       {cards.map((card) => (
-        <Card key={card.label}>
+        <a key={card.label} href={card.href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+        <Card className="h-full transition-shadow hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {card.label}
@@ -32,6 +33,7 @@ export function SummaryCards({ kpis }: { kpis: Kpis }) {
             <div className="text-3xl font-bold">{card.value}</div>
           </CardContent>
         </Card>
+        </a>
       ))}
     </div>
   )

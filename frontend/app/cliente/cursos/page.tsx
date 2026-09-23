@@ -16,6 +16,9 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { ChevronDownIcon, ChevronUpIcon, ChevronLeftIcon, ChevronRightIcon, Loader2 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { parseFecha } from '@/lib/utils'
+
+const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).slice(0, 10) : null); return d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }
 
 type SubCurso = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string }
 type CursoProximo = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string; grupo_id?: string; precio_base?: number; precio_promocional?: number | null; subcursos?: (SubCurso & { precio_base?: number; precio_promocional?: number | null })[] }
@@ -393,8 +396,8 @@ export default function CursosClientePage() {
         const pid = p.id
         return (
           <div className="space-y-1">
-            <Input placeholder="Nombres" value={String(p.nombres ?? p.nombre ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === pid); if (i !== -1) { a[i] = { ...a[i], nombres: e.target.value } } return a })} />
-            <Input placeholder="Apellido paterno" value={String(p.apellido_paterno ?? p.apellido ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === pid); if (i !== -1) { a[i] = { ...a[i], apellido_paterno: e.target.value } } return a })} />
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">Nombres<Input placeholder="Nombres" value={String(p.nombres ?? p.nombre ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === pid); if (i !== -1) { a[i] = { ...a[i], nombres: e.target.value } } return a })} /></label>
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido paterno<Input placeholder="Apellido paterno" value={String(p.apellido_paterno ?? p.apellido ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === pid); if (i !== -1) { a[i] = { ...a[i], apellido_paterno: e.target.value } } return a })} /></label>
           </div>
         )
       }
@@ -411,7 +414,7 @@ export default function CursosClientePage() {
         const p = row.original
         const pid = p.id
         return (
-          <Input placeholder="Correo" value={p.correo || ''} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === pid); if (i !== -1) { a[i] = { ...a[i], correo: e.target.value } } return a })} />
+          <label className="grid gap-1 text-xs font-medium text-muted-foreground">Correo<Input placeholder="Correo" value={p.correo || ''} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === pid); if (i !== -1) { a[i] = { ...a[i], correo: e.target.value } } return a })} /></label>
         )
       }
     },
@@ -691,7 +694,7 @@ export default function CursosClientePage() {
 
   return (
     <Suspense fallback={<div className="flex min-h-svh items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-[var(--primary)]" /></div>}>
-    <div className="space-y-6 px-4 lg:px-6">
+    <div className="space-y-6 px-4 py-4 lg:px-6 lg:py-6">
       <Dialog open={openEventDialog} onClose={() => setOpenEventDialog(false)}>
         <DialogHeader>
           <DialogTitle>{selected ? `${selected.codigo_curso} · ${selected.nombre}` : 'Evento'}</DialogTitle>
@@ -841,10 +844,10 @@ export default function CursosClientePage() {
               <div key={c.id} className={`flex items-center justify-between gap-2 p-2 border rounded cursor-pointer ${selected?.id === c.id ? 'bg-primary-50 dark:bg-neutral-800' : ''}`} onClick={() => setSelected(c)}>
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate">{c.codigo_curso} · {c.nombre}</div>
-                  <div className="text-sm truncate">{c.ciudad || '-'} · Inicio: {c.fecha_inicio ? String(c.fecha_inicio).slice(0,10) : '-'} · Fin: {c.fecha_fin ? String(c.fecha_fin).slice(0,10) : '-'} · Precio: {fmtMXN.format(Number((c.precio_promocional ?? c.precio_base ?? 0) || 0))}</div>
+                  <div className="text-sm truncate">{c.ciudad || '-'} · {fechaCorta(c.fecha_inicio)} – {fechaCorta(c.fecha_fin)} · Precio: {fmtMXN.format(Number((c.precio_promocional ?? c.precio_base ?? 0) || 0))}</div>
                   
                 </div>
-                <div className="text-sm shrink-0">Estado: {c.estado === 'en_espera' ? 'pendiente' : c.estado}</div>
+                <Badge variant="outline" className="shrink-0 capitalize">{c.estado === 'en_espera' ? 'pendiente' : c.estado}</Badge>
               </div>
             ))}
             {proximosFiltered.length === 0 && (
@@ -907,7 +910,7 @@ export default function CursosClientePage() {
             </div>
             <div className="mt-4 flex gap-2">
               <Button onClick={saveSelected}>Guardar</Button>
-              <Button onClick={() => setSelected(null)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => setSelected(null)}>Cancelar</Button>
             </div>
             {detalleError && (
               <Alert className="alert-error mt-3">{detalleError}</Alert>
@@ -972,9 +975,9 @@ export default function CursosClientePage() {
                     </div>
                     <div className="mt-4 space-y-2">
                       <div className="text-sm font-semibold">Registrar constancia</div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        <Input placeholder="Nombre de constancia (ej. Espacios confinados)" value={nuevoConstanciaNombre} onChange={(e) => setNuevoConstanciaNombre(e.target.value)} />
-                        <Input placeholder="Norma/NOM (opcional)" value={nuevoConstanciaNorma} onChange={(e) => setNuevoConstanciaNorma(e.target.value)} />
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:items-end">
+                        <label className="grid gap-1 text-xs font-medium text-muted-foreground">Nombre de constancia<Input placeholder="Nombre de constancia (ej. Espacios confinados)" value={nuevoConstanciaNombre} onChange={(e) => setNuevoConstanciaNombre(e.target.value)} /></label>
+                        <label className="grid gap-1 text-xs font-medium text-muted-foreground">Norma/NOM (opcional)<Input placeholder="Norma/NOM (opcional)" value={nuevoConstanciaNorma} onChange={(e) => setNuevoConstanciaNorma(e.target.value)} /></label>
                         <Button onClick={async () => { if (!selected) return; setConstanciaError(''); const nombre = nuevoConstanciaNombre.trim(); const norma = nuevoConstanciaNorma.trim(); if (!nombre) { setConstanciaError('Ingresa un nombre de constancia'); return } try { await apiRequest(`/clientes/cursos/${selected.id}/constancias`, { method: 'POST', body: JSON.stringify({ nombre, norma: norma || undefined }) }); setNuevoConstanciaNombre(''); setNuevoConstanciaNorma(''); await loadConstanciasCurso(); setConstanciaError(''); } catch (e) { setConstanciaError((e as Error)?.message || 'No se pudo registrar la constancia') } }}>Registrar constancia</Button>
                       </div>
                       {constanciaError && (<Alert className="alert-error">{constanciaError}</Alert>)}
@@ -982,25 +985,26 @@ export default function CursosClientePage() {
                   </CardContent>
                 </Card>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-11 gap-2">
-                <div className="md:col-span-11"><Input placeholder="Nombres" value={String(nuevoPart.nombres ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, nombres: e.target.value }))} /></div>
-                <div className="md:col-span-11"><Input placeholder="Apellido paterno" value={String(nuevoPart.apellido_paterno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_paterno: e.target.value }))} /></div>
-                <div className="md:col-span-11"><Input placeholder="Apellido materno" value={String(nuevoPart.apellido_materno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_materno: e.target.value }))} /></div>
+              <div className="text-sm font-semibold pt-2">Agregar participante al curso</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                <div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Nombres<Input placeholder="Nombres" value={String(nuevoPart.nombres ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, nombres: e.target.value }))} /></label></div>
+                <div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido paterno<Input placeholder="Apellido paterno" value={String(nuevoPart.apellido_paterno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_paterno: e.target.value }))} /></label></div>
+                <div><label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido materno<Input placeholder="Apellido materno" value={String(nuevoPart.apellido_materno ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, apellido_materno: e.target.value }))} /></label></div>
                 
-                <Input placeholder="Correo" value={nuevoPart.correo} onChange={(e) => setNuevoPart(s => ({ ...s, correo: e.target.value }))} />
-                <Input placeholder="Ciudad" value={nuevoPart.ciudad_origen} onChange={(e) => setNuevoPart(s => ({ ...s, ciudad_origen: e.target.value }))} />
-                <Input placeholder="Teléfono" value={String(nuevoPart.telefono ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, telefono: e.target.value }))} />
-                <Input placeholder="Empresa" value={String(nuevoPart.empresa ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, empresa: e.target.value }))} />
-                <Input placeholder="Cargo" value={String(nuevoPart.cargo ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, cargo: e.target.value }))} />
-                <Input placeholder="Profesión" value={String(nuevoPart.profesion ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, profesion: e.target.value }))} />
-                <div className="flex items-center gap-2 md:col-span-11">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Correo<Input placeholder="Correo" value={nuevoPart.correo} onChange={(e) => setNuevoPart(s => ({ ...s, correo: e.target.value }))} /></label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Ciudad<Input placeholder="Ciudad" value={nuevoPart.ciudad_origen} onChange={(e) => setNuevoPart(s => ({ ...s, ciudad_origen: e.target.value }))} /></label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Teléfono<Input placeholder="Teléfono" value={String(nuevoPart.telefono ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, telefono: e.target.value }))} /></label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Empresa<Input placeholder="Empresa" value={String(nuevoPart.empresa ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, empresa: e.target.value }))} /></label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Cargo<Input placeholder="Cargo" value={String(nuevoPart.cargo ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, cargo: e.target.value }))} /></label>
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">Profesión<Input placeholder="Profesión" value={String(nuevoPart.profesion ?? '')} onChange={(e) => setNuevoPart(s => ({ ...s, profesion: e.target.value }))} /></label>
+                <div className="flex flex-wrap items-center gap-2 sm:col-span-2 md:col-span-3">
                   <ToggleGroup type="single" value={String(nuevoPart.precio_modo || 'normal')} onValueChange={(val) => val && setNuevoPart(s => ({ ...s, precio_modo: val as 'normal' | 'descuento' }))}>
                     <ToggleGroupItem value="normal">Normal {fmtMXN.format(Number(selected?.precio_base || 0))}</ToggleGroupItem>
                     <ToggleGroupItem value="descuento" disabled={selected?.precio_promocional == null}>Descuento {fmtMXN.format(Number(selected?.precio_promocional ?? selected?.precio_base ?? 0))}</ToggleGroupItem>
                   </ToggleGroup>
                 </div>
               </div>
-              <div className="flex gap-2"><Button onClick={crearParticipante}>Agregar</Button></div>
+              <div className="flex gap-2"><Button onClick={crearParticipante}>Agregar participante</Button></div>
               {participanteError && (<Alert className="alert-error mt-2">{participanteError}</Alert>)}
               <div className="text-xs text-muted-foreground">Los montos representan: Costo y Pagado. Saldo = Costo − Pagado.</div>
               <div className="space-y-3">
@@ -1034,7 +1038,7 @@ export default function CursosClientePage() {
                                 <TableCell colSpan={columnsCount}>
                                   <div className="space-y-2">
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                      <Input type="number" step="0.01" placeholder="Monto (MXN)" value={String((nuevoPago[row.original.id]?.monto ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [row.original.id]: { ...(prev[row.original.id] || { monto: 0, metodo: 'efectivo', ref: '' }), monto: Number(e.target.value || 0) } }))} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Monto (MXN)<Input type="number" step="0.01" placeholder="Monto (MXN)" value={String((nuevoPago[row.original.id]?.monto ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [row.original.id]: { ...(prev[row.original.id] || { monto: 0, metodo: 'efectivo', ref: '' }), monto: Number(e.target.value || 0) } }))} /></label>
                                       <Select value={String((nuevoPago[row.original.id]?.metodo ?? 'efectivo'))} onValueChange={(val) => setNuevoPago(prev => ({ ...prev, [row.original.id]: { ...(prev[row.original.id] || { monto: 0, metodo: 'efectivo', ref: '' }), metodo: val } }))}>
                                         <SelectTrigger className="w-full"><SelectValue placeholder="Método" /></SelectTrigger>
                                         <SelectContent>
@@ -1045,7 +1049,7 @@ export default function CursosClientePage() {
                                           <SelectItem value="otro">otro</SelectItem>
                                         </SelectContent>
                                       </Select>
-                                      <Input placeholder="Referencia" value={String((nuevoPago[row.original.id]?.ref ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [row.original.id]: { ...(prev[row.original.id] || { monto: 0, metodo: 'efectivo', ref: '' }), ref: e.target.value } }))} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Referencia<Input placeholder="Referencia" value={String((nuevoPago[row.original.id]?.ref ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [row.original.id]: { ...(prev[row.original.id] || { monto: 0, metodo: 'efectivo', ref: '' }), ref: e.target.value } }))} /></label>
                                     </div>
                                     <div className="flex gap-2">
                                       <Button variant="outline" onClick={() => savePrecio(row.original)}>Guardar precio</Button>
@@ -1133,19 +1137,19 @@ export default function CursosClientePage() {
                                       <span className="font-semibold">Certificado:</span> {String(p.id_certificado || '-')} · <span className="font-semibold">Código:</span> {String(p.codigo_validacion || '-')} · <span className="font-semibold">Emisión:</span> {p.fecha_emision_certificado ? String(p.fecha_emision_certificado).slice(0,10) : '-'} · <span className="font-semibold">Inicio vigencia:</span> {p.fecha_inicio_vigencia ? String(p.fecha_inicio_vigencia).slice(0,10) : '-'} · <span className="font-semibold">Expira:</span> {p.fecha_expiracion ? String(p.fecha_expiracion).slice(0,10) : '-'} · <span className="font-semibold">Estatus:</span> {(() => { const acr = !!p.estado_acreditacion; const exp = p.fecha_expiracion ? new Date(String(p.fecha_expiracion)) : null; const today = new Date(); if (!acr) return 'pendiente'; if (exp && exp < new Date(today.getFullYear(), today.getMonth(), today.getDate())) return 'vencido'; return 'activo' })()}
                                     </div>
                                     <div className="grid grid-cols-1 gap-2">
-                                      <Input placeholder="Nombres" value={String(p.nombres ?? p.nombre ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], nombres: e.target.value }; return a })} />
-                                      <Input placeholder="Apellido paterno" value={String(p.apellido_paterno ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], apellido_paterno: e.target.value }; return a })} />
-                                      <Input placeholder="Apellido materno" value={String(p.apellido_materno ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], apellido_materno: e.target.value }; return a })} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Nombres<Input placeholder="Nombres" value={String(p.nombres ?? p.nombre ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], nombres: e.target.value }; return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido paterno<Input placeholder="Apellido paterno" value={String(p.apellido_paterno ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], apellido_paterno: e.target.value }; return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Apellido materno<Input placeholder="Apellido materno" value={String(p.apellido_materno ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], apellido_materno: e.target.value }; return a })} /></label>
                                       
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                      <Input placeholder="Ciudad" value={p.ciudad_origen || ''} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], ciudad_origen: e.target.value }; return a })} />
-                                      <Input placeholder="Teléfono" value={String(p.telefono ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], telefono: e.target.value }; return a })} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Ciudad<Input placeholder="Ciudad" value={p.ciudad_origen || ''} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], ciudad_origen: e.target.value }; return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Teléfono<Input placeholder="Teléfono" value={String(p.telefono ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], telefono: e.target.value }; return a })} /></label>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                      <Input placeholder="Empresa" value={String(p.empresa ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], empresa: e.target.value }; return a })} />
-                                      <Input placeholder="Cargo" value={String(p.cargo ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], cargo: e.target.value }; return a })} />
-                                      <Input placeholder="Profesión" value={String(p.profesion ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], profesion: e.target.value }; return a })} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Empresa<Input placeholder="Empresa" value={String(p.empresa ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], empresa: e.target.value }; return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Cargo<Input placeholder="Cargo" value={String(p.cargo ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], cargo: e.target.value }; return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Profesión<Input placeholder="Profesión" value={String(p.profesion ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], profesion: e.target.value }; return a })} /></label>
                                     </div>
                                     
                                     <div className="flex flex-wrap gap-2">
@@ -1158,8 +1162,8 @@ export default function CursosClientePage() {
                                     </div>
                                     {filaError[p.id] && (<Alert className="alert-error">{filaError[p.id]}</Alert>)}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                      <Input placeholder="ID certificado" value={String(p.id_certificado || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], id_certificado: e.target.value } } return a })} />
-                                      <Input placeholder="Código validación" value={String(p.codigo_validacion || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], codigo_validacion: e.target.value.toUpperCase() } } return a })} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">ID certificado<Input placeholder="ID certificado" value={String(p.id_certificado || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], id_certificado: e.target.value } } return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Código validación<Input placeholder="Código validación" value={String(p.codigo_validacion || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], codigo_validacion: e.target.value.toUpperCase() } } return a })} /></label>
                                       <div className="flex items-center gap-4">
                                         <div className="flex items-center gap-2">
                                           <Checkbox checked={!!p.estado_acreditacion} onCheckedChange={(val) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], estado_acreditacion: !!val } } return a })} />
@@ -1172,8 +1176,8 @@ export default function CursosClientePage() {
                                       </div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                      <Input type="date" placeholder="Emisión certificado" value={String(p.fecha_emision_certificado || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], fecha_emision_certificado: e.target.value } } return a })} />
-                                      <Input type="date" placeholder="Expiración certificado" value={String(p.fecha_expiracion || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], fecha_expiracion: e.target.value } } return a })} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Emisión certificado<Input type="date" placeholder="Emisión certificado" value={String(p.fecha_emision_certificado || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], fecha_emision_certificado: e.target.value } } return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Expiración certificado<Input type="date" placeholder="Expiración certificado" value={String(p.fecha_expiracion || '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; const i = a.findIndex(x => x.id === p.id); if (i !== -1) { a[i] = { ...a[i], fecha_expiracion: e.target.value } } return a })} /></label>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                                       <Select value={String(nuevoAsignacion[p.id]?.constancia_id || '')} onValueChange={(val) => setNuevoAsignacion(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || {}), constancia_id: val } }))}>
@@ -1199,13 +1203,13 @@ export default function CursosClientePage() {
                                           <ToggleGroupItem value="descuento" disabled={selected?.precio_promocional == null}>Descuento {fmtMXN.format(Number(selected?.precio_promocional ?? selected?.precio_base ?? 0))}</ToggleGroupItem>
                                         </ToggleGroup>
                                       </div>
-                                      <Input type="number" step="0.01" placeholder="Costo" value={String(p.costo_asignado ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], costo_asignado: Number(e.target.value || 0) }; return a })} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Costo<Input type="number" step="0.01" placeholder="Costo" value={String(p.costo_asignado ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], costo_asignado: Number(e.target.value || 0) }; return a })} /></label>
                                       
                                       <div className="text-sm text-right md:text-left">{fmtMXN.format(Number(p.valor_pagado || 0))}</div>
                                       <div className="text-sm font-medium text-right md:text-left">{fmtMXN.format(saldo)}</div>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                      <Input type="number" step="0.01" placeholder="Monto (MXN)" value={String((nuevoPago[p.id]?.monto ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || { monto: 0, metodo: 'efectivo', ref: '' }), monto: Number(e.target.value || 0) } }))} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Monto (MXN)<Input type="number" step="0.01" placeholder="Monto (MXN)" value={String((nuevoPago[p.id]?.monto ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || { monto: 0, metodo: 'efectivo', ref: '' }), monto: Number(e.target.value || 0) } }))} /></label>
                                       <Select value={String((nuevoPago[p.id]?.metodo ?? 'efectivo'))} onValueChange={(val) => setNuevoPago(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || { monto: 0, metodo: 'efectivo', ref: '' }), metodo: val } }))}>
                                         <SelectTrigger className="w-full"><SelectValue placeholder="Método" /></SelectTrigger>
                                         <SelectContent>
@@ -1216,7 +1220,7 @@ export default function CursosClientePage() {
                                           <SelectItem value="otro">otro</SelectItem>
                                         </SelectContent>
                                       </Select>
-                                      <Input placeholder="Referencia" value={String((nuevoPago[p.id]?.ref ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || { monto: 0, metodo: 'efectivo', ref: '' }), ref: e.target.value } }))} />
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Referencia<Input placeholder="Referencia" value={String((nuevoPago[p.id]?.ref ?? ''))} onChange={(e) => setNuevoPago(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || { monto: 0, metodo: 'efectivo', ref: '' }), ref: e.target.value } }))} /></label>
                                     </div>
                                     <div className="text-xs">
                                       <span className="font-semibold">Programa:</span> {selected?.nombre || '-'} · <span className="font-semibold">Proveedor:</span> {selected?.empresa_contratante || '-'} · <span className="font-semibold">Fecha curso:</span> {selected?.fecha_inicio ? String(selected.fecha_inicio).slice(0,10) : '-'} · <span className="font-semibold">Expira:</span> {p.fecha_expiracion ? String(p.fecha_expiracion).slice(0,10) : '-'} · <span className="font-semibold">Estatus:</span> {(() => { const acr = !!p.estado_acreditacion; const exp = p.fecha_expiracion ? new Date(String(p.fecha_expiracion)) : null; const today = new Date(); if (!acr) return 'pendiente'; if (exp && exp < new Date(today.getFullYear(), today.getMonth(), today.getDate())) return 'vencido'; return 'activo' })()}
