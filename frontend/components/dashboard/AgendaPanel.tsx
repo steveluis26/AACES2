@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CalendarDays, Building2, Users, MapPin } from "lucide-react"
+import { parseFecha } from "@/lib/utils"
 
 type Curso = {
   curso_id: string
@@ -30,8 +31,9 @@ export function AgendaPanel({ agenda }: { agenda: Curso[] }) {
   }
 
   const formatFecha = (iso: string | null) => {
-    if (!iso) return ""
-    return new Date(iso).toLocaleDateString("es-MX", {
+    const d = parseFecha(iso)
+    if (!d) return ""
+    return d.toLocaleDateString("es-MX", {
       day: "numeric", month: "short",
     })
   }

@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
@@ -30,6 +30,9 @@ export function LoginForm({
   const [formData, setFormData] = useState({ email: "", password: "" })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  // Evita que el formulario se envíe de forma nativa (GET con la contraseña en la URL) antes de hidratar
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -86,7 +89,7 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
+          <form method="post" className="p-6 md:p-8" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
                 <h1 className="text-2xl font-bold">Iniciar sesión</h1>
@@ -105,7 +108,7 @@ export function LoginForm({
                 <Input id="password" name="password" type="password" required value={formData.password} onChange={handleChange} />
               </div>
               {error && (<div className="text-xs text-[var(--destructive)]">{error}</div>)}
-              <Button type="submit" className="w-full" disabled={loading}>{loading ? "Iniciando…" : "Entrar"}</Button>
+              <Button type="submit" className="w-full" disabled={loading || !mounted}>{loading ? "Iniciando…" : "Entrar"}</Button>
               <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
                 <span className="relative z-10 bg-background px-2 text-muted-foreground">
                   O continúa con

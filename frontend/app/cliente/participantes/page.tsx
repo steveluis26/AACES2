@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, Alert } from '
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableHead, TableHeader, TableRow, TableCell } from '@/components/ui/table'
 import { ChevronRight } from 'lucide-react'
+import { Field } from '@/components/ui/field'
 import { apiRequest } from '@/app/services/api'
 
 type ParticipanteListado = {
@@ -45,15 +46,29 @@ export default function ParticipantesPage() {
 
   useEffect(() => { load() }, [load])
 
-  const buscarDuplicados = async () => {
+  const buscarDuplicados = async (): Promise<typeof duplicados> => {
     try {
       const params = new URLSearchParams()
       if (nombre) params.set('nombre', nombre)
       if (correo) params.set('correo', correo)
       if (telefono) params.set('telefono', telefono)
       const data = await apiRequest<{ posibles_duplicados: typeof duplicados }>(`/participantes/posibles-duplicados?${params}`)
-      setDuplicados(data.posibles_duplicados?.filter(d => d.score >= 50) ?? [])
-    } catch { setDuplicados([]) }
+      const found = data.posibles_duplicados?.filter(d => d.score >= 50) ?? []
+      setDuplicados(found)
+      return found
+    } catch { setDuplicados([]); return [] }
+  }
+
+  // Antes se creaba aunque hubiera duplicados; ahora se detiene y deja decidir.
+  const guardar = async (forzar = false) => {
+    if (!nombre.trim()) return
+    if (!forzar) {
+      setCreando(true)
+      const found = await buscarDuplicados()
+      setCreando(false)
+      if (found.length > 0) return
+    }
+    crear()
   }
 
   const crear = async () => {
@@ -80,7 +95,7 @@ export default function ParticipantesPage() {
   }
 
   return (
-    <div className="space-y-6 px-4 lg:px-6">
+    <div className="space-y-6 px-4 py-4 lg:px-6 lg:py-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Participantes</h1>
         <Button onClick={() => { setShowForm(!showForm); setDuplicados([]) }}>
@@ -92,19 +107,31 @@ export default function ParticipantesPage() {
         <Card>
           <CardHeader><CardTitle>Registrar participante</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <Input placeholder="Nombre completo *" value={nombre} onChange={e => { setNombre(e.target.value); setDuplicados([]) }} />
-              <Input placeholder="Correo" value={correo} onChange={e => { setCorreo(e.target.value); setDuplicados([]) }} />
-              <Input placeholder="Teléfono" value={telefono} onChange={e => { setTelefono(e.target.value); setDuplicados([]) }} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Field label="Nombre completo" htmlFor="p_nombre" required>
+                <Input id="p_nombre" autoComplete="name" placeholder="Nombre(s) y apellidos" value={nombre} onChange={e => { setNombre(e.target.value); setDuplicados([]) }} />
+              </Field>
+              <Field label="Correo" htmlFor="p_correo">
+                <Input id="p_correo" type="email" autoComplete="email" placeholder="nombre@empresa.com" value={correo} onChange={e => { setCorreo(e.target.value); setDuplicados([]) }} />
+              </Field>
+              <Field label="Teléfono" htmlFor="p_tel">
+                <Input id="p_tel" type="tel" autoComplete="tel" placeholder="10 dígitos" value={telefono} onChange={e => { setTelefono(e.target.value); setDuplicados([]) }} />
+              </Field>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              <Input placeholder="Empresa" value={empresa} onChange={e => setEmpresa(e.target.value)} />
-              <Input placeholder="Cargo" value={cargo} onChange={e => setCargo(e.target.value)} />
-              <Input placeholder="Ciudad" value={ciudadOrigen} onChange={e => setCiudadOrigen(e.target.value)} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Field label="Empresa" htmlFor="p_empresa">
+                <Input id="p_empresa" autoComplete="organization" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+              </Field>
+              <Field label="Cargo" htmlFor="p_cargo">
+                <Input id="p_cargo" value={cargo} onChange={e => setCargo(e.target.value)} />
+              </Field>
+              <Field label="Ciudad" htmlFor="p_ciudad">
+                <Input id="p_ciudad" value={ciudadOrigen} onChange={e => setCiudadOrigen(e.target.value)} />
+              </Field>
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={async () => { await buscarDuplicados(); crear() }} disabled={creando || !nombre.trim()}>
+              <Button onClick={() => guardar()} disabled={creando || !nombre.trim()}>
                 {creando ? 'Guardando...' : 'Guardar'}
               </Button>
               <Button variant="outline" onClick={resetForm}>Limpiar</Button>
@@ -114,7 +141,7 @@ export default function ParticipantesPage() {
             {duplicados.length > 0 && (
               <div className="border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 rounded p-3 space-y-2">
                 <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">
-                  Posibles duplicados detectados
+                  Este participante podría ya existir. Revisa antes de crear uno nuevo.
                 </p>
                 {duplicados.map(d => (
                   <div key={d.id} className="flex items-center justify-between text-sm">
@@ -124,6 +151,9 @@ export default function ParticipantesPage() {
                     </Button>
                   </div>
                 ))}
+                <Button size="sm" variant="ghost" onClick={() => guardar(true)} disabled={creando}>
+                  No es la misma persona, crear de todos modos
+                </Button>
               </div>
             )}
           </CardContent>

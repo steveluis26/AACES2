@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== 'production'
-const apiBase = isDev ? 'http://localhost:8000' : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
+const apiBase = isDev ? (process.env.DEV_API_URL || 'http://localhost:8000') : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
 
 const nextConfig = {
   output: 'standalone',

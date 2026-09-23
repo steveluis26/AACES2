@@ -15,6 +15,7 @@ import { ColumnDef, SortingState, flexRender, getCoreRowModel, getFilteredRowMod
 import { Checkbox } from '@/components/ui/checkbox'
 import { ChevronDownIcon, ChevronUpIcon, ChevronLeftIcon, ChevronRightIcon, Loader2 } from 'lucide-react'
 import { useSearchParams } from 'next/navigation'
+import { toast } from 'sonner'
 
 type SubCurso = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string }
 type CursoProximo = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string; grupo_id?: string; precio_base?: number; precio_promocional?: number | null; subcursos?: (SubCurso & { precio_base?: number; precio_promocional?: number | null })[] }
