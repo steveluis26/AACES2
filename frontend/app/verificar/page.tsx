@@ -1,7 +1,8 @@
 "use client"
 import { useState, useCallback } from "react"
-import { QrCode, SendHorizonal, Shield, ShieldCheck, CheckCircle, Loader2, ScanLine, KeyRound, BadgeCheck } from "lucide-react"
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { useRouter } from "next/navigation"
+import { QrCode, SendHorizonal, ShieldCheck, Loader2, ScanLine, KeyRound, BadgeCheck } from "lucide-react"
+import { motion, useReducedMotion } from "motion/react"
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/reveal"
 import FooterSection from "src/components/footer"
 import { Button } from "@/components/ui/button"
@@ -9,78 +10,22 @@ import { toast } from "sonner"
 
 export const dynamic = "force-dynamic"
 
-interface ValidationResult {
-  valido: boolean
-  mensaje: string
-  datos_certificado?: {
-    nombre_participante: string
-    nombre_curso: string
-    codigo_curso: string
-    fecha_inicio: string
-    fecha_fin: string
-    duracion_horas: number
-    calificacion?: number
-    fecha_emision?: string
-    fecha_expiracion?: string
-    id_certificado?: string
-    constancias?: string[]
-    capacitador?: string
-    estado?: string
-  }
-  intentos_restantes?: number
-}
 
 export default function VerificarPage() {
   const [code, setCode] = useState("")
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<ValidationResult | null>(null)
-  const [attempts, setAttempts] = useState(5)
+  const router = useRouter()
 
-  const verify = useCallback(async (e: React.FormEvent) => {
+  // Un solo lugar para el resultado: la página pública /v/{código} (la misma que abre el QR)
+  const verify = useCallback((e: React.FormEvent) => {
     e.preventDefault()
-    if (!code.trim()) { toast.error("Ingresa un código de validación"); return }
+    const c = code.trim().toUpperCase()
+    if (!c) { toast.error("Ingresa un código de validación"); return }
     setLoading(true)
-    // Timeout de 20s: sin esto, si el backend no responde el fetch se queda
-    // colgado para siempre y el botón queda deshabilitado sin explicación.
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 20000)
-    try {
-      const raw = code.trim().toUpperCase()
-      const c = raw.startsWith("CERT-") ? raw.slice(5) : raw
-      const res = await fetch("/api/v1/validaciones/validar-certificado", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codigo_validacion: c, ip_address: "127.0.0.1", user_agent: navigator.userAgent }),
-        signal: controller.signal,
-      })
-      const data = await res.json()
-      const norm = data?.certificado ? { ...data, datos_certificado: data.datos_certificado ?? data.certificado } : data
-      setResult(norm)
-      if (norm.intentos_restantes !== undefined) setAttempts(norm.intentos_restantes)
-      if (norm.valido) toast.success("Certificado verificado exitosamente")
-      else toast.error(norm.mensaje)
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        toast.error("La verificación tardó demasiado. Intenta de nuevo.")
-      } else {
-        toast.error("Error al verificar el certificado")
-      }
-    } finally {
-      clearTimeout(timer)
-      setLoading(false)
-    }
-  }, [code])
+    router.push(`/v/${encodeURIComponent(c)}`)
+  }, [code, router])
 
   const reduce = useReducedMotion()
-  const d = result?.datos_certificado
-  const fecha = (v?: string) => {
-    if (!v) return null
-    const x = /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v + "T00:00:00") : new Date(v)
-    return isNaN(x.getTime()) ? null : x
-  }
-  const exp = fecha(d?.fecha_expiracion)
-  const vencido = d?.estado === "Vencido" || (exp ? exp < new Date() : false)
-  const fmt = (v?: string) => fecha(v)?.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
 
   return (
     <div className="min-h-screen bg-background">
@@ -117,9 +62,9 @@ export default function VerificarPage() {
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                   maxLength={20}
-                  disabled={loading || attempts <= 0}
+                  disabled={loading}
                 />
-                <Button type="submit" className="h-10 rounded-full bg-orange-500 px-5 text-white shadow-md shadow-orange-500/25 transition-all hover:bg-orange-600 active:scale-95" disabled={loading || attempts <= 0}>
+                <Button type="submit" className="h-10 rounded-full bg-orange-500 px-5 text-white shadow-md shadow-orange-500/25 transition-all hover:bg-orange-600 active:scale-95" disabled={loading}>
                   {loading ? (
                     <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />
                   ) : (
@@ -133,83 +78,8 @@ export default function VerificarPage() {
               </div>
             </form>
 
-            {attempts <= 3 && attempts > 0 && (
-              <p className="mt-3 text-sm text-muted-foreground">Intentos restantes: {attempts}</p>
-            )}
-            {attempts <= 0 && (
-              <p className="mt-3 text-sm text-destructive">Has excedido el número de intentos.</p>
-            )}
           </Reveal>
 
-          {/* Resultado */}
-          <AnimatePresence mode="wait">
-            {result && (
-              <motion.div
-                key={(d?.id_certificado || "") + String(result.valido) + result.mensaje}
-                initial={reduce ? false : { opacity: 0, y: 24, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={reduce ? undefined : { opacity: 0, y: -8 }}
-                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-                role="status"
-                className={`mt-10 overflow-hidden rounded-2xl border text-left shadow-lg ${
-                  result.valido ? "border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/20" : "border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20"
-                }`}
-              >
-                <div className="flex items-center gap-4 p-6">
-                  <motion.span
-                    initial={reduce ? false : { scale: 0, rotate: -30 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 15, delay: 0.15 }}
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${result.valido ? "bg-green-600 text-white" : "bg-red-600 text-white"}`}
-                  >
-                    {result.valido ? <CheckCircle className="h-6 w-6" /> : <Shield className="h-6 w-6" />}
-                  </motion.span>
-                  <div>
-                    <p className={`text-lg font-semibold ${result.valido ? "text-green-800 dark:text-green-300" : "text-red-800 dark:text-red-300"}`}>
-                      {result.mensaje}
-                    </p>
-                    {result.valido && <p className="text-sm text-green-700/80 dark:text-green-400/80">Este documento fue emitido a través de AACES.</p>}
-                  </div>
-                </div>
-                {d && (
-                  <dl className="grid gap-4 border-t border-black/5 bg-background/60 p-6 sm:grid-cols-2 dark:border-white/10">
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Participante</dt>
-                      <dd className="font-medium">{d.nombre_participante}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Curso</dt>
-                      <dd className="font-medium">{d.nombre_curso}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Emitido por</dt>
-                      <dd className="font-medium">{d.capacitador || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Emisión</dt>
-                      <dd className="font-medium">{fmt(d.fecha_emision) || "-"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Vigencia</dt>
-                      <dd className="font-medium">{fmt(d.fecha_expiracion) || "No expira"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Estado</dt>
-                      <dd>
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-sm font-semibold ${vencido ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"}`}>
-                          {d.estado || (vencido ? "Vencido" : "Vigente")}
-                        </span>
-                      </dd>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <dt className="text-xs text-muted-foreground">ID</dt>
-                      <dd className="font-mono text-sm">{d.id_certificado || "-"}</dd>
-                    </div>
-                  </dl>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
       </section>
 

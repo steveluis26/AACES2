@@ -1,10 +1,15 @@
-from datetime import date, timedelta
-from fastapi import APIRouter, HTTPException
+from datetime import date, datetime, timedelta
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 from app.core.database import get_db
 from fastapi import Depends
+from app.api.v1.endpoints.validaciones import _log_validation_attempt
+from app.services.security import rate_limiter
+
+_MAX_FALLOS = 20
+_VENTANA_FALLOS = 15 * 60
 
 router = APIRouter()
 
@@ -155,3 +160,141 @@ async def registrar_lista_espera(
         )
         await db.commit()
     return {"ok": True}
+
+
+@router.get("/certificado/{codigo}")
+async def certificado_publico(
+    codigo: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Datos públicos de una constancia/DC-3 para la página que abre el QR.
+
+    Acepta el código de validación o el ID del certificado. Solo expone lo
+    necesario para verificar (sin correo ni teléfono del participante). Si la
+    constancia venció se devuelve igual, con estado "vencido", para que quien
+    la escanea sepa de quién es y desde cuándo no es válida.
+    """
+    code = (codigo or "").strip().upper()
+    if code.startswith("CERT-") and len(code) > 5:
+        alt = code[5:]
+    else:
+        alt = code
+    if not code or len(code) > 64:
+        raise HTTPException(status_code=400, detail="Código inválido")
+
+    # Solo cuentan los intentos fallidos: verificar muchos certificados reales no bloquea,
+    # pero adivinar códigos queda limitado.
+    ip = request.client.host if request.client else "0.0.0.0"
+    rl_key = f"cert_publico_fallo:{ip}"
+    if rate_limiter.get_remaining_attempts(rl_key, _MAX_FALLOS, _VENTANA_FALLOS) <= 0:
+        raise HTTPException(status_code=429, detail="Demasiados códigos no válidos. Intenta de nuevo en unos minutos.")
+
+    await db.execute(text("SET LOCAL search_path TO aaces"))
+    row = (
+        await db.execute(
+            text("""
+                SELECT cp.id_certificado, cp.codigo_validacion, cp.estado_acreditacion, cp.estado_pago,
+                       cp.fecha_emision_certificado, cp.fecha_expiracion, cp.calificacion,
+                       p.nombre, p.apellido, p.apellido_paterno, p.apellido_materno,
+                       c.nombre, c.codigo_curso, c.fecha_inicio, c.fecha_fin, c.duracion_horas,
+                       c.modalidad, c.ciudad, c.empresa_contratante, c.id,
+                       o.razon_social, o.nombre_comercial, o.logo_url, o.stps_registro, o.stps_validado,
+                       cl.nombre
+                FROM aaces.curso_participante cp
+                JOIN aaces.participantes p ON p.id = cp.participante_id
+                JOIN aaces.cursos c ON c.id = cp.curso_id
+                LEFT JOIN aaces.clientes cl ON cl.id = c.cliente_id
+                LEFT JOIN aaces.organizaciones o ON o.id = cl.organizacion_id
+                WHERE UPPER(cp.codigo_validacion) IN (:code, :alt)
+                   OR UPPER(cp.id_certificado) IN (:code, :alt)
+                LIMIT 1
+            """),
+            {"code": code, "alt": alt},
+        )
+    ).fetchone()
+
+    ua = request.headers.get("user-agent", "")
+    if not row:
+        rate_limiter.is_rate_limited(rl_key, _MAX_FALLOS, _VENTANA_FALLOS)
+        # No se registra en validaciones_publicas: exige que el código exista (FK)
+        raise HTTPException(status_code=404, detail="Certificado no encontrado")
+
+    (id_cert, cod_val, acreditado, estado_pago, f_emision, f_exp, calificacion,
+     p_nombre, p_apellido, p_pat, p_mat,
+     c_nombre, c_codigo, c_ini, c_fin, c_horas, c_modalidad, c_ciudad, c_empresa, curso_id,
+     o_razon, o_comercial, o_logo, o_stps, o_stps_ok, cl_nombre) = row
+
+    def _d(v):
+        # datetime es subclase de date: hay que revisarlo primero
+        if v is None:
+            return None
+        return v.date() if isinstance(v, datetime) else v
+
+    today = date.today()
+    ini, fin, exp = _d(c_ini), _d(c_fin), _d(f_exp)
+    en_curso = bool(ini and (fin or ini) and ini <= today <= (fin or ini))
+    if exp and exp < today:
+        estado = "vencido"
+    elif acreditado or (str(estado_pago or "").lower() == "pagado" and en_curso):
+        estado = "vigente"
+    else:
+        estado = "no_acreditado"
+
+    apellidos = " ".join(x for x in [p_pat, p_mat] if x) or (p_apellido or "")
+    nombre_completo = " ".join(x for x in [p_nombre, apellidos] if x).strip()
+
+    constancias = []
+    try:
+        rs = (
+            await db.execute(
+                text("SELECT nombre, COALESCE(norma, '') FROM aaces.constancias_curso WHERE curso_id = :c ORDER BY nombre"),
+                {"c": curso_id},
+            )
+        ).fetchall()
+        constancias = [{"nombre": r[0], "norma": r[1] or None} for r in rs]
+    except Exception:
+        constancias = []
+
+    verificaciones = 0
+    try:
+        v = (
+            await db.execute(
+                text("SELECT COALESCE(SUM(intentos), 0) FROM aaces.validaciones_publicas WHERE UPPER(codigo_validacion) = :c AND resultado = true"),
+                {"c": str(cod_val or id_cert or code).upper()},
+            )
+        ).scalar()
+        verificaciones = int(v or 0)
+    except Exception:
+        verificaciones = 0
+
+    await _log_validation_attempt(db, str(cod_val or id_cert or code), ip, ua, estado == "vigente")
+
+    return {
+        "valido": estado == "vigente",
+        "estado": estado,
+        "id_certificado": id_cert,
+        "codigo_validacion": cod_val,
+        "participante": {"nombre": nombre_completo},
+        "curso": {
+            "nombre": c_nombre,
+            "codigo": c_codigo,
+            "fecha_inicio": ini.isoformat() if ini else None,
+            "fecha_fin": fin.isoformat() if fin else None,
+            "duracion_horas": c_horas,
+            "modalidad": c_modalidad,
+            "ciudad": c_ciudad,
+        },
+        "fecha_emision": _d(f_emision).isoformat() if f_emision else None,
+        "fecha_expiracion": exp.isoformat() if exp else None,
+        "calificacion": float(calificacion) if calificacion is not None else None,
+        "constancias": constancias,
+        "capacitador": {
+            "nombre": o_comercial or o_razon or cl_nombre,
+            "razon_social": o_razon,
+            "logo_url": o_logo,
+            "stps_registro": o_stps if o_stps_ok else None,
+        },
+        "empresa": c_empresa or None,
+        "verificaciones": verificaciones + (1 if estado == "vigente" else 0),
+    }

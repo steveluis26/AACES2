@@ -89,7 +89,7 @@ export function NavDocuments({
     const estadoTxt = typeof item.estado_acreditacion === "boolean" ? (item.estado_acreditacion ? "Acreditado" : "No acreditado") : ""
     const constancias = item.constancias_asociadas || ""
     const origin = typeof window !== "undefined" ? window.location.origin : ""
-    const validationUrl = item.certificado_url || (item.codigo_validacion ? `${origin}/validar?codigo=${encodeURIComponent(String(item.codigo_validacion))}` : "")
+    const validationUrl = item.certificado_url || (item.codigo_validacion ? `${origin}/v/${encodeURIComponent(String(item.codigo_validacion))}` : "")
     const qrUrl = validationUrl ? `https://quickchart.io/qr?text=${encodeURIComponent(validationUrl)}&size=180` : `https://quickchart.io/qr?text=${encodeURIComponent(String(item.codigo_validacion || ""))}&size=180`
     const html = `<!doctype html>
 <html>
