@@ -185,7 +185,7 @@ async def _validar_cursos_propios(db: AsyncSession, curso_ids: List[str], org_id
         text("""
             SELECT id FROM catalogo_cursos
             WHERE organizacion_id = :org_id AND activo = true
-              AND id = ANY(:ids::uuid[])
+              AND id = ANY(CAST(:ids AS uuid[]))
         """),
         {"org_id": org_id, "ids": list(set(curso_ids))},
     )
