@@ -1,6 +1,6 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel } from "./Panel"
 import { FileText, UserPlus, BookOpen, Clock } from "lucide-react"
 
 type Evento = {
@@ -23,62 +23,40 @@ function tiempoRelativo(iso: string | null): string {
   if (mins < 1) return "Ahora"
   if (mins < 60) return `hace ${mins} min`
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `hace ${hrs}h`
+  if (hrs < 24) return `hace ${hrs} h`
   const dias = Math.floor(hrs / 24)
-  return `hace ${dias}d`
+  return `hace ${dias} d`
 }
 
-export function ActivityTimeline({ actividad }: { actividad: Evento[] }) {
-  if (!actividad || actividad.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Actividad reciente</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Aún no hay actividad registrada</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
+export function ActivityTimeline({ actividad, delay = 0 }: { actividad: Evento[]; delay?: number }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">Actividad reciente</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-0">
-          {actividad.map((ev, i) => {
+    <Panel titulo="Actividad reciente" icono={Clock} delay={delay}>
+      {!actividad || actividad.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Aún no hay actividad registrada.</p>
+      ) : (
+        <ol className="relative space-y-4 before:absolute before:bottom-2 before:left-4 before:top-2 before:w-px before:bg-border">
+          {actividad.slice(0, 6).map((ev, i) => {
             const cfg = TIPO_CONFIG[ev.tipo] || { icon: Clock, label: ev.tipo }
             const Icon = cfg.icon
             return (
-              <div key={i} className="flex gap-3 pb-4 last:pb-0 relative">
-                <div className="flex flex-col items-center">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border bg-background">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
+              <li key={i} className="relative flex gap-3">
+                <span className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-card">
+                  <Icon className="h-3.5 w-3.5 text-orange-500" />
+                </span>
+                <div className="min-w-0 flex-1 pt-0.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-medium">{cfg.label}</p>
+                    <time className="shrink-0 text-xs text-muted-foreground">{tiempoRelativo(ev.fecha)}</time>
                   </div>
-                  {i < actividad.length - 1 && (
-                    <div className="w-px flex-1 bg-border mt-1" />
+                  {(ev.participante || ev.curso) && (
+                    <p className="truncate text-xs text-muted-foreground">{[ev.participante, ev.curso].filter(Boolean).join(" · ")}</p>
                   )}
                 </div>
-                <div className="flex-1 min-w-0 pt-1">
-                  <p className="text-sm font-medium">{cfg.label}</p>
-                  {ev.participante && (
-                    <p className="text-xs text-muted-foreground truncate">{ev.participante}</p>
-                  )}
-                  {ev.curso && (
-                    <p className="text-xs text-muted-foreground truncate">{ev.curso}</p>
-                  )}
-                </div>
-                <div className="shrink-0 pt-1">
-                  <span className="text-xs text-muted-foreground">{tiempoRelativo(ev.fecha)}</span>
-                </div>
-              </div>
+              </li>
             )
           })}
-        </div>
-      </CardContent>
-    </Card>
+        </ol>
+      )}
+    </Panel>
   )
 }
