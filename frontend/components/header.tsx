@@ -31,7 +31,7 @@ export function HeroHeader() {
   const isCurrent = (href: string) => !href.includes("#") && (pathname === href || (href !== "/" && (pathname || "").startsWith(href + "/")))
   return (
     <>
-      <div className={`pointer-events-auto fixed left-1/2 top-4 z-50 -translate-x-1/2 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-4 motion-safe:duration-700 transition-all duration-300 ${shrink ? 'w-[min(100%-4rem,980px)]' : 'w-[min(100%-2rem,1100px)]'}`}>
+      <div className={`print:hidden pointer-events-auto fixed left-1/2 top-4 z-50 -translate-x-1/2 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-4 motion-safe:duration-700 transition-all duration-300 ${shrink ? 'w-[min(100%-4rem,980px)]' : 'w-[min(100%-2rem,1100px)]'}`}>
         <div className="mx-auto flex items-center justify-between rounded-[2rem] border border-[var(--border)] bg-background/70 px-5 py-2 backdrop-blur-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)]">
           <a href="/" className="group flex items-center gap-2">
             <Image src="/logo.png" alt="AACES" width={24} height={24} className="h-6 w-auto" />

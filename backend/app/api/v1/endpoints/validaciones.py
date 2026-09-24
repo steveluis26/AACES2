@@ -292,8 +292,8 @@ async def _log_validation_attempt(
         await db.execute(text("SET LOCAL search_path TO aaces"))
         q = text(
             """
-            INSERT INTO validaciones_publicas (codigo_validacion, ip_validacion, user_agent, resultado, intentos)
-            VALUES (:cod, CAST(:ip AS INET), :ua, :res, 1)
+            INSERT INTO validaciones_publicas (id, codigo_validacion, ip_validacion, user_agent, resultado, intentos)
+            VALUES (gen_random_uuid(), :cod, CAST(:ip AS INET), :ua, :res, 1)
             ON CONFLICT (codigo_validacion, ip_validacion) DO UPDATE SET
               resultado = EXCLUDED.resultado,
               intentos = validaciones_publicas.intentos + 1,
