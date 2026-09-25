@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Alert } from '@/components/ui'
+import { Field } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import { apiRequest } from '@/app/services/api'
 
@@ -32,6 +33,8 @@ type ParticipanteDetalle = {
   empresa: string | null
   cargo: string | null
   ciudad_origen: string | null
+  curp: string | null
+  ocupacion: string | null
   fecha_nacimiento: string | null
   nivel_educacion: string | null
   fecha_creacion: string | null
@@ -61,6 +64,8 @@ export default function ParticipanteDetallePage() {
   const [editEmpresa, setEditEmpresa] = useState('')
   const [editCargo, setEditCargo] = useState('')
   const [editCiudad, setEditCiudad] = useState('')
+  const [editCurp, setEditCurp] = useState('')
+  const [editOcupacion, setEditOcupacion] = useState('')
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const load = useCallback(async () => {
@@ -90,6 +95,7 @@ export default function ParticipanteDetallePage() {
         body: JSON.stringify({
           nombre: editNombre, correo: editCorreo, telefono: editTelefono,
           empresa: editEmpresa, cargo: editCargo, ciudad_origen: editCiudad,
+          curp: editCurp, ocupacion: editOcupacion,
         }),
       })
       setEditando(false)
@@ -128,6 +134,7 @@ export default function ParticipanteDetallePage() {
             setEditNombre(p.nombre); setEditCorreo(p.correo || '')
             setEditTelefono(p.telefono || ''); setEditEmpresa(p.empresa || '')
             setEditCargo(p.cargo || ''); setEditCiudad(p.ciudad_origen || '')
+            setEditCurp(p.curp || ''); setEditOcupacion(p.ocupacion || '')
           }
           setEditando(!editando)
         }}>
@@ -152,12 +159,30 @@ export default function ParticipanteDetallePage() {
           <CardContent>
             {editando ? (
               <div className="space-y-3">
-                <Input label="Nombre" value={editNombre} onChange={e => setEditNombre(e.target.value)} />
-                <Input label="Correo" value={editCorreo} onChange={e => setEditCorreo(e.target.value)} />
-                <Input label="Teléfono" value={editTelefono} onChange={e => setEditTelefono(e.target.value)} />
-                <Input label="Empresa" value={editEmpresa} onChange={e => setEditEmpresa(e.target.value)} />
-                <Input label="Cargo" value={editCargo} onChange={e => setEditCargo(e.target.value)} />
-                <Input label="Ciudad" value={editCiudad} onChange={e => setEditCiudad(e.target.value)} />
+                <Field label="Nombre" htmlFor="e_nombre">
+                  <Input id="e_nombre" value={editNombre} onChange={e => setEditNombre(e.target.value)} />
+                </Field>
+                <Field label="Correo" htmlFor="e_correo">
+                  <Input id="e_correo" value={editCorreo} onChange={e => setEditCorreo(e.target.value)} />
+                </Field>
+                <Field label="Teléfono" htmlFor="e_telefono">
+                  <Input id="e_telefono" value={editTelefono} onChange={e => setEditTelefono(e.target.value)} />
+                </Field>
+                <Field label="Empresa" htmlFor="e_empresa">
+                  <Input id="e_empresa" value={editEmpresa} onChange={e => setEditEmpresa(e.target.value)} />
+                </Field>
+                <Field label="Cargo" htmlFor="e_cargo">
+                  <Input id="e_cargo" value={editCargo} onChange={e => setEditCargo(e.target.value)} />
+                </Field>
+                <Field label="Ciudad" htmlFor="e_ciudad">
+                  <Input id="e_ciudad" value={editCiudad} onChange={e => setEditCiudad(e.target.value)} />
+                </Field>
+                <Field label="CURP" htmlFor="e_curp">
+                  <Input id="e_curp" maxLength={18} autoCapitalize="characters" spellCheck={false} className="font-mono uppercase tracking-wider" value={editCurp} onChange={e => setEditCurp(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())} />
+                </Field>
+                <Field label="Ocupación específica (DC-3)" htmlFor="e_ocupacion">
+                  <Input id="e_ocupacion" value={editOcupacion} onChange={e => setEditOcupacion(e.target.value)} />
+                </Field>
                 <Button onClick={guardar}>Guardar cambios</Button>
                 {guardarError && (<Alert className="alert-error">{guardarError}</Alert>)}
               </div>
@@ -168,6 +193,8 @@ export default function ParticipanteDetallePage() {
                 <div><span className="font-medium">Empresa:</span> {p.empresa || '-'}</div>
                 <div><span className="font-medium">Cargo:</span> {p.cargo || '-'}</div>
                 <div><span className="font-medium">Ciudad:</span> {p.ciudad_origen || '-'}</div>
+                <div><span className="font-medium">CURP:</span> <span className="font-mono">{p.curp || '-'}</span></div>
+                <div><span className="font-medium">Ocupación:</span> {p.ocupacion || '-'}</div>
                 {p.fecha_nacimiento && <div><span className="font-medium">Fecha de nacimiento:</span> {p.fecha_nacimiento}</div>}
               </div>
             )}

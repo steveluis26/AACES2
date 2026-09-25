@@ -190,6 +190,9 @@ class DocumentosService:
         doc = await self.obtener(db, doc_id, organizacion_id)
         if not doc or doc["estatus"] == "cancelado":
             return None
+        if doc.get("storage_provider") == "plantilla_pdf":
+            from app.api.v1.endpoints.plantillas_pdf import regenerar_documento
+            return await regenerar_documento(db, doc["storage_key"], organizacion_id)
         return await self._storage.read(doc["storage_key"])
 
     async def cancelar(self, db: AsyncSession, doc_id: str, organizacion_id: str) -> bool:

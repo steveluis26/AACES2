@@ -601,6 +601,31 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
             pass
 
 
+async def create_plantillas_pdf(conn: AsyncConnection) -> None:
+    # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
+    # El archivo se guarda en la base de datos: el disco de Render no es persistente.
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.plantillas_pdf (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          nombre VARCHAR(200) NOT NULL,
+          archivo BYTEA NOT NULL,
+          archivo_nombre VARCHAR(255),
+          paginas JSONB NOT NULL DEFAULT '[]',
+          campos JSONB NOT NULL DEFAULT '[]',
+          activa BOOLEAN NOT NULL DEFAULT true,
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          fecha_actualizacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    await conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_plantillas_pdf_org ON aaces.plantillas_pdf(organizacion_id)"
+    ))
+    # Datos del trabajador que pide el DC-3 oficial (opcionales).
+    await conn.execute(text("ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS curp VARCHAR(18)"))
+    await conn.execute(text("ALTER TABLE IF EXISTS aaces.participantes ADD COLUMN IF NOT EXISTS ocupacion VARCHAR(150)"))
+
+
 async def ensure_schema(conn: AsyncConnection) -> None:
     logger.info("Ensuring database schema...")
     await create_aaces_schema(conn)
@@ -623,6 +648,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_notificaciones,
         create_catalogo,
         create_lista_espera,
+        create_plantillas_pdf,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

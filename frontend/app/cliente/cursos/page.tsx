@@ -27,8 +27,8 @@ const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).s
 type SubCurso = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string }
 type CursoProximo = { id: string; codigo_curso: string; nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string; estado: string; empresa_contratante: string; grupo_id?: string; precio_base?: number; precio_promocional?: number | null; subcursos?: (SubCurso & { precio_base?: number; precio_promocional?: number | null })[] }
 type GrupoCurso = { id: string; nombre: string; precio_base: number; precio_promocional?: number | null }
-type CursoParticipante = { id: string; participante_id: string; nombre: string; apellido: string; nombres?: string; apellido_paterno?: string; apellido_materno?: string; correo: string; ciudad_origen: string; telefono?: string; empresa?: string; cargo?: string; profesion?: string; estado_pago: string; valor_pagado: number; costo_asignado: number; descuento: number; id_certificado?: string; codigo_validacion?: string; estado_acreditacion?: boolean; fecha_emision_certificado?: string; fecha_inicio_vigencia?: string; fecha_expiracion?: string; habilitar_validacion?: boolean }
-type NuevoParticipante = { nombre?: string; apellido?: string; nombres?: string; apellido_paterno?: string; apellido_materno?: string; correo: string; ciudad_origen?: string; telefono?: string; empresa?: string; cargo?: string; profesion?: string; id_certificado?: string; codigo_validacion?: string; estado_acreditacion?: boolean; fecha_emision_certificado?: string; fecha_expiracion?: string; precio_modo?: 'normal' | 'descuento' }
+type CursoParticipante = { id: string; participante_id: string; nombre: string; apellido: string; nombres?: string; apellido_paterno?: string; apellido_materno?: string; correo: string; ciudad_origen: string; telefono?: string; empresa?: string; cargo?: string; profesion?: string; curp?: string | null; ocupacion?: string | null; estado_pago: string; valor_pagado: number; costo_asignado: number; descuento: number; id_certificado?: string; codigo_validacion?: string; estado_acreditacion?: boolean; fecha_emision_certificado?: string; fecha_inicio_vigencia?: string; fecha_expiracion?: string; habilitar_validacion?: boolean }
+type NuevoParticipante = { nombre?: string; apellido?: string; nombres?: string; apellido_paterno?: string; apellido_materno?: string; correo: string; ciudad_origen?: string; telefono?: string; empresa?: string; cargo?: string; profesion?: string; curp?: string; ocupacion?: string; id_certificado?: string; codigo_validacion?: string; estado_acreditacion?: boolean; fecha_emision_certificado?: string; fecha_expiracion?: string; precio_modo?: 'normal' | 'descuento' }
 type ConstanciaCurso = { id: string; nombre: string; norma?: string }
 type ConstanciaAsignada = { id: string; constancia_id: string; constancia_nombre: string; participante_id: string; participante_nombre: string; id_certificado?: string; codigo_validacion?: string; estado_acreditacion?: boolean; fecha_emision_certificado?: string; fecha_expiracion?: string }
 
@@ -504,6 +504,8 @@ export default function CursosClientePage() {
       empresa: String(nuevoPart.empresa || '').trim(),
       cargo: String(nuevoPart.cargo || '').trim(),
       profesion: String(nuevoPart.profesion || '').trim(),
+      curp: String(nuevoPart.curp || '').trim(),
+      ocupacion: String(nuevoPart.ocupacion || '').trim(),
     }
     const idCert = String(nuevoPart.id_certificado || '').trim()
     const codVal = String(nuevoPart.codigo_validacion || '').trim()
@@ -518,6 +520,7 @@ export default function CursosClientePage() {
     // Antes regresaba sin avisar si faltaba nombre o correo.
     if (!payload.nombres) { setParticipanteError('Escribe el nombre del participante'); return }
     if (!payload.correo) { setParticipanteError('Escribe el correo del participante'); return }
+    if (payload.curp && String(payload.curp).length !== 18) { setParticipanteError('La CURP debe tener 18 caracteres'); return }
     setAgregando(true)
     try {
       const res = await apiRequest<{ id: string; participante_id: string }>(`/clientes/cursos/${selected.id}/participantes`, { method: 'POST', body: JSON.stringify(payload) })
@@ -535,7 +538,7 @@ export default function CursosClientePage() {
     setAgregando(false)
     toast.success('Participante agregado al curso', { description: [payload.nombres, payload.apellido_paterno].filter(Boolean).join(' ') })
     setParticipanteError('')
-    setNuevoPart({ nombres: '', apellido_paterno: '', apellido_materno: '', correo: '', ciudad_origen: '', telefono: '', empresa: '', cargo: '', profesion: '', id_certificado: '', codigo_validacion: '', estado_acreditacion: false, fecha_emision_certificado: '', fecha_expiracion: '', precio_modo: 'normal' })
+    setNuevoPart({ nombres: '', apellido_paterno: '', apellido_materno: '', correo: '', ciudad_origen: '', telefono: '', empresa: '', cargo: '', profesion: '', curp: '', ocupacion: '', id_certificado: '', codigo_validacion: '', estado_acreditacion: false, fecha_emision_certificado: '', fecha_expiracion: '', precio_modo: 'normal' })
     await loadParticipantes()
   }
 
@@ -551,6 +554,8 @@ export default function CursosClientePage() {
       empresa: String(p.empresa || '').trim(),
       cargo: String(p.cargo || '').trim(),
       profesion: String(p.profesion || '').trim(),
+      curp: String(p.curp || '').trim(),
+      ocupacion: String(p.ocupacion || '').trim(),
       estado_pago: (p.estado_pago || 'pendiente')
     }
     const idCert = String(p.id_certificado || '').trim()
@@ -944,6 +949,12 @@ export default function CursosClientePage() {
                       <Field label={<>Ciudad</>} htmlFor="np_ciudad_origen">
                         <Input id="np_ciudad_origen" placeholder="" value={String(nuevoPart.ciudad_origen ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, ciudad_origen: e.target.value })); if (participanteError) setParticipanteError('') }} />
                       </Field>
+                      <Field label={<>CURP</>} htmlFor="np_curp" hint={nuevoPart.curp ? `${nuevoPart.curp.length}/18 · para el DC-3` : 'Opcional · para el DC-3'} className="lg:col-span-2">
+                        <Input id="np_curp" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={18} placeholder="18 caracteres" className="font-mono uppercase tracking-wider" value={String(nuevoPart.curp ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, curp: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
+                      <Field label={<>Ocupación específica</>} htmlFor="np_ocupacion" hint="Opcional · para el DC-3" className="lg:col-span-2">
+                        <Input id="np_ocupacion" placeholder="Ej. Supervisor de seguridad" value={String(nuevoPart.ocupacion ?? '')} onChange={(e) => { setNuevoPart(s => ({ ...s, ocupacion: e.target.value })); if (participanteError) setParticipanteError('') }} />
+                      </Field>
                     </div>
                   </FormStep>
                   <FormStep n={4} title="Precio" desc="Se asigna como costo del participante en este curso.">
@@ -1113,6 +1124,10 @@ export default function CursosClientePage() {
                                       <label className="grid gap-1 text-xs font-medium text-muted-foreground">Empresa<Input placeholder="Empresa" value={String(p.empresa ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], empresa: e.target.value }; return a })} /></label>
                                       <label className="grid gap-1 text-xs font-medium text-muted-foreground">Cargo<Input placeholder="Cargo" value={String(p.cargo ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], cargo: e.target.value }; return a })} /></label>
                                       <label className="grid gap-1 text-xs font-medium text-muted-foreground">Profesión<Input placeholder="Profesión" value={String(p.profesion ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], profesion: e.target.value }; return a })} /></label>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">CURP<Input placeholder="18 caracteres" maxLength={18} spellCheck={false} className="font-mono uppercase tracking-wider" value={String(p.curp ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], curp: e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() }; return a })} /></label>
+                                      <label className="grid gap-1 text-xs font-medium text-muted-foreground">Ocupación específica (DC-3)<Input placeholder="Ej. Supervisor de seguridad" value={String(p.ocupacion ?? '')} onChange={(e) => setParticipantes(arr => { const a = [...arr]; a[idx] = { ...a[idx], ocupacion: e.target.value }; return a })} /></label>
                                     </div>
                                     
                                     <div className="flex flex-wrap gap-2">

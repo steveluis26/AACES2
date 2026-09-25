@@ -312,7 +312,7 @@ async def descargar_pdf_constancia(
     if org_id is not None:
         params["org_id"] = org_id
     res = await db.execute(
-        text(f"SELECT storage_key FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
+        text(f"SELECT storage_key, storage_provider FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
         params,
     )
     row = res.fetchone()
@@ -322,6 +322,15 @@ async def descargar_pdf_constancia(
     storage_key = row[0]
     if not storage_key:
         raise HTTPException(status_code=404, detail="Constancia sin archivo PDF")
+
+    # DC-3 generados con plantilla del cliente: no se guardan en disco, se regeneran
+    if row[1] == "plantilla_pdf":
+        from app.api.v1.endpoints.plantillas_pdf import regenerar_documento
+        pdf_bytes = await regenerar_documento(db, storage_key, org_id)
+        if not pdf_bytes:
+            raise HTTPException(status_code=404, detail="No se pudo regenerar la constancia (plantilla eliminada)")
+        return Response(content=pdf_bytes, media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="constancia-{constancia_id}.pdf"'})
 
     provider = LocalStorageProvider(base_dir=settings.STORAGE_DIR)
     if not await provider.exists(storage_key):
