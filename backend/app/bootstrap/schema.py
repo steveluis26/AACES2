@@ -619,6 +619,166 @@ async def create_archivos_almacenados(conn: AsyncConnection) -> None:
     """))
 
 
+async def create_cupo_constancias(conn: AsyncConnection) -> None:
+    """Límite de constancias por plan.
+
+    Regla: cuenta la primera vez que un participante recibe folio y QR en un curso
+    (curso_participante.codigo_validacion pasa de vacío a tener valor). Reemitir,
+    regenerar o descargar no cuenta; cancelar no devuelve. El conteo y el bloqueo
+    viven en un trigger para que ningún camino de emisión se lo salte."""
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.consumo_constancias (
+          curso_participante_id UUID PRIMARY KEY,
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          fecha TIMESTAMPTZ NOT NULL DEFAULT now(),
+          de_paquete BOOLEAN NOT NULL DEFAULT false
+        )
+    """))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_consumo_org_fecha ON aaces.consumo_constancias (organizacion_id, fecha)"))
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.paquetes_constancias (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+          restantes INTEGER NOT NULL CHECK (restantes >= 0),
+          referencia_pago VARCHAR(100),
+          nota TEXT,
+          fecha_compra TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_paquetes_org ON aaces.paquetes_constancias (organizacion_id)"))
+
+    # Estado del cupo de una organización (lo usan el trigger y la API)
+    await conn.execute(text("""
+        CREATE OR REPLACE FUNCTION aaces.cupo_constancias(p_org UUID)
+        RETURNS TABLE (plan_codigo TEXT, plan_nombre TEXT, limite INTEGER, usados INTEGER,
+                       periodo_inicio DATE, periodo_fin DATE, extra INTEGER,
+                       ilimitado BOOLEAN, es_prueba BOOLEAN, activa BOOLEAN)
+        LANGUAGE plpgsql STABLE AS $$
+        DECLARE
+          s RECORD;
+          v_hay BOOLEAN;
+          hoy DATE := (now() AT TIME ZONE 'America/Mexico_City')::date;
+          k INTEGER;
+        BEGIN
+          SELECT p.codigo, p.nombre, COALESCE(su.constancias_max, p.constancias_max) AS lim,
+                 COALESCE(su.fecha_inicio, su.fecha_creacion::date, hoy) AS fi
+            INTO s
+            FROM aaces.suscripciones su JOIN aaces.planes p ON p.id = su.plan_id
+           WHERE su.organizacion_id = p_org AND su.estatus = 'activa'
+             AND (su.fecha_fin IS NULL OR su.fecha_fin >= hoy)
+           ORDER BY su.fecha_inicio DESC NULLS LAST, su.fecha_creacion DESC
+           LIMIT 1;
+          v_hay := FOUND;
+
+          SELECT COALESCE(SUM(pc.restantes), 0)::int INTO extra
+            FROM aaces.paquetes_constancias pc WHERE pc.organizacion_id = p_org;
+
+          IF NOT v_hay THEN
+            plan_codigo := NULL; plan_nombre := NULL; limite := 0; ilimitado := false;
+            es_prueba := false; activa := false; periodo_inicio := NULL; periodo_fin := NULL;
+            SELECT count(*)::int INTO usados FROM aaces.consumo_constancias c
+             WHERE c.organizacion_id = p_org AND NOT c.de_paquete
+               AND c.fecha >= date_trunc('month', now());
+            RETURN NEXT; RETURN;
+          END IF;
+
+          plan_codigo := s.codigo; plan_nombre := s.nombre; activa := true;
+          es_prueba := (s.codigo = 'trial');
+          limite := COALESCE(s.lim, 0);
+          ilimitado := (s.lim IS NULL OR s.lim >= 999999);
+
+          IF es_prueba THEN
+            -- La prueba da un total, no un cupo mensual
+            periodo_inicio := NULL; periodo_fin := NULL;
+            SELECT count(*)::int INTO usados FROM aaces.consumo_constancias c
+             WHERE c.organizacion_id = p_org AND NOT c.de_paquete;
+          ELSE
+            -- Periodo mensual anclado al día en que empezó la suscripción
+            k := (EXTRACT(YEAR FROM age(hoy, s.fi)) * 12 + EXTRACT(MONTH FROM age(hoy, s.fi)))::int;
+            periodo_inicio := (s.fi + make_interval(months => k))::date;
+            periodo_fin := (s.fi + make_interval(months => k + 1))::date;
+            SELECT count(*)::int INTO usados FROM aaces.consumo_constancias c
+             WHERE c.organizacion_id = p_org AND NOT c.de_paquete
+               AND (c.fecha AT TIME ZONE 'America/Mexico_City')::date >= periodo_inicio;
+          END IF;
+          RETURN NEXT;
+        END $$;
+    """))
+
+    await conn.execute(text("""
+        CREATE OR REPLACE FUNCTION aaces.tg_consumo_constancia() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        DECLARE
+          v_org UUID;
+          e RECORD;
+          v_paq UUID;
+        BEGIN
+          IF NEW.codigo_validacion IS NULL OR NEW.codigo_validacion = '' THEN RETURN NEW; END IF;
+          IF TG_OP = 'UPDATE' AND COALESCE(OLD.codigo_validacion, '') <> '' THEN RETURN NEW; END IF;
+          IF EXISTS (SELECT 1 FROM aaces.consumo_constancias WHERE curso_participante_id = NEW.id) THEN
+            RETURN NEW;  -- ya se contó (p. ej. se le quitó y se le volvió a dar)
+          END IF;
+
+          SELECT cl.organizacion_id INTO v_org
+            FROM aaces.cursos c JOIN aaces.clientes cl ON cl.id = c.cliente_id
+           WHERE c.id = NEW.curso_id;
+          IF v_org IS NULL THEN RETURN NEW; END IF;
+
+          -- Un emisor a la vez por organización, para no rebasar el cupo en paralelo
+          PERFORM pg_advisory_xact_lock(hashtext('cupo:' || v_org::text));
+          SELECT * INTO e FROM aaces.cupo_constancias(v_org);
+
+          IF e.activa AND (e.ilimitado OR e.usados < e.limite) THEN
+            INSERT INTO aaces.consumo_constancias (curso_participante_id, organizacion_id)
+            VALUES (NEW.id, v_org);
+            RETURN NEW;
+          END IF;
+
+          IF e.activa AND e.extra > 0 THEN
+            SELECT id INTO v_paq FROM aaces.paquetes_constancias
+             WHERE organizacion_id = v_org AND restantes > 0
+             ORDER BY fecha_compra LIMIT 1 FOR UPDATE;
+            UPDATE aaces.paquetes_constancias SET restantes = restantes - 1 WHERE id = v_paq;
+            INSERT INTO aaces.consumo_constancias (curso_participante_id, organizacion_id, de_paquete)
+            VALUES (NEW.id, v_org, true);
+            RETURN NEW;
+          END IF;
+
+          RAISE EXCEPTION 'CUPO_CONSTANCIAS_AGOTADO'
+            USING ERRCODE = 'P0001',
+                  HINT = CASE WHEN e.activa THEN 'Llegaste al límite de constancias de tu plan.'
+                              ELSE 'Tu suscripción no está activa.' END;
+        END $$;
+    """))
+    await conn.execute(text("DROP TRIGGER IF EXISTS trg_consumo_constancia ON aaces.curso_participante"))
+    await conn.execute(text("""
+        CREATE TRIGGER trg_consumo_constancia
+        BEFORE INSERT OR UPDATE OF codigo_validacion ON aaces.curso_participante
+        FOR EACH ROW EXECUTE FUNCTION aaces.tg_consumo_constancia()
+    """))
+
+    # Historial: constancias emitidas antes de existir el límite (no se bloquean)
+    await conn.execute(text("""
+        INSERT INTO aaces.consumo_constancias (curso_participante_id, organizacion_id, fecha)
+        SELECT cp.id, cl.organizacion_id, LEAST(COALESCE(cp.fecha_emision_certificado, cp.fecha_creacion, now()), now())
+          FROM aaces.curso_participante cp
+          JOIN aaces.cursos c ON c.id = cp.curso_id
+          JOIN aaces.clientes cl ON cl.id = c.cliente_id
+         WHERE COALESCE(cp.codigo_validacion, '') <> '' AND cl.organizacion_id IS NOT NULL
+        ON CONFLICT (curso_participante_id) DO NOTHING
+    """))
+    await conn.execute(text("UPDATE aaces.consumo_constancias SET fecha = now() WHERE fecha > now()"))
+
+    # Avisos de cupo al 80% y 100%
+    await conn.execute(text("ALTER TABLE aaces.notificaciones DROP CONSTRAINT IF EXISTS check_tipo_notificacion"))
+    await conn.execute(text("""
+        ALTER TABLE aaces.notificaciones ADD CONSTRAINT check_tipo_notificacion CHECK (tipo IN (
+          'constancia_por_vencer', 'curso_proximo', 'suscripcion_por_vencer',
+          'pago_fallido', 'curso_sin_participantes', 'cupo_constancias'))
+    """))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -668,6 +828,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_lista_espera,
         create_plantillas_pdf,
         create_archivos_almacenados,
+        create_cupo_constancias,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import logging
 from sqlalchemy import text
@@ -169,8 +171,23 @@ async def domain_error_handler(request: Request, exc: DomainError):
     )
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request: Request, exc: StarletteHTTPException):
+    # Muchos endpoints envuelven cualquier error en un 500 con el texto original;
+    # si el origen fue el límite de constancias, responder con el mensaje claro.
+    from app.services.cupo import es_error_cupo, http_error_cupo
+    if exc.status_code >= 500 and es_error_cupo(exc.detail):
+        err = http_error_cupo()
+        return JSONResponse(status_code=err.status_code, content={"detail": err.detail})
+    return await http_exception_handler(request, exc)
+
+
 @app.exception_handler(Exception)
 async def unhandled_error_handler(request: Request, exc: Exception):
+    from app.services.cupo import es_error_cupo, http_error_cupo
+    if es_error_cupo(exc):
+        err = http_error_cupo()
+        return JSONResponse(status_code=err.status_code, content={"detail": err.detail})
     # Los 500 silenciosos son imposibles de diagnosticar sin el traceback.
     # Se registra el error completo en el log y se devuelve un 500 genérico.
     logger.exception("Error no controlado en %s %s", request.method, request.url.path)

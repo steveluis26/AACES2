@@ -362,9 +362,9 @@ async def ejecutar_recordatorios(db: AsyncSession, ref: date | None = None) -> d
             text(
                 """
                 UPDATE aaces.notificaciones
-                SET email_estado = :estado,
+                SET email_estado = CAST(:estado AS VARCHAR),
                     email_error = :error,
-                    fecha_envio = CASE WHEN :estado = 'enviado'
+                    fecha_envio = CASE WHEN CAST(:estado AS VARCHAR) = 'enviado'
                                       THEN CURRENT_TIMESTAMP END
                 WHERE id = :nid
                 """
@@ -373,6 +373,19 @@ async def ejecutar_recordatorios(db: AsyncSession, ref: date | None = None) -> d
         )
 
     await db.commit()
+
+    # Avisos de cupo de constancias (80% / 100%); idempotentes por periodo
+    try:
+        from app.services import cupo
+        orgs = (await db.execute(text(
+            "SELECT DISTINCT organizacion_id FROM aaces.suscripciones WHERE estatus = 'activa'"
+        ))).fetchall()
+        for (org,) in orgs:
+            await cupo.avisar(db, str(org))
+    except Exception:  # noqa: BLE001
+        logger.exception("Avisos de cupo fallaron")
+        await db.rollback()
+
     logger.info("Job de recordatorios %s: %s", ref.isoformat(), resumen)
     return resumen
 
@@ -415,8 +428,8 @@ async def registrar_pago_fallido(
         text(
             """
             UPDATE aaces.notificaciones
-            SET email_estado = :estado, email_error = :error,
-                fecha_envio = CASE WHEN :estado = 'enviado'
+            SET email_estado = CAST(:estado AS VARCHAR), email_error = :error,
+                fecha_envio = CASE WHEN CAST(:estado AS VARCHAR) = 'enviado'
                                    THEN CURRENT_TIMESTAMP END
             WHERE id = :nid
             """

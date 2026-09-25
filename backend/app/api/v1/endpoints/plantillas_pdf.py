@@ -260,6 +260,9 @@ async def generar(plantilla_id: str, body: GenerarIn, identity: Identity = Depen
     if len(filas) > MAX_PARTICIPANTES:
         raise HTTPException(status_code=400, detail=f"Máximo {MAX_PARTICIPANTES} participantes por archivo")
 
+    # Límite del plan: solo cuentan quienes reciben su constancia por primera vez
+    from app.services import cupo
+    await cupo.verificar(db, identity.org_id, await cupo.nuevos_de(db, [f["cp_id"] for f in filas]))
     await _asegurar_folios(db, filas)
     plantilla_pdf = bytes(p["archivo"])
     url = settings.PUBLIC_VERIFICATION_URL
@@ -269,6 +272,7 @@ async def generar(plantilla_id: str, body: GenerarIn, identity: Identity = Depen
         await _registrar_emision(db, identity.org_id, str(p["id"]), f, individual, identity.user_id if identity.source == "usuario" else None)
     pdf = P.generar(plantilla_pdf, p["campos"], valores)
     await db.commit()
+    cupo.avisar_en_segundo_plano(identity.org_id)
 
     nombre = f"DC3_{_slug(filas[0]['curso_nombre'])}.pdf"
     return Response(

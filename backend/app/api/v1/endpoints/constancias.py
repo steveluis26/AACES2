@@ -12,6 +12,7 @@ import uuid
 from app.core.database import get_db
 from app.core.identity import get_current_identity, get_current_cliente_id, require_org_id, Identity
 from app.services.constancias import constancias_service
+from app.services import cupo as cupo_service
 from app.schemas import (
     EmitirConstanciaRequest, ConstanciaDetalleResponse,
     ConstanciaListResponse,
@@ -81,6 +82,7 @@ async def emitir_constancia_legacy(
         template_id=None,  # Will use default active template
     )
 
+    cupo_service.avisar_en_segundo_plano(org_id)
     return {"id": doc["id"], "codigo_validacion": doc["codigo_validacion"], "folio": doc.get("folio", "")}
 
 
@@ -105,10 +107,15 @@ async def emitir_constancia(
             resource="constancias",
             details={"doc_id": doc["id"], "codigo_validacion": doc["codigo_validacion"]},
         )
+        cupo_service.avisar_en_segundo_plano(organizacion_id)
         return {"success": True, "documento": doc}
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        if cupo_service.es_error_cupo(e):
+            raise cupo_service.http_error_cupo()
         logger.exception(f"Error emitiendo constancia: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error al emitir constancia")
 

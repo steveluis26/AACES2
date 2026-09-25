@@ -198,8 +198,8 @@ async def _ensure_demo_org_and_admin(conn: AsyncConnection, hash_password_fn, pl
         await conn.execute(
             text("""
                 INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus, fecha_inicio, activada_por)
-                VALUES (:org_id, :plan_id, 'activa', CURRENT_DATE, :admin_id)
-                ON CONFLICT DO NOTHING
+                SELECT :org_id, :plan_id, 'activa', CURRENT_DATE, :admin_id
+                WHERE NOT EXISTS (SELECT 1 FROM aaces.suscripciones WHERE organizacion_id = :org_id)
             """),
             {"org_id": org_id, "plan_id": plan_id, "admin_id": admin_id}
         )

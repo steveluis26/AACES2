@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel
 
+from app.services import cupo as cupo_service
 from app.core.database import get_db
 from app.models import Cliente, Capacitador, Curso, Participante, CursoParticipante, Pago
 from app.schemas import (
@@ -1822,9 +1823,14 @@ async def add_participante_curso(
             sets.append("fecha_emision_certificado = :fecha_emision_certificado"); params["fecha_emision_certificado"] = emision
         if expiracion is not None:
             sets.append("fecha_expiracion = :fecha_expiracion"); params["fecha_expiracion"] = expiracion
+        org_cupo = None
+        if params.get("codigo_validacion"):
+            # Al agregarlo recibe folio y QR: cuenta para el límite del plan
+            org_cupo = await cupo_service.verificar_participantes(db, [cp_id])
         if sets:
             await db.execute(text(f"UPDATE aaces.curso_participante SET {', '.join(sets)} WHERE id = :cp AND curso_id = :curso"), params)
         await db.commit()
+        cupo_service.avisar_en_segundo_plano(org_cupo)
         return {"id": str(cp_id), "participante_id": str(pid)}
     except HTTPException:
         raise
@@ -2107,9 +2113,13 @@ async def update_participante_curso(
                 params_cp["fecha_expiracion"] = exp_calc.scalar()
                 sets_cp.append("fecha_expiracion = :fecha_expiracion")
         # Montos se gestionan vía pagos; no se actualizan manualmente aquí
+        org_cupo = None
+        if params_cp.get("codigo_validacion"):
+            org_cupo = await cupo_service.verificar_participantes(db, [cp_id])
         if sets_cp:
             await db.execute(text(f"UPDATE aaces.curso_participante SET {', '.join(sets_cp)} WHERE id = :cp AND curso_id = :curso"), params_cp)
         await db.commit()
+        cupo_service.avisar_en_segundo_plano(org_cupo)
         return {"updated": 1}
     except HTTPException:
         raise
@@ -2340,9 +2350,11 @@ async def asignar_constancia_participante(
             if vig_m is not None:
                 exp_calc = await db.execute(text("SELECT (CAST(:emi AS date) + make_interval(months => CAST(:vig AS integer)))::date"), {"emi": emision, "vig": vig_m})
                 expiracion = exp_calc.scalar()
+        org_cupo = await cupo_service.verificar_participantes(db, [cp_id])
         await db.execute(text("UPDATE curso_participante SET id_certificado = :idc, codigo_validacion = :cod, estado_acreditacion = COALESCE(:acr, estado_acreditacion), fecha_emision_certificado = COALESCE(:emi, fecha_emision_certificado), fecha_expiracion = COALESCE(:exp, fecha_expiracion) WHERE id = :cp AND curso_id = :curso"), {"idc": id_cert, "cod": cod_val, "acr": bool(acreditado) if acreditado is not None else None, "emi": emision, "exp": expiracion, "cp": cp_id, "curso": curso_id})
         await db.execute(text("UPDATE aaces.curso_participante SET id_certificado = :idc, codigo_validacion = :cod, estado_acreditacion = COALESCE(:acr, estado_acreditacion), fecha_emision_certificado = COALESCE(:emi, fecha_emision_certificado), fecha_expiracion = COALESCE(:exp, fecha_expiracion) WHERE id = :cp AND curso_id = :curso"), {"idc": id_cert, "cod": cod_val, "acr": bool(acreditado) if acreditado is not None else None, "emi": emision, "exp": expiracion, "cp": cp_id, "curso": curso_id})
         await db.commit()
+        cupo_service.avisar_en_segundo_plano(org_cupo)
         return {"assigned": True}
     except HTTPException:
         raise
