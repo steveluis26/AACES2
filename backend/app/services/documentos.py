@@ -6,7 +6,7 @@ from sqlalchemy import text
 from datetime import datetime
 
 from app.services.document_service import DocumentService
-from app.services.storage_provider import LocalStorageProvider, StorageProvider
+from app.services.storage_provider import StorageProvider, get_storage
 from app.core.config import settings
 from app.core.enums import VerificationType
 
@@ -14,10 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_storage() -> StorageProvider:
-    provider = settings.STORAGE_PROVIDER
-    if provider == "local":
-        return LocalStorageProvider(base_dir=settings.STORAGE_DIR)
-    return LocalStorageProvider(base_dir=settings.STORAGE_DIR)
+    return get_storage()
 
 
 class DocumentosService:
@@ -190,10 +187,8 @@ class DocumentosService:
         doc = await self.obtener(db, doc_id, organizacion_id)
         if not doc or doc["estatus"] == "cancelado":
             return None
-        if doc.get("storage_provider") == "plantilla_pdf":
-            from app.api.v1.endpoints.plantillas_pdf import regenerar_documento
-            return await regenerar_documento(db, doc["storage_key"], organizacion_id)
-        return await self._storage.read(doc["storage_key"])
+        from app.services.archivos import obtener_pdf
+        return await obtener_pdf(db, doc["storage_key"], organizacion_id)
 
     async def cancelar(self, db: AsyncSession, doc_id: str, organizacion_id: str) -> bool:
         r = await db.execute(

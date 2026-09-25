@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
 import logging
 from sqlalchemy import text
@@ -137,9 +138,11 @@ app.add_middleware(
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-# Serve generated documents
-os.makedirs(settings.STORAGE_DIR, exist_ok=True)
-app.mount("/storage", StaticFiles(directory=settings.STORAGE_DIR), name="storage")
+# Documentos generados: ahora viven en la base (el disco de Render no persiste).
+# Las ligas viejas /storage/... se redirigen a /api/v1/archivos/...
+@app.get("/storage/{clave:path}", include_in_schema=False)
+async def storage_legacy(clave: str):
+    return RedirectResponse(url=f"/api/v1/archivos/{clave}", status_code=301)
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")

@@ -601,6 +601,24 @@ async def create_legacy_fixes(conn: AsyncConnection) -> None:
             pass
 
 
+async def create_archivos_almacenados(conn: AsyncConnection) -> None:
+    # PDF de constancias guardados en la base: el disco de Render se borra en cada deploy.
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.archivos_almacenados (
+          clave TEXT PRIMARY KEY,
+          contenido BYTEA NOT NULL,
+          tamano INTEGER,
+          fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    # Las ligas viejas apuntaban a /storage, que Vercel no redirige al backend
+    await conn.execute(text("""
+        UPDATE aaces.curso_participante
+        SET certificado_url = '/api/v1/archivos/' || substring(certificado_url FROM 10)
+        WHERE certificado_url LIKE '/storage/%'
+    """))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -649,6 +667,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_catalogo,
         create_lista_espera,
         create_plantillas_pdf,
+        create_archivos_almacenados,
         create_metadata_tables,
         create_legacy_fixes,
     ]:
