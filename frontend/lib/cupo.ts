@@ -14,6 +14,17 @@ export type Cupo = {
   periodo_inicio: string | null
   periodo_fin: string | null
   historial?: { mes: string; emitidas: number }[]
+  recomendacion?: Recomendacion
+}
+
+export type Recomendacion = {
+  nivel: "ok" | "atencion" | "subir"
+  titulo: string
+  mensaje: string
+  ritmo_mensual: number
+  proyeccion_periodo: number | null
+  agota_el: string | null
+  plan_sugerido: { codigo: string; nombre: string; precio_mensual: number; limite: number | null } | null
 }
 
 export const fechaCorta = (iso: string | null) =>
