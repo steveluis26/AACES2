@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { apiRequest } from "@/app/services/api"
 import { descargarBlob, plantillasApi } from "@/lib/plantillas"
+import type { Cupo } from "@/lib/cupo"
 import { parseFecha } from "@/lib/utils"
 
 type Curso = { id: string; nombre: string; fecha_inicio: string | null; fecha_fin: string | null; ciudad?: string | null }
@@ -34,10 +35,12 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const [marcados, setMarcados] = useState<Set<string>>(new Set())
   const [generando, setGenerando] = useState(false)
   const [listo, setListo] = useState<number | null>(null)
+  const [cupo, setCupo] = useState<Cupo | null>(null)
 
   useEffect(() => {
     if (!abierto) return
     setListo(null)
+    apiRequest<Cupo>("/cupo").then(setCupo).catch(() => setCupo(null))
     apiRequest<{ items: Curso[] }>("/clientes/cursos?limit=100")
       .then((r) => setCursos((r.items || []).sort((a, b) => String(b.fecha_inicio || "").localeCompare(String(a.fecha_inicio || "")))))
       .catch(() => setCursos([]))
@@ -67,6 +70,10 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
     return n
   })
   const todos = marcados.size === acreditados.length && acreditados.length > 0
+  // Solo gastan constancia quienes aún no tienen folio; volver a generar las demás es gratis
+  const nuevos = (inscritos || []).filter((p) => marcados.has(p.id) && !p.codigo_validacion).length
+  const disponibles = cupo ? cupo.disponibles : null
+  const sinCupo = !!cupo && (!cupo.activa || (disponibles !== null && nuevos > disponibles))
 
   const generar = async () => {
     setGenerando(true)
@@ -74,6 +81,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
       const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados))
       descargarBlob(r.blob, r.nombre)
       setListo(r.generados)
+      apiRequest<Cupo>("/cupo").then(setCupo).catch(() => {})
       toast.success(`${r.generados} ${r.generados === 1 ? "DC-3 generado" : "DC-3 generados"}`, { description: "Se descargó un PDF listo para imprimir." })
     } catch (e) {
       toast.error((e as Error).message)
@@ -153,6 +161,19 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
                             {inscritos.length - acreditados.length} {inscritos.length - acreditados.length === 1 ? "participante no está acreditado" : "participantes no están acreditados"}. Solo se generan DC-3 de acreditados; acredítalos en la <Link href={`/cliente/cursos?curso=${curso}`} className="font-semibold underline">agenda del curso</Link>.
                           </p>
                         )}
+                        {sinCupo && (
+                          <div role="alert" className="rounded-xl border border-red-500/30 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
+                            <p className="flex items-start gap-2 font-medium">
+                              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                              {!cupo?.activa
+                                ? "Tu suscripción no está activa, no puedes emitir constancias nuevas."
+                                : `Este grupo usa ${nuevos} ${nuevos === 1 ? "constancia nueva" : "constancias nuevas"} y ${!disponibles ? "ya no te quedan disponibles" : `te ${disponibles === 1 ? "queda" : "quedan"} ${disponibles}`}.`}
+                            </p>
+                            <p className="mt-1 pl-6 text-xs">
+                              {cupo?.activa && "Quita participantes, "}compra un paquete extra o <Link href="/cliente/pagos" className="font-semibold underline">mejora tu plan</Link>.
+                            </p>
+                          </div>
+                        )}
                         <ul className="space-y-1.5">
                           {inscritos.map((p) => {
                             const ok = !!p.estado_acreditacion
@@ -182,8 +203,11 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
 
         {listo === null && (
           <SheetFooter className="flex-row items-center gap-2 border-t bg-background px-6 py-4 sm:justify-between">
-            <span className="hidden text-sm text-muted-foreground sm:block">{curso ? `${marcados.size} seleccionados${cursoSel ? ` · ${cursoSel.nombre}` : ""}` : "Elige un curso"}</span>
-            <Button onClick={generar} disabled={!curso || marcados.size === 0 || generando} className="flex-1 sm:flex-none">
+            <span className="hidden text-sm text-muted-foreground sm:block">
+              {curso ? `${marcados.size} seleccionados${cursoSel ? ` · ${cursoSel.nombre}` : ""}` : "Elige un curso"}
+              {cupo && disponibles !== null && cupo.activa && <span className="block text-xs">{nuevos} {nuevos === 1 ? "nueva usa" : "nuevas usan"} tu plan · te {disponibles === 1 ? "queda" : "quedan"} {disponibles}</span>}
+            </span>
+            <Button onClick={generar} disabled={!curso || marcados.size === 0 || generando || sinCupo} className="flex-1 sm:flex-none">
               {generando ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando…</> : <><FileDown className="h-4 w-4" /> Generar {marcados.size || ""} DC-3</>}
             </Button>
           </SheetFooter>

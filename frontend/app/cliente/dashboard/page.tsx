@@ -12,6 +12,8 @@ import { AlertsPanel } from "@/components/dashboard/AlertsPanel"
 import { AgendaPanel } from "@/components/dashboard/AgendaPanel"
 import { ActivityTimeline } from "@/components/dashboard/ActivityTimeline"
 import { ConfidenceCard } from "@/components/dashboard/ConfidenceCard"
+import { CupoCard } from "@/components/dashboard/CupoCard"
+import type { Cupo } from "@/lib/cupo"
 import { ConstanciasChart, ModalidadPanel } from "@/components/dashboard/ChartsPanel"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -83,6 +85,7 @@ export default function ClienteDashboardPage() {
     apiRequest<Onboarding>("/clientes/dashboard/onboarding"),
     { retry: 1 },
   )
+  const cupo = useQuery(["cupo"], () => apiRequest<Cupo>("/cupo"), { retry: 1 })
   const vencimientos = useQuery(["dashboard", "vencimientos"], () =>
     apiRequest("/participantes/vencimientos-por-empresa"),
     { refetchInterval: 60000, retry: 1 },
@@ -143,6 +146,8 @@ export default function ClienteDashboardPage() {
       <DashboardHeader nombre={nombre || "Usuario"} organizacion={organizacion} resumen={frase} onboarding={onboarding.data} />
 
       {kpis && <SummaryCards kpis={kpis} />}
+
+      <CupoCard cupo={cupo.data} delay={0.2} />
 
       {/* En móvil los pendientes van primero; en escritorio viven en la columna derecha */}
       <div className="lg:hidden">

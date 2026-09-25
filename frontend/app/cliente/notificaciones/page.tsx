@@ -22,6 +22,7 @@ const TIPO_LABEL: Record<string, string> = {
   suscripcion_por_vencer: 'Suscripción',
   pago_fallido: 'Pago fallido',
   curso_sin_participantes: 'Sin participantes',
+  cupo_constancias: 'Límite de constancias',
 }
 
 const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -30,6 +31,7 @@ const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'ou
   suscripcion_por_vencer: 'secondary',
   pago_fallido: 'destructive',
   curso_sin_participantes: 'outline',
+  cupo_constancias: 'destructive',
 }
 
 export default function NotificacionesPage() {

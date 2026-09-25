@@ -110,6 +110,10 @@ class ConstanciasService:
         if not cp.estado_acreditacion:
             raise ValueError("El participante no está acreditado en este curso")
 
+        # Límite del plan: solo cuenta si es su primera constancia en este curso
+        from app.services import cupo
+        await cupo.verificar(db, organizacion_id, await cupo.nuevos_de(db, [curso_participante_id]))
+
         # Reusar el codigo de validacion ya emitido (si existe) para no regenerarlo
         # en cada re-emision. validaciones_publicas es FK a curso_participante.codigo_validacion,
         # asi que cambiarlo romperia las validaciones previas del mismo participante.
