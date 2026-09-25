@@ -212,3 +212,110 @@ async def verificar_participantes(db: AsyncSession, cp_ids: Iterable[str]) -> Op
         return None
     await verificar(db, str(org), await nuevos_de(db, ids))
     return str(org)
+
+
+# ---------------------------------------------------------------------------
+# Historial por mes y recomendación de plan
+# ---------------------------------------------------------------------------
+
+def _ultimos_meses(hoy: date, n: int) -> list:
+    y, m = hoy.year, hoy.month
+    out = []
+    for _ in range(n):
+        out.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    return list(reversed(out))
+
+
+def historial_completo(historial: list, hoy: date, n: int = 6) -> list:
+    """Los últimos n meses, con 0 en los meses sin constancias (la gráfica no salta meses)."""
+    por_mes = {h["mes"]: h["emitidas"] for h in historial}
+    return [{"mes": m, "emitidas": int(por_mes.get(m, 0))} for m in _ultimos_meses(hoy, n)]
+
+
+async def _planes_pago(db: AsyncSession) -> list:
+    rows = (await db.execute(text("""
+        SELECT codigo, nombre, precio_mensual, constancias_max
+        FROM aaces.planes WHERE activo = true AND codigo <> 'trial' AND COALESCE(precio_mensual, 0) > 0
+        ORDER BY precio_mensual
+    """))).fetchall()
+    return [{
+        "codigo": r[0], "nombre": r[1], "precio_mensual": float(r[2] or 0),
+        "limite": None if r[3] is None or r[3] >= 999999 else int(r[3]),
+    } for r in rows]
+
+
+def _cubre(plan: Dict[str, Any], necesarias: int) -> bool:
+    return plan["limite"] is None or plan["limite"] >= necesarias
+
+
+async def recomendar(db: AsyncSession, e: Dict[str, Any], hist: list, hoy: date) -> Dict[str, Any]:
+    """Qué le conviene según su ritmo. Nunca se sugiere bajar de plan automáticamente;
+    solo avisamos cuando se le va a quedar corto."""
+    # Ritmo: promedio de los 3 meses anteriores al actual (los que ya cerraron)
+    cerrados = [h["emitidas"] for h in hist[:-1]][-3:]
+    con_datos = [c for c in cerrados if c > 0]
+    ritmo = round(sum(con_datos) / len(con_datos)) if con_datos else 0
+
+    # Proyección del periodo actual (planes mensuales)
+    proyeccion, agota_el = None, None
+    if e["activa"] and not e["es_prueba"] and e["periodo_inicio"] and e["periodo_fin"]:
+        ini, fin = date.fromisoformat(e["periodo_inicio"]), date.fromisoformat(e["periodo_fin"])
+        dias_total = max((fin - ini).days, 1)
+        dias = max((hoy - ini).days + 1, 1)
+        if dias >= 3 and e["usados"] > 0:
+            por_dia = e["usados"] / dias
+            proyeccion = round(por_dia * dias_total)
+            if not e["ilimitado"] and e["limite"] and proyeccion > e["limite"] and e["usados"] < e["limite"]:
+                from datetime import timedelta
+                agota = ini + timedelta(days=int(e["limite"] / por_dia))
+                if agota < fin:
+                    agota_el = agota.isoformat()
+
+    # Subir de plan se decide con los meses ya cerrados; un mes cargado se
+    # resuelve con un paquete. Sin historial (cliente nuevo) usamos la proyección.
+    necesarias = ritmo if ritmo else (proyeccion or 0)
+    planes = await _planes_pago(db)
+    actual = next((p for p in planes if p["codigo"] == e["plan_codigo"]), None)
+    base = {"ritmo_mensual": ritmo, "proyeccion_periodo": proyeccion, "agota_el": agota_el, "plan_sugerido": None}
+
+    if not e["activa"]:
+        return {**base, "nivel": "subir", "titulo": "Tu suscripción no está activa",
+                "mensaje": "Renueva tu plan para volver a emitir constancias. Las que ya emitiste siguen siendo válidas."}
+
+    if e["es_prueba"]:
+        sugerido = next((p for p in planes if _cubre(p, necesarias)), planes[0] if planes else None)
+        return {**base, "nivel": "atencion" if (e["porcentaje"] or 0) >= 80 else "ok", "plan_sugerido": sugerido,
+                "titulo": "Elige el plan que va con tu ritmo",
+                "mensaje": (f"Emites alrededor de {necesarias} constancias al mes. " if necesarias else "")
+                           + (f"El plan {sugerido['nombre']} te alcanza." if sugerido else "")}
+
+    if e["ilimitado"]:
+        return {**base, "nivel": "ok", "titulo": "Tu plan no tiene límite",
+                "mensaje": f"Emites alrededor de {necesarias} constancias al mes." if necesarias else "Emite sin preocuparte por el límite."}
+
+    limite = e["limite"] or 0
+    if necesarias > limite:
+        mejores = [p for p in planes if (not actual or p["precio_mensual"] > actual["precio_mensual"]) and _cubre(p, necesarias)]
+        sugerido = mejores[0] if mejores else None
+        ritmo_txt = f"A tu ritmo necesitas unas {necesarias} constancias al mes y tu plan incluye {limite}."
+        if sugerido:
+            dif = sugerido["precio_mensual"] - (actual["precio_mensual"] if actual else 0)
+            return {**base, "nivel": "subir", "plan_sugerido": sugerido,
+                    "titulo": f"Te conviene el plan {sugerido['nombre']}",
+                    "mensaje": f"{ritmo_txt} Con {sugerido['nombre']} tienes "
+                               + ("constancias ilimitadas" if sugerido["limite"] is None else f"{sugerido['limite']} al mes")
+                               + (f" por ${dif:,.0f} más al mes." if dif > 0 else ".")}
+        return {**base, "nivel": "subir", "titulo": "Estás usando más de lo que incluye tu plan",
+                "mensaje": f"{ritmo_txt} Compra paquetes extra para los meses con más grupos."}
+
+    if agota_el:
+        return {**base, "nivel": "atencion", "titulo": "A este ritmo se te acabarán antes del corte",
+                "mensaje": f"Llevas {e['usados']} de {limite} y te alcanzarían hasta el {_fecha_legible(agota_el)}. "
+                           "Si tienes más grupos este mes, considera un paquete extra."}
+
+    return {**base, "nivel": "ok", "titulo": "Tu plan te alcanza",
+            "mensaje": (f"Emites alrededor de {necesarias} constancias al mes y tu plan incluye {limite}."
+                        if necesarias else f"Tu plan incluye {limite} constancias al mes.")}

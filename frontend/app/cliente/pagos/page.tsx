@@ -5,6 +5,9 @@ import { Card, CardHeader, CardTitle, CardContent, Button } from "@/components/u
 import { apiRequest } from "@/app/services/api"
 import { toast } from "sonner"
 import { CheckIcon, CreditCardIcon, Loader2 } from "lucide-react"
+import { CupoCard } from "@/components/dashboard/CupoCard"
+import { UsoConstancias } from "@/components/cupo/uso-constancias"
+import type { Cupo } from "@/lib/cupo"
 
 type Plan = {
   id: string
@@ -44,16 +47,20 @@ export default function ClientePagosPage() {
   const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null)
   const [loading, setLoading] = useState(true)
   const [procesando, setProcesando] = useState<string | null>(null)
+  const [cupo, setCupo] = useState<Cupo | null>(null)
+  const [destacado, setDestacado] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
     try {
-      const [ps, mi] = await Promise.all([
+      const [ps, mi, cu] = await Promise.all([
         apiRequest<Plan[]>("/stripe/planes"),
         apiRequest<Suscripcion | null>("/stripe/suscripcion/mia").catch(() => null),
+        apiRequest<Cupo>("/cupo").catch(() => null),
       ])
       setPlanes(ps)
       setSuscripcion(mi)
+      setCupo(cu)
     } catch {
       toast.error("Error al cargar planes")
     } finally {
@@ -89,6 +96,8 @@ export default function ClientePagosPage() {
       toast.error((e as Error)?.message || "Error al cancelar")
     }
   }
+
+  const recomendado = cupo?.recomendacion?.plan_sugerido?.codigo ?? null
 
   const badgeColor =
     suscripcion?.estatus === "activa"
@@ -131,7 +140,20 @@ export default function ClientePagosPage() {
         </Card>
       )}
 
-      <div>
+      {cupo && (
+        <section className="space-y-6" aria-label="Uso de constancias">
+          <CupoCard cupo={cupo} sinBoton />
+          <UsoConstancias
+            cupo={cupo}
+            onElegirPlan={(codigo) => {
+              setDestacado(codigo)
+              document.getElementById(`plan-${codigo}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+            }}
+          />
+        </section>
+      )}
+
+      <div id="planes" className="scroll-mt-24">
         <h2 className="text-lg font-medium mb-1">Planes</h2>
         <p className="text-sm text-muted-foreground mb-4">
           Precios que tienen sentido. Sin límites absurdos de constancias. Paga por lo que usas.
@@ -148,9 +170,17 @@ export default function ClientePagosPage() {
             const features = FEATURES_BY_PLAN[plan.codigo] || []
             const esActual = suscripcion?.plan_codigo === plan.codigo && suscripcion.estatus !== "cancelada"
             return (
-              <Card key={plan.id} className={plan.codigo === "profesional" ? "border-orange-500 border-2" : ""}>
+              <Card
+                key={plan.id}
+                id={`plan-${plan.codigo}`}
+                className={`scroll-mt-24 transition-shadow duration-500 ${(recomendado ? recomendado === plan.codigo : plan.codigo === "profesional") ? "border-orange-500 border-2" : ""} ${destacado === plan.codigo ? "shadow-xl shadow-orange-500/20 ring-4 ring-orange-500/20" : ""}`}
+              >
                 <CardHeader>
-                  {plan.codigo === "profesional" && (
+                  {recomendado === plan.codigo ? (
+                    <span className="mb-2 inline-block rounded-full bg-orange-500 px-3 py-1 text-xs font-medium text-white w-fit">
+                      Recomendado para ti
+                    </span>
+                  ) : plan.codigo === "profesional" && !recomendado && (
                     <span className="mb-2 inline-block rounded-full bg-orange-500 px-3 py-1 text-xs font-medium text-white w-fit">
                       Más popular
                     </span>

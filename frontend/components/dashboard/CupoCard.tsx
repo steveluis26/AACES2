@@ -9,7 +9,7 @@ import { CountUp } from "./CountUp"
 const BARRA = { ok: "bg-orange-500", alerta: "bg-amber-500", lleno: "bg-red-500" }
 
 /** Cuántas constancias lleva la agencia en su periodo y cuántas le quedan. */
-export function CupoCard({ cupo, delay = 0 }: { cupo?: Cupo; delay?: number }) {
+export function CupoCard({ cupo, delay = 0, sinBoton = false }: { cupo?: Cupo; delay?: number; sinBoton?: boolean }) {
   const reduce = useReducedMotion()
   if (!cupo) return null
   const nivel = nivelCupo(cupo)
@@ -81,7 +81,7 @@ export function CupoCard({ cupo, delay = 0 }: { cupo?: Cupo; delay?: number }) {
           )}
         </div>
 
-        {(nivel !== "ok" || cupo.es_prueba) && (
+        {!sinBoton && (nivel !== "ok" || cupo.es_prueba) && (
           <Link
             href="/cliente/pagos"
             className="group inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-600"
