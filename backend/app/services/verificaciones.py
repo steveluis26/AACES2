@@ -29,6 +29,8 @@ class VerificationService:
                 FROM aaces.documentos_emitidos d
                 JOIN aaces.organizaciones o ON o.id = d.organizacion_id
                 WHERE d.codigo_validacion = :codigo
+                -- Al reemitir, el código se conserva: mostrar la emisión vigente
+                ORDER BY (d.estatus = 'emitido') DESC, d.fecha_emision DESC
                 LIMIT 1
             """),
             {"codigo": codigo}

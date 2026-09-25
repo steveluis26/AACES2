@@ -29,7 +29,15 @@ class WeasyPrintRenderer(Renderer):
         pdf_bytes = HTML(string=html).write_pdf()
         return pdf_bytes
 
+    def render_html(self, html: str) -> bytes:
+        """PDF desde HTML ya renderizado (p. ej. el html_snapshot de un documento emitido)."""
+        from weasyprint import HTML
+        return HTML(string=html).write_pdf()
+
     def _inject_qr(self, html: str, qr_svg: str) -> str:
+        # La plantilla ya lo trae (Jinja sustituyó {{qr}}): no agregar un segundo QR
+        if qr_svg and qr_svg in html:
+            return html
         placeholder = "{{qr}}"
         if placeholder in html:
             return html.replace(placeholder, qr_svg)

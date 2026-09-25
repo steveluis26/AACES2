@@ -6,13 +6,12 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from datetime import date
+import json
 import uuid
 
 from app.core.database import get_db
 from app.core.identity import get_current_identity, get_current_cliente_id, require_org_id, Identity
 from app.services.constancias import constancias_service
-from app.services.storage_provider import LocalStorageProvider
-from app.core.config import settings
 from app.schemas import (
     EmitirConstanciaRequest, ConstanciaDetalleResponse,
     ConstanciaListResponse,
@@ -323,21 +322,11 @@ async def descargar_pdf_constancia(
     if not storage_key:
         raise HTTPException(status_code=404, detail="Constancia sin archivo PDF")
 
-    # DC-3 generados con plantilla del cliente: no se guardan en disco, se regeneran
-    if row[1] == "plantilla_pdf":
-        from app.api.v1.endpoints.plantillas_pdf import regenerar_documento
-        pdf_bytes = await regenerar_documento(db, storage_key, org_id)
-        if not pdf_bytes:
-            raise HTTPException(status_code=404, detail="No se pudo regenerar la constancia (plantilla eliminada)")
-        return Response(content=pdf_bytes, media_type="application/pdf",
-                        headers={"Content-Disposition": f'inline; filename="constancia-{constancia_id}.pdf"'})
-
-    provider = LocalStorageProvider(base_dir=settings.STORAGE_DIR)
-    if not await provider.exists(storage_key):
-        raise HTTPException(status_code=404, detail="Archivo PDF no encontrado en storage")
-
-    pdf_bytes = await provider.read(storage_key)
-    filename = storage_key.split("/")[-1] or f"constancia-{constancia_id}.pdf"
+    from app.services.archivos import obtener_pdf
+    pdf_bytes = await obtener_pdf(db, storage_key, org_id)
+    if not pdf_bytes:
+        raise HTTPException(status_code=404, detail="No se encontró ni se pudo regenerar el PDF de esta constancia")
+    filename = storage_key.split("/")[-1] if storage_key.endswith(".pdf") else f"constancia-{constancia_id}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -390,37 +379,61 @@ async def reemitir_constancia(
     if org_id is not None:
         params["org_id"] = org_id
     res = await db.execute(
-        text(f"SELECT organizacion_id, tipo_documento FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1"),
+        text(f"""
+            SELECT organizacion_id, tipo_documento, storage_provider, storage_key, documento_metadata,
+                   codigo_validacion, folio, estatus
+            FROM aaces.documentos_emitidos WHERE id = :id {filtro_org} LIMIT 1
+        """),
         params,
     )
     row = res.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Constancia no encontrada")
+    doc_org, tipo_doc, provider, storage_key, meta, codigo, folio, estatus = row
+    if estatus == "cancelado":
+        raise HTTPException(status_code=400, detail="La constancia está cancelada")
+    doc_org = str(doc_org) if doc_org else None
 
-    org_id = str(row[0]) if row[0] else None
-    tipo_doc = row[1]
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except ValueError:
+            meta = {}
+    cp_id = (meta or {}).get("curso_participante_id")
 
-    await db.execute(
-        text(f"UPDATE aaces.documentos_emitidos SET estatus = 'reemitido' WHERE id = :id {filtro_org}"),
-        params,
-    )
+    # Antes se creaba el registro nuevo sin generar su PDF; ahora se genera de verdad.
+    if provider == "plantilla_pdf":
+        await db.execute(text("UPDATE aaces.documentos_emitidos SET estatus = 'reemitido' WHERE id = :id"), {"id": constancia_id})
+        doc_id = str(uuid.uuid4())
+        await db.execute(
+            text("""
+                INSERT INTO aaces.documentos_emitidos (id, organizacion_id, tipo_documento, codigo_validacion, folio,
+                    storage_provider, storage_key, pdf_hash, documento_metadata, emitido_por, fecha_emision, estatus)
+                SELECT :nid, organizacion_id, tipo_documento, codigo_validacion, folio,
+                    storage_provider, storage_key, pdf_hash, documento_metadata, :por, now(), 'emitido'
+                FROM aaces.documentos_emitidos WHERE id = :id
+            """),
+            {"nid": doc_id, "id": constancia_id, "por": identity.user_id if identity.source == "usuario" else None},
+        )
+        await db.commit()
+        return {"id": doc_id, "codigo_validacion": codigo, "estatus": "emitido", "folio": folio}
 
-    doc_id = str(uuid.uuid4())
-    codigo_validacion = str(uuid.uuid4())
-    folio = f"FOL-{uuid.uuid4().hex[:8].upper()}"
-    await db.execute(
-        text("""
-            INSERT INTO aaces.documentos_emitidos (id, organizacion_id, tipo_documento, codigo_validacion, folio, storage_provider, storage_key, pdf_hash, emitido_por, fecha_emision, estatus)
-            VALUES (:id, :org_id, :tipo, :codigo, :folio, 'local', :key, '', NULL, now(), 'emitido')
-        """),
-        {
-            "id": doc_id, "org_id": org_id, "tipo": tipo_doc,
-            "codigo": codigo_validacion, "folio": folio,
-            "key": f"constancias/{doc_id}.pdf",
-        },
-    )
+    if not cp_id or not doc_org:
+        raise HTTPException(status_code=400, detail="Esta constancia no se puede reemitir automáticamente; emítela de nuevo desde el curso")
+
+    await db.execute(text("UPDATE aaces.documentos_emitidos SET estatus = 'reemitido' WHERE id = :id"), {"id": constancia_id})
+    try:
+        doc = await constancias_service.emitir(
+            db=db,
+            organizacion_id=doc_org,
+            curso_participante_id=cp_id,
+            emitido_por=identity.user_id if identity.source == "usuario" else None,
+        )
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     await db.commit()
-    return {"id": doc_id, "codigo_validacion": codigo_validacion, "estatus": "emitido", "folio": folio}
+    return {"id": doc["id"], "codigo_validacion": doc["codigo_validacion"], "estatus": "emitido", "folio": doc.get("folio", "")}
 
 
 @router.get("/{constancia_id}/timeline")

@@ -10,7 +10,7 @@ from app.db.errors import is_undefined_table
 from datetime import datetime, date
 
 from app.services.document_service import DocumentService
-from app.services.storage_provider import LocalStorageProvider, StorageProvider
+from app.services.storage_provider import StorageProvider, get_storage
 from app.core.config import settings
 from app.schemas.capabilities import DocumentCapabilities
 from app.core.enums import ConstanciaSort, OrderEnum
@@ -64,10 +64,7 @@ DEFAULT_CONSTANCIA_TEMPLATE = """<!DOCTYPE html>
 
 
 def _get_storage() -> StorageProvider:
-    provider = settings.STORAGE_PROVIDER
-    if provider == "local":
-        return LocalStorageProvider(base_dir=settings.STORAGE_DIR)
-    return LocalStorageProvider(base_dir=settings.STORAGE_DIR)
+    return get_storage()
 
 
 class ConstanciasService:
