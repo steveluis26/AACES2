@@ -665,8 +665,10 @@ async def create_cupo_constancias(conn: AsyncConnection) -> None:
                  COALESCE(su.fecha_inicio, su.fecha_creacion::date, hoy) AS fi
             INTO s
             FROM aaces.suscripciones su JOIN aaces.planes p ON p.id = su.plan_id
-           WHERE su.organizacion_id = p_org AND su.estatus = 'activa'
-             AND (su.fecha_fin IS NULL OR su.fecha_fin >= hoy)
+           WHERE su.organizacion_id = p_org
+             -- Cancelar no corta el periodo ya pagado: sigue activa hasta fecha_fin
+             AND (su.estatus = 'activa' AND (su.fecha_fin IS NULL OR su.fecha_fin >= hoy)
+                  OR su.estatus = 'cancelada' AND su.fecha_fin IS NOT NULL AND su.fecha_fin >= hoy)
            ORDER BY su.fecha_inicio DESC NULLS LAST, su.fecha_creacion DESC
            LIMIT 1;
           v_hay := FOUND;

@@ -11,7 +11,8 @@ const BARRA = { ok: "bg-orange-500", alerta: "bg-amber-500", lleno: "bg-red-500"
 /** Cuántas constancias lleva la agencia en su periodo y cuántas le quedan. */
 export function CupoCard({ cupo, delay = 0, sinBoton = false }: { cupo?: Cupo; delay?: number; sinBoton?: boolean }) {
   const reduce = useReducedMotion()
-  if (!cupo) return null
+  // Sin suscripción activa lo dice la franja de solo lectura (AvisoSoloLectura)
+  if (!cupo || !cupo.activa) return null
   const nivel = nivelCupo(cupo)
   const pct = cupo.porcentaje ?? 0
 
