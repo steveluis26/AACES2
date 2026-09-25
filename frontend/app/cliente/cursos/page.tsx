@@ -19,8 +19,9 @@ import { toast } from 'sonner'
 import { parseFecha } from '@/lib/utils'
 import { Field } from '@/components/ui/field'
 import { FormStep, Segmented } from '@/components/forms/form-bits'
-import { UserPlus as UserPlusIcon, CalendarDays, List as ListIcon, MapPin as MapPinIcon, Pencil as PencilIcon, Users as UsersIcon, X as XIcon } from 'lucide-react'
+import { BadgeCheck as BadgeCheckIcon, UserPlus as UserPlusIcon, CalendarDays, List as ListIcon, MapPin as MapPinIcon, Pencil as PencilIcon, Users as UsersIcon, X as XIcon } from 'lucide-react'
 import { CalendarioMensual } from '@/components/cursos/calendario-mensual'
+import { AcreditarGrupo } from '@/components/cursos/acreditar-grupo'
 
 const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).slice(0, 10) : null); return d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }
 
@@ -68,6 +69,7 @@ export default function CursosClientePage() {
   const [nuevoAsignacion, setNuevoAsignacion] = useState<Record<string, { constancia_id?: string; id_certificado?: string; codigo_validacion?: string; fecha_emision_certificado?: string; fecha_expiracion?: string; estado_acreditacion?: boolean }>>({})
   const [detalleError, setDetalleError] = useState<string>('')
   const [csvError, setCsvError] = useState<string>('')
+  const [acreditarAbierto, setAcreditarAbierto] = useState(false)
   const [participanteError, setParticipanteError] = useState<string>('')
   const [agregando, setAgregando] = useState(false)
   const [precioGrupoError, setPrecioGrupoError] = useState<string>('')
@@ -376,7 +378,9 @@ export default function CursosClientePage() {
       cell: ({ row }) => {
         const p = row.original
         return (
-          <div className="font-mono text-sm">{String(p.id_certificado || '-')}</div>
+          p.codigo_validacion
+            ? <div className="font-mono text-sm">{String(p.id_certificado || p.codigo_validacion)}</div>
+            : <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Sin folio</span>
         )
       }
     },
@@ -833,10 +837,19 @@ export default function CursosClientePage() {
             {detalleError && (
               <Alert className="alert-error mt-3">{detalleError}</Alert>
             )}
+            <AcreditarGrupo
+              abierto={acreditarAbierto}
+              onCerrar={() => setAcreditarAbierto(false)}
+              cursoId={selected.id}
+              cursoNombre={selected.nombre}
+              participantes={participantes}
+              onListo={loadParticipantes}
+            />
             <div id="participantes-section" className="mt-8 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="text-lg font-semibold">Participantes</div>
                 <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => setAcreditarAbierto(true)} disabled={participantes.length === 0}><BadgeCheckIcon className="h-4 w-4" /> Acreditar y generar folios</Button>
                   <Button variant="outline" onClick={() => aplicarPrecioGrupo('solo_vacios')}>Aplicar precio grupo (vacíos)</Button>
                   <Button variant="outline" onClick={() => aplicarPrecioGrupo('todos')}>Aplicar precio grupo (todos)</Button>
                   <Button variant="secondary" onClick={exportarCSV}>Exportar CSV</Button>
