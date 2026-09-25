@@ -1,15 +1,18 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 import { useQuery } from "react-query"
+import { parseFecha } from "@/lib/utils"
 import { apiRequest } from "@/app/services/api"
 import { DashboardHeader } from "@/components/dashboard/Header"
 import { SummaryCards } from "@/components/dashboard/SummaryCards"
-import { QuickActions } from "@/components/dashboard/QuickActions"
 import { AlertsPanel } from "@/components/dashboard/AlertsPanel"
 import { AgendaPanel } from "@/components/dashboard/AgendaPanel"
 import { ActivityTimeline } from "@/components/dashboard/ActivityTimeline"
 import { ConfidenceCard } from "@/components/dashboard/ConfidenceCard"
-import { ChartsPanel } from "@/components/dashboard/ChartsPanel"
+import { ConstanciasChart, ModalidadPanel } from "@/components/dashboard/ChartsPanel"
 import { Skeleton } from "@/components/ui/skeleton"
 
 type Kpis = {
@@ -27,34 +30,26 @@ type Onboarding = {
   progreso: number
 }
 
-function useUserInfo() {
-  if (typeof window === "undefined") return { nombre: "Usuario", organizacion: "" }
-  const userStr = localStorage.getItem("aaces_user")
-  if (userStr) {
-    try {
+function leerUsuario() {
+  try {
+    const userStr = localStorage.getItem("aaces_user")
+    if (userStr) {
       const u = JSON.parse(userStr)
       return { nombre: u.nombre || u.email || "Usuario", organizacion: u.organizacion || "" }
-    } catch {}
-  }
-  try {
+    }
     const token = localStorage.getItem("aaces_token") || ""
     const payload = JSON.parse(atob(token.split(".")[1]))
-    return {
-      nombre: payload.name || payload.nombre || "Usuario",
-      organizacion: payload.razon_social || "",
-    }
+    return { nombre: payload.name || payload.nombre || "Usuario", organizacion: payload.razon_social || "" }
   } catch {
     return { nombre: "Usuario", organizacion: "" }
   }
 }
 
-function SectionSkeleton() {
-  return (
-    <div className="space-y-3">
-      <Skeleton className="h-4 w-24" />
-      <Skeleton className="h-20 w-full rounded-lg" />
-    </div>
-  )
+// Se lee en un efecto: leer localStorage durante el render causaba diferencias servidor/navegador
+function useUserInfo() {
+  const [u, setU] = useState({ nombre: "", organizacion: "" })
+  useEffect(() => { setU(leerUsuario()) }, [])
+  return u
 }
 
 export default function ClienteDashboardPage() {
@@ -98,13 +93,12 @@ export default function ClienteDashboardPage() {
 
   if (anyError && !resumen.data) {
     return (
-      <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-        <DashboardHeader nombre={nombre} organizacion={organizacion} />
-        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-6 text-center">
-          <p className="text-destructive font-medium">Error al cargar el dashboard</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Verifica tu conexión e intenta de nuevo
-          </p>
+      <div className="space-y-6 px-4 py-4 lg:px-6 lg:py-6">
+        <DashboardHeader nombre={nombre || "Usuario"} organizacion={organizacion} />
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-500/30 dark:bg-red-500/10">
+          <p className="font-semibold text-red-700 dark:text-red-400">No pudimos cargar tu dashboard</p>
+          <p className="text-sm text-muted-foreground">Revisa tu conexión e intenta de nuevo.</p>
+          <button onClick={() => { resumen.refetch(); confianza.refetch(); alertas.refetch() }} className="mt-1 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">Reintentar</button>
         </div>
       </div>
     )
@@ -112,122 +106,83 @@ export default function ClienteDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-        <SectionSkeleton />
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-lg" />
-          ))}
+      <div className="space-y-6 px-4 py-4 lg:px-6 lg:py-6">
+        <Skeleton className="h-40 rounded-2xl" />
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-36 rounded-2xl" />)}
         </div>
-        <Skeleton className="h-16 rounded-lg" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Skeleton className="h-40 rounded-lg" />
-          <Skeleton className="h-40 rounded-lg" />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Skeleton className="h-80 rounded-2xl lg:col-span-2" />
+          <Skeleton className="h-80 rounded-2xl" />
         </div>
       </div>
     )
   }
 
   const kpis = (resumen.data as { kpis: Kpis } | undefined)?.kpis
+  const pendientes = (resumen.data as { pendientes?: { acreditar: number; emitir: number; vencer: number } } | undefined)?.pendientes
+  const agendaList = ((agenda.data as any[]) || [])
   const noData = !kpis || kpis.cursos_activos === 0
 
+  // Resumen en una frase para el saludo
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0)
+  const semana = agendaList.filter((c) => {
+    const d = parseFecha(String(c.fecha_inicio || "").slice(0, 10))
+    return d && d >= hoy && (d.getTime() - hoy.getTime()) / 86400000 <= 7
+  }).length
+  const partes: string[] = []
+  if (semana > 0) partes.push(`${semana} ${semana === 1 ? "curso empieza" : "cursos empiezan"} esta semana`)
+  if (kpis?.por_vencer) partes.push(`${kpis.por_vencer} ${kpis.por_vencer === 1 ? "constancia vence" : "constancias vencen"} en los próximos 30 días`)
+  if (pendientes?.acreditar) partes.push(`${pendientes.acreditar} ${pendientes.acreditar === 1 ? "participante espera" : "participantes esperan"} acreditación`)
+  const frase = noData
+    ? "Aún no tienes cursos. Registra el primero para empezar a emitir constancias verificables."
+    : partes.length ? `Hoy: ${partes.join(", ")}.` : "Todo en orden. No tienes pendientes urgentes."
+
   return (
-    <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
-        <DashboardHeader nombre={nombre} organizacion={organizacion} />
+    <div className="space-y-6 px-4 py-4 lg:px-6 lg:py-6">
+      <DashboardHeader nombre={nombre || "Usuario"} organizacion={organizacion} resumen={frase} onboarding={onboarding.data} />
+
+      {kpis && <SummaryCards kpis={kpis} />}
+
+      {/* En móvil los pendientes van primero; en escritorio viven en la columna derecha */}
+      <div className="lg:hidden">
+        <AlertsPanel
+          alertas={(alertas.data as any[]) || []}
+          pendientes={pendientes}
+          vencimientos={(vencimientos.data as any[]) || []}
+          delay={0.3}
+        />
       </div>
 
-      {noData ? (
-        <div className="px-4 lg:px-6">
-          <div className="rounded-lg border border-dashed p-8 text-center space-y-4">
-            <h2 className="text-xl font-semibold">Bienvenido a AACES</h2>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Todavía no tienes cursos registrados. Crea tu primer curso para comenzar a
-              generar constancias y certificados digitales verificables.
-            </p>
-            <button
-              onClick={() => {
-                const r = "/cliente/gestion"
-                try { window.location.href = r } catch {}
-              }}
-              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Crear mi primer curso
-            </button>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <AgendaPanel agenda={agendaList} delay={0.25} />
+          <ConstanciasChart data={(graficas.data as any)?.constancias_mes || []} delay={0.35} />
+          <div className="grid gap-6 sm:grid-cols-2">
+            <ModalidadPanel data={(graficas.data as any)?.cursos_categoria || []} delay={0.45} />
+            <Link href="/marketplace" className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-dashed border-orange-500/40 bg-orange-500/5 p-5 transition-colors hover:bg-orange-500/10 sm:p-6">
+              <div>
+                <span className="inline-flex rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-semibold text-white">Próximamente</span>
+                <h2 className="mt-3 text-base font-semibold">Aparece en el Marketplace</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Las empresas podrán encontrar tus cursos publicados en el directorio.</p>
+              </div>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-orange-500">Publicar cursos <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></span>
+            </Link>
           </div>
         </div>
-      ) : (
-        <>
-          <div className="px-4 lg:px-6">
-            <SummaryCards kpis={kpis!} />
-          </div>
-
-          <div className="px-4 lg:px-6">
-            <QuickActions onboarding={onboarding.data} />
-          </div>
-
-          <div className="px-4 lg:px-6">
-            <div className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Próximos a vencer</h3>
-                <a href="/cliente/renovaciones" className="text-xs text-primary hover:underline">Ver todos</a>
-              </div>
-              {vencimientos.isLoading ? (
-                <p className="text-xs text-muted-foreground">Cargando...</p>
-              ) : (vencimientos.data as { empresa: string; por_vencer: number; vencidos: number; vigentes: number; total: number }[])?.length > 0 ? (
-                <div className="space-y-2">
-                  {(vencimientos.data as { empresa: string; por_vencer: number; vencidos: number; vigentes: number; total: number }[]).slice(0, 5).map((v: { empresa: string; por_vencer: number; vencidos: number; vigentes: number; total: number }) => (
-                    <div key={v.empresa} className="flex items-center justify-between text-sm">
-                      <span className="truncate max-w-[180px]">{v.empresa}</span>
-                      <div className="flex gap-3 text-xs">
-                        {v.por_vencer > 0 && <span className="text-yellow-600 font-medium">{v.por_vencer} por vencer</span>}
-                        {v.vencidos > 0 && <span className="text-red-600 font-medium">{v.vencidos} vencidos</span>}
-                        <span className="text-muted-foreground">{v.total} total</span>
-                      </div>
-                    </div>
-                  ))}
-                  <a href="/cliente/renovaciones" className="text-xs text-primary hover:underline block text-center pt-1">
-                    Ver {(
-                      (vencimientos.data as { por_vencer: number; vencidos: number }[]).reduce((a: number, v: { por_vencer: number }) => a + (v.por_vencer || 0), 0) +
-                      (vencimientos.data as { vencidos: number }[]).reduce((a: number, v: { vencidos: number }) => a + (v.vencidos || 0), 0)
-                    )} participantes por atender
-                  </a>
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">Todos los cursos están vigentes</p>
-              )}
-            </div>
-          </div>
-
-          {(alertas.data as unknown[])?.length > 0 && (
-            <div className="px-4 lg:px-6">
-              <AlertsPanel alertas={alertas.data as any[]} />
-            </div>
-          )}
-
-          <div className="px-4 lg:px-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <AgendaPanel agenda={(agenda.data as any[]) || []} />
-            <ActivityTimeline actividad={(actividad.data as any[]) || []} />
-          </div>
-
-          <div className="px-4 lg:px-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ConfidenceCard data={confianza.data as any} />
-            <div className="rounded-lg border border-dashed p-6 flex flex-col items-center justify-center text-center gap-2">
-              <h3 className="text-sm font-medium text-muted-foreground">Visibilidad</h3>
-              <p className="text-xs text-muted-foreground">
-                Próximamente — Marketplace
-              </p>
-            </div>
-          </div>
-
-          <div className="px-4 lg:px-6">
-            <ChartsPanel
-              constancias_mes={(graficas.data as any)?.constancias_mes || []}
-              cursos_categoria={(graficas.data as any)?.cursos_categoria || []}
+        <div className="min-w-0 space-y-6">
+          <div className="hidden lg:block">
+            <AlertsPanel
+              alertas={(alertas.data as any[]) || []}
+              pendientes={pendientes}
+              vencimientos={(vencimientos.data as any[]) || []}
+              delay={0.3}
             />
           </div>
-        </>
-      )}
+          <ConfidenceCard data={confianza.data as any} delay={0.4} />
+          <ActivityTimeline actividad={(actividad.data as any[]) || []} delay={0.5} />
+        </div>
+      </div>
     </div>
   )
 }

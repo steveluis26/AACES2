@@ -1,77 +1,79 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertTriangle, AlertCircle, Info, TrendingUp, ChevronRight } from "lucide-react"
-import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, FileCheck2, ListChecks, UserCheck, Building2 } from "lucide-react"
+import { Panel } from "./Panel"
 
-type Alerta = {
-  tipo: string
-  cantidad: number
-  prioridad: string
+type Alerta = { tipo: string; cantidad: number; prioridad: string }
+type Pendientes = { acreditar: number; emitir: number; vencer: number }
+type Vencimiento = { empresa: string; por_vencer: number; vencidos: number }
+
+const ALERTAS: Record<string, { t: string; href: string; icono: React.ComponentType<{ className?: string }> }> = {
+  cursos_sin_instructor: { t: "Cursos sin instructor asignado", href: "/cliente/cursos", icono: UserCheck },
+  cursos_sin_empresa: { t: "Cursos sin empresa contratante", href: "/cliente/cursos", icono: Building2 },
+  participantes_sin_constancia: { t: "Participantes sin constancia", href: "/cliente/participantes", icono: FileCheck2 },
 }
 
-const LABELS: Record<string, string> = {
-  constancias_por_vencer: "Constancias por vencer",
-  cursos_sin_instructor: "Cursos sin instructor",
-  participantes_sin_constancia: "Participantes sin constancia",
-  cursos_sin_empresa: "Cursos sin empresa contratante",
-}
-
-const LINKS: Record<string, string> = {
-  constancias_por_vencer: "/cliente/renovaciones",
-  cursos_sin_instructor: "/cliente/cursos",
-  participantes_sin_constancia: "/cliente/participantes",
-  cursos_sin_empresa: "/cliente/cursos",
-}
-
-const PRIORITY_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string; text: string }> = {
-  alta: { icon: AlertTriangle, color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-950", text: "text-red-950 dark:text-red-100" },
-  media: { icon: AlertCircle, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-950", text: "text-amber-950 dark:text-amber-100" },
-  baja: { icon: Info, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-100 dark:bg-blue-950", text: "text-blue-950 dark:text-blue-100" },
-}
-
-export function AlertsPanel({ alertas }: { alertas: Alerta[] }) {
-  if (!alertas || alertas.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Alertas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <TrendingUp className="h-4 w-4 text-green-500" />
-            Sin alertas pendientes
-          </div>
-        </CardContent>
-      </Card>
-    )
+/** Lo que el cliente tiene que atender: pendientes, alertas y vencimientos por empresa. */
+export function AlertsPanel({ alertas, pendientes, vencimientos, delay = 0 }: {
+  alertas: Alerta[]
+  pendientes?: Pendientes
+  vencimientos?: Vencimiento[]
+  delay?: number
+}) {
+  const items: { t: string; n: number; href: string; icono: React.ComponentType<{ className?: string }>; tono: "rojo" | "ambar" | "naranja" }[] = []
+  if (pendientes?.vencer) items.push({ t: "Constancias por vencer (30 días)", n: pendientes.vencer, href: "/cliente/renovaciones", icono: CalendarClock, tono: "ambar" })
+  if (pendientes?.acreditar) items.push({ t: "Participantes por acreditar", n: pendientes.acreditar, href: "/cliente/cursos", icono: UserCheck, tono: "naranja" })
+  if (pendientes?.emitir) items.push({ t: "Constancias por emitir", n: pendientes.emitir, href: "/cliente/constancias", icono: FileCheck2, tono: "naranja" })
+  for (const a of alertas || []) {
+    if (a.tipo === "constancias_por_vencer") continue
+    const m = ALERTAS[a.tipo]
+    if (m && a.cantidad > 0) items.push({ t: m.t, n: a.cantidad, href: m.href, icono: m.icono, tono: a.prioridad === "alta" ? "rojo" : "ambar" })
   }
+  const tonos = {
+    rojo: "bg-red-100 text-red-600 dark:bg-red-500/15",
+    ambar: "bg-amber-100 text-amber-600 dark:bg-amber-500/15",
+    naranja: "bg-orange-500/10 text-orange-500",
+  }
+  const vencidas = (vencimientos || []).filter((v) => v.por_vencer > 0 || v.vencidos > 0).slice(0, 4)
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">Alertas</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {alertas.map((a, i) => {
-          const cfg = PRIORITY_CONFIG[a.prioridad] || PRIORITY_CONFIG.baja
-          const Icon = cfg.icon
-          return (
-            <a
-              key={`${a.tipo}-${i}`}
-              href={LINKS[a.tipo] || "#"}
-              className={cn("flex items-center gap-3 rounded-lg p-3 text-sm transition-opacity hover:opacity-80", cfg.bg, cfg.text)}
-            >
-              <Icon className={cn("h-5 w-5 shrink-0", cfg.color)} />
-              <div className="flex-1">
-                <span className="font-medium">{LABELS[a.tipo] || a.tipo}</span>
-                <span className="ml-2 text-muted-foreground">{a.cantidad}</span>
-              </div>
-              <ChevronRight className={cn("h-4 w-4 shrink-0", cfg.color)} />
-            </a>
-          )
-        })}
-      </CardContent>
-    </Card>
+    <Panel titulo="Pendientes" icono={ListChecks} delay={delay}>
+      {items.length === 0 ? (
+        <div className="flex items-center gap-3 rounded-xl bg-green-50 p-4 text-sm text-green-700 dark:bg-green-500/10 dark:text-green-400">
+          <CheckCircle2 className="h-5 w-5 shrink-0" /> Todo al día. No tienes pendientes.
+        </div>
+      ) : (
+        <ul className="-mx-2 space-y-0.5">
+          {items.map((it) => (
+            <li key={it.t}>
+              <Link href={it.href} className="group flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-muted/60">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${tonos[it.tono]}`}><it.icono className="h-4 w-4" /></span>
+                <span className="min-w-0 flex-1 text-sm">{it.t}</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold tabular-nums">{it.n}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {vencidas.length > 0 && (
+        <div className="mt-4 border-t pt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" />Vencimientos por empresa</p>
+          <ul className="space-y-1.5">
+            {vencidas.map((v) => (
+              <li key={v.empresa} className="flex items-center justify-between gap-2 text-sm">
+                <span className="truncate">{v.empresa}</span>
+                <span className="flex shrink-0 gap-1.5 text-xs">
+                  {v.por_vencer > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">{v.por_vencer} por vencer</span>}
+                  {v.vencidos > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700 dark:bg-red-500/15 dark:text-red-400">{v.vencidos} {v.vencidos === 1 ? "vencida" : "vencidas"}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Panel>
   )
 }
