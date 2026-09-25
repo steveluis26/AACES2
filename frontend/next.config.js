@@ -22,6 +22,11 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // pdfjs-dist pide 'canvas' (solo para Node); en el navegador no se usa
+  webpack: (config) => {
+    config.resolve.alias.canvas = false
+    return config
+  },
   async rewrites() {
     return [
       {
