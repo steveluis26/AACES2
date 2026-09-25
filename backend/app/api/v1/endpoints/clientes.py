@@ -1786,11 +1786,16 @@ async def add_participante_curso(
         id_cert = (payload.get("id_certificado") or "").strip() or None
         cod_val = (payload.get("codigo_validacion") or "").strip()
         cod_val = cod_val.upper() if cod_val else None
-        if id_cert is None:
-            id_cert = f"CERT-{uuid.uuid4().hex[:8].upper()}"
-        if cod_val is None:
-            cod_val = uuid.uuid4().hex[:8].upper()
-        acreditado = True
+        # Inscribir NO da folio ni QR: se asignan al acreditar el grupo (botón
+        # "Acreditar y generar folios"), para no gastar constancias de quien no
+        # toma el curso. Solo se acredita aquí si lo piden explícitamente, p. ej.
+        # al capturar a alguien que ya tomó el curso y trae su folio.
+        acreditado = bool(payload.get("acreditado") or payload.get("estado_acreditacion") or cod_val or id_cert)
+        if acreditado:
+            if id_cert is None:
+                id_cert = f"CERT-{uuid.uuid4().hex[:8].upper()}"
+            if cod_val is None:
+                cod_val = uuid.uuid4().hex[:8].upper()
         emision_raw = payload.get("fecha_emision_certificado") or None
         expiracion_raw = payload.get("fecha_expiracion_certificado") or payload.get("fecha_expiracion") or None
 
@@ -1818,7 +1823,7 @@ async def add_participante_curso(
             sets.append("id_certificado = :id_certificado"); params["id_certificado"] = id_cert
         if cod_val is not None:
             sets.append("codigo_validacion = :codigo_validacion"); params["codigo_validacion"] = cod_val
-        sets.append("estado_acreditacion = :estado_acreditacion"); params["estado_acreditacion"] = True
+        sets.append("estado_acreditacion = :estado_acreditacion"); params["estado_acreditacion"] = acreditado
         if emision is not None:
             sets.append("fecha_emision_certificado = :fecha_emision_certificado"); params["fecha_emision_certificado"] = emision
         if expiracion is not None:
@@ -2126,6 +2131,70 @@ async def update_participante_curso(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando participante: {str(e)}")
+
+@router.post("/cursos/{curso_id}/acreditar")
+async def acreditar_grupo(
+    curso_id: str,
+    payload: dict,
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db)
+):
+    """Acredita a los participantes que sí tomaron el curso y les da folio y QR.
+
+    Es el único momento (junto con la emisión) en que se gastan constancias del
+    plan. Todo o nada: si no alcanza el cupo no se acredita a nadie."""
+    cid = await get_current_cliente_id(db, identity)
+    curso = (await db.execute(
+        text("SELECT fecha_inicio, fecha_fin, vigencia_meses, duracion_validacion FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"),
+        {"id": curso_id, "cid": cid},
+    )).fetchone()
+    if not curso:
+        raise HTTPException(status_code=404, detail="Curso no encontrado")
+    ids = [str(i) for i in (payload.get("curso_participante_ids") or []) if i]
+    if not ids:
+        raise HTTPException(status_code=400, detail="Elige al menos un participante")
+
+    filas = (await db.execute(
+        text("""
+            SELECT id, codigo_validacion, id_certificado, fecha_emision_certificado, fecha_expiracion
+            FROM aaces.curso_participante
+            WHERE curso_id = :curso AND id = ANY(CAST(:ids AS uuid[]))
+        """),
+        {"curso": curso_id, "ids": ids},
+    )).fetchall()
+    if len(filas) != len(set(ids)):
+        raise HTTPException(status_code=400, detail="Algún participante no pertenece a este curso")
+
+    org_cupo = await cupo_service.verificar_participantes(db, ids)
+
+    fi, ff, vig, dur_val = curso
+    emision_def = ff or fi or date.today()
+    try:
+        meses = int(vig) if vig is not None else int(dur_val) if dur_val is not None else None
+    except (TypeError, ValueError):
+        meses = None
+
+    nuevos = 0
+    for cp_id, cod, id_cert, emision, expiracion in filas:
+        cambios = {"estado_acreditacion": True}
+        if not cod:
+            nuevos += 1
+            cambios["codigo_validacion"] = uuid.uuid4().hex[:8].upper()
+            cambios["id_certificado"] = id_cert or f"CERT-{uuid.uuid4().hex[:8].upper()}"
+            cambios["fecha_inicio_vigencia"] = emision_def
+            if not emision:
+                cambios["fecha_emision_certificado"] = emision_def
+            if not expiracion and meses and meses > 0:
+                cambios["fecha_expiracion"] = (await db.execute(
+                    text("SELECT (CAST(:e AS date) + make_interval(months => CAST(:m AS integer)))::date"),
+                    {"e": emision or emision_def, "m": meses},
+                )).scalar()
+        sets = ", ".join(f"{k} = :{k}" for k in cambios)
+        await db.execute(text(f"UPDATE aaces.curso_participante SET {sets} WHERE id = :id"), {**cambios, "id": cp_id})
+    await db.commit()
+    cupo_service.avisar_en_segundo_plano(org_cupo)
+    return {"acreditados": len(filas), "folios_nuevos": nuevos}
+
 
 @router.delete("/cursos/{curso_id}/participantes/{cp_id}")
 async def delete_participante_curso(
