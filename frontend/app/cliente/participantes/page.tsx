@@ -37,6 +37,8 @@ export default function ParticipantesPage() {
   const [empresa, setEmpresa] = useState('')
   const [cargo, setCargo] = useState('')
   const [ciudadOrigen, setCiudadOrigen] = useState('')
+  const [curp, setCurp] = useState('')
+  const [ocupacion, setOcupacion] = useState('')
 
   const [duplicados, setDuplicados] = useState<{ id: string; pax_id: string; nombre: string; correo: string; score: number }[]>([])
   const [creando, setCreando] = useState(false)
@@ -75,6 +77,7 @@ export default function ParticipantesPage() {
   // Si hay posibles duplicados se detiene y deja decidir.
   const guardar = async (forzar = false) => {
     if (!nombre.trim()) { setCrearError('Escribe el nombre completo'); return }
+    if (curp && curp.length !== 18) { setCrearError('La CURP debe tener 18 caracteres'); return }
     if (!forzar) {
       setCreando(true)
       const found = await buscarDuplicados()
@@ -91,7 +94,7 @@ export default function ParticipantesPage() {
     try {
       const result = await apiRequest<{ id: string; pax_id: string }>('/participantes', {
         method: 'POST',
-        body: JSON.stringify({ nombre, correo, telefono, empresa, cargo, ciudad_origen: ciudadOrigen }),
+        body: JSON.stringify({ nombre, correo, telefono, empresa, cargo, ciudad_origen: ciudadOrigen, curp, ocupacion }),
       })
       setShowForm(false)
       resetForm()
@@ -105,7 +108,7 @@ export default function ParticipantesPage() {
   }
 
   const resetForm = () => {
-    setNombre(''); setCorreo(''); setTelefono(''); setEmpresa(''); setCargo(''); setCiudadOrigen('')
+    setNombre(''); setCorreo(''); setTelefono(''); setEmpresa(''); setCargo(''); setCiudadOrigen(''); setCurp(''); setOcupacion('')
     setCrearError(''); setDuplicados([])
   }
 
@@ -279,6 +282,17 @@ export default function ParticipantesPage() {
                   </Field>
                   <Field label="Ciudad" htmlFor="p_ciudad">
                     <Input id="p_ciudad" autoComplete="address-level2" value={ciudadOrigen} onChange={e => setCiudadOrigen(e.target.value)} />
+                  </Field>
+                </div>
+              </FormStep>
+
+              <FormStep n={4} title="Datos para el DC-3" desc="Opcional. Se llenan solos al generar las constancias.">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="CURP" htmlFor="p_curp" hint={curp ? `${curp.length}/18` : '18 caracteres'} error={crearError && curp && curp.length !== 18 ? crearError : undefined}>
+                    <Input id="p_curp" autoComplete="off" autoCapitalize="characters" spellCheck={false} maxLength={18} placeholder="LOPM900101MQTPZR05" className="font-mono uppercase tracking-wider" value={curp} onChange={e => { setCurp(e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()); setCrearError('') }} />
+                  </Field>
+                  <Field label="Ocupación específica" htmlFor="p_ocupacion" hint="Del Catálogo Nacional de Ocupaciones.">
+                    <Input id="p_ocupacion" placeholder="Ej. Supervisor de seguridad" value={ocupacion} onChange={e => setOcupacion(e.target.value)} />
                   </Field>
                 </div>
               </FormStep>

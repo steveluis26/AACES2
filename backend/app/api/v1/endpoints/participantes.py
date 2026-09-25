@@ -27,6 +27,14 @@ class AcreditarSchema(BaseModel):
 # ── Vigencia and renovaciones ────────────────────────────────────
 
 
+def _curp(v) -> str:
+    """CURP en mayúsculas; si viene, debe tener 18 caracteres alfanuméricos."""
+    s = "".join(str(v or "").split()).upper()
+    if s and (len(s) != 18 or not s.isalnum()):
+        raise HTTPException(status_code=400, detail="La CURP debe tener 18 caracteres (letras y números)")
+    return s
+
+
 @router.get("/proximos-a-vencer")
 async def participantes_proximos_a_vencer(
     dias: int = Query(60, ge=1, le=365),
@@ -270,7 +278,7 @@ async def get_participante(
             text("""
                 SELECT id, pax_id, nombre, correo, telefono, empresa, cargo,
                        ciudad_origen, fecha_nacimiento, nivel_educacion, direccion,
-                       fecha_creacion
+                       fecha_creacion, curp, ocupacion
                 FROM aaces.participantes
                 WHERE id = :pid AND cliente_id = :cid
             """),
@@ -354,6 +362,8 @@ async def get_participante(
         "nivel_educacion": p[9],
         "direccion": p[10],
         "fecha_creacion": p[11].isoformat() if p[11] else None,
+        "curp": p[12],
+        "ocupacion": p[13],
         "cursos": cursos,
         "total_cursos": len(cursos),
         "vigentes": vigentes,
@@ -377,6 +387,8 @@ async def create_participante(
     empresa = (payload.get("empresa") or "").strip()
     cargo = (payload.get("cargo") or "").strip()
     ciudad_origen = (payload.get("ciudad_origen") or "").strip()
+    curp = _curp(payload.get("curp"))
+    ocupacion = (payload.get("ocupacion") or "").strip()[:150]
 
     if not nombre:
         raise HTTPException(status_code=400, detail="El nombre es requerido")
@@ -385,8 +397,8 @@ async def create_participante(
     pid = (
         await db.execute(
             text("""
-                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, pais)
-                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, 'Mexico')
+                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, pais, curp, ocupacion)
+                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, 'Mexico', :curp, :ocupacion)
                 RETURNING id
             """),
             {
@@ -398,6 +410,8 @@ async def create_participante(
                 "cargo": cargo or None,
                 "ciudad": ciudad_origen or None,
                 "cliente_id": cid,
+                "curp": curp or None,
+                "ocupacion": ocupacion or None,
             },
         )
     ).scalar()
@@ -425,11 +439,14 @@ async def update_participante(
 
     sets = []
     params = {"pid": participante_id}
-    for col in ("nombre", "correo", "telefono", "empresa", "cargo", "ciudad_origen"):
+    for col in ("nombre", "correo", "telefono", "empresa", "cargo", "ciudad_origen", "ocupacion"):
         val = payload.get(col)
         if val is not None:
             sets.append(f"{col} = :{col}")
             params[col] = str(val).strip()
+    if payload.get("curp") is not None:
+        sets.append("curp = :curp")
+        params["curp"] = _curp(payload.get("curp")) or None
     if not sets:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
 

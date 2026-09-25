@@ -1466,7 +1466,7 @@ async def list_participantes_curso(
               p.id,
               p.nombre,
               p.apellido,
-              p.apellido_paterno AS nombres,
+              p.nombre AS nombres,
               p.apellido_paterno,
               p.apellido_materno,
               p.correo,
@@ -1507,7 +1507,9 @@ async def list_participantes_curso(
                 FROM aaces.cursos c
                 WHERE c.id = cp.curso_id
               ) AS costo_asignado,
-              0 AS descuento
+              0 AS descuento,
+              p.curp,
+              p.ocupacion
             FROM aaces.curso_participante cp
             JOIN aaces.participantes p ON p.id = cp.participante_id
             WHERE cp.curso_id = :cid
@@ -1540,7 +1542,9 @@ async def list_participantes_curso(
                 "fecha_expiracion": r[19],
                 "valor_pagado": float(r[20] or 0),
                 "costo_asignado": float(r[21] or 0),
-                "descuento": float(r[22] or 0)
+                "descuento": float(r[22] or 0),
+                "curp": r[23],
+                "ocupacion": r[24],
             }
             for r in rows
         ]
@@ -1569,7 +1573,7 @@ async def export_participantes_curso(
               p.id,
               p.nombre,
               p.apellido,
-              p.apellido_paterno AS nombres,
+              p.nombre AS nombres,
               p.apellido_paterno,
               p.apellido_materno,
               p.correo,
@@ -1609,7 +1613,9 @@ async def export_participantes_curso(
                 FROM aaces.cursos c
                 WHERE c.id = cp.curso_id
               ) AS costo_asignado,
-              0 AS descuento
+              0 AS descuento,
+              p.curp,
+              p.ocupacion
             FROM aaces.curso_participante cp
             JOIN aaces.participantes p ON p.id = cp.participante_id
             WHERE cp.curso_id = :cid
@@ -1713,6 +1719,18 @@ async def add_participante_curso(
             pax_id = f"PAX-{uuid.uuid4().hex[:8].upper()}"
             ins = await db.execute(text("INSERT INTO aaces.participantes (id, pax_id, cliente_id, nombre, apellido, apellido_paterno, apellido_materno, correo, ciudad_origen, telefono, empresa, cargo, nivel_educacion, pais) VALUES (gen_random_uuid(), :pax_id, :cid, :nombre, :apellido, :ap_pat, :ap_mat, :correo, :ciudad, :telefono, :empresa, :cargo, :profesion, 'Mexico') RETURNING id"), {"pax_id": pax_id, "cid": cid, "nombre": (nombre or nombres) or None, "apellido": combined_apellido or None, "ap_pat": (apellido_paterno or "").strip() or None, "ap_mat": (apellido_materno or "").strip() or None, "correo": correo, "ciudad": ciudad or None, "telefono": telefono or None, "empresa": empresa or None, "cargo": cargo or None, "profesion": profesion or None})
             pid = ins.scalar()
+        # Datos para el DC-3 (opcionales)
+        _curp_v = "".join(str(payload.get("curp") or "").split()).upper()
+        if _curp_v and (len(_curp_v) != 18 or not _curp_v.isalnum()):
+            raise HTTPException(status_code=400, detail="La CURP debe tener 18 caracteres (letras y números)")
+        _ocup_v = (payload.get("ocupacion") or "").strip()[:150]
+        if _curp_v or _ocup_v:
+            _s, _p = [], {"pid": pid}
+            if _curp_v:
+                _s.append("curp = :curp"); _p["curp"] = _curp_v
+            if _ocup_v:
+                _s.append("ocupacion = :ocupacion"); _p["ocupacion"] = _ocup_v
+            await db.execute(text(f"UPDATE aaces.participantes SET {', '.join(_s)} WHERE id = :pid"), _p)
         # Evitar violación de UNIQUE: si ya existe la inscripción, reutilizar su id
         ex_global = await db.execute(text("SELECT id FROM aaces.curso_participante WHERE curso_id = :curso AND participante_id = :pid"), {"curso": curso_id, "pid": pid})
         global_id = ex_global.scalar()
@@ -1978,6 +1996,9 @@ async def update_participante_curso(
         params_p = {"pid": pid}
         if "nombre" in payload:
             sets_p.append("nombre = :nombre"); params_p["nombre"] = (payload.get("nombre") or "").strip()
+        elif (payload.get("nombres") or "").strip():
+            # La agenda edita el nombre como "nombres"; antes se ignoraba y el cambio se perdía
+            sets_p.append("nombre = :nombre"); params_p["nombre"] = payload["nombres"].strip()
         if "apellido" in payload:
             sets_p.append("apellido = :apellido"); params_p["apellido"] = (payload.get("apellido") or "").strip()
         if "apellido_paterno" in payload:
@@ -1990,6 +2011,13 @@ async def update_participante_curso(
             sets_p.append("empresa = :empresa"); params_p["empresa"] = (payload.get("empresa") or "").strip()
         if "cargo" in payload:
             sets_p.append("cargo = :cargo"); params_p["cargo"] = (payload.get("cargo") or "").strip()
+        if "ocupacion" in payload:
+            sets_p.append("ocupacion = :ocupacion"); params_p["ocupacion"] = (payload.get("ocupacion") or "").strip()[:150] or None
+        if "curp" in payload:
+            _c = "".join(str(payload.get("curp") or "").split()).upper()
+            if _c and (len(_c) != 18 or not _c.isalnum()):
+                raise HTTPException(status_code=400, detail="La CURP debe tener 18 caracteres (letras y números)")
+            sets_p.append("curp = :curp"); params_p["curp"] = _c or None
         if "profesion" in payload:
             sets_p.append("nivel_educacion = :profesion"); params_p["profesion"] = (payload.get("profesion") or "").strip()
         # Mantener compatibilidad en campo combinado 'apellido'
