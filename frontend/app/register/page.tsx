@@ -22,8 +22,13 @@ function RegisterForm() {
   const [admin, setAdmin] = useState({ nombre: '', correo: '', password: '', confirmar: '' })
   const [acepta, setAcepta] = useState(false)
 
-  const planLabel = plan === 'profesional' ? 'Profesional' : 'Prueba gratuita'
-  const planPrice = plan === 'profesional' ? '$399/mes' : 'Gratis'
+  const PLANES: Record<string, { label: string; precio: string }> = {
+    profesional: { label: 'Profesional', precio: '$499/mes' },
+    empresa: { label: 'Empresa', precio: '$1,299/mes' },
+  }
+  const planPago = PLANES[plan]
+  const planLabel = planPago ? planPago.label : 'Prueba gratuita'
+  const planPrice = planPago ? `${planPago.precio} IVA incluido` : 'Gratis por 30 días'
 
   const handleOrgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -121,22 +126,22 @@ function RegisterForm() {
             </div>
             <CardTitle className="text-2xl">Registro exitoso</CardTitle>
             <CardDescription className="mt-2">
-              Tu organización <strong>{org.razon_social}</strong> ha sido registrada con el plan <strong>{planLabel}</strong>.
+              Tu organización <strong>{org.razon_social}</strong> ya está lista con <strong>30 días de prueba</strong> y 50 constancias.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Recibirás un correo de confirmación cuando tu cuenta sea activada por nuestro equipo.
-              {plan === 'profesional' && (
+              Ya puedes iniciar sesión y empezar a usar AACES.
+              {planPago && (
                 <>
                   <br /><br />
-                  El plan Profesional requiere pago. Te notificaremos cuando los pagos estén habilitados
-                  o uno de nuestros asesores activará tu cuenta.
+                  Al iniciar sesión te llevamos a activar tu plan <strong>{planPago.label}</strong> con Mercado Pago.
+                  Mientras tanto usas la prueba sin costo.
                 </>
               )}
             </p>
             <div className="pt-4 space-y-2">
-              <Button className="w-full" onClick={() => router.push('/login')}>
+              <Button className="w-full" onClick={() => router.push(planPago ? `/login?next=${encodeURIComponent(`/cliente/pagos?plan=${plan}`)}` : '/login')}>
                 Ir a iniciar sesión
               </Button>
               <Button variant="outline" className="w-full" onClick={() => router.push('/')}>

@@ -813,6 +813,37 @@ async def create_marketplace_visibilidad(conn: AsyncConnection) -> None:
     """))
 
 
+async def create_cobros_mercadopago(conn: AsyncConnection) -> None:
+    """Planes 2026 (precios con IVA incluido) y cobros con Mercado Pago."""
+    await conn.execute(text("ALTER TABLE aaces.planes ADD COLUMN IF NOT EXISTS precio_anual NUMERIC(10,2)"))
+    for codigo, nombre, desc, mes, anio, limite, mkt in [
+        ("trial", "Prueba", "Prueba AACES gratis con 50 constancias", 0, 0, 50, False),
+        ("profesional", "Profesional", "Para agencias capacitadoras en crecimiento", 499, 5489, 500, True),
+        ("empresa", "Empresa", "Para agencias con muchos grupos al mes", 1299, 14289, 2000, True),
+    ]:
+        await conn.execute(text("""
+            UPDATE aaces.planes SET nombre = :n, descripcion = :d, precio_mensual = :m, precio_anual = :a,
+                   constancias_max = :l, incluye_marketplace = :mk, usuarios_max = NULL
+            WHERE codigo = :c
+        """), {"c": codigo, "n": nombre, "d": desc, "m": mes, "a": anio, "l": limite, "mk": mkt})
+
+    # pagado_hasta: hasta cuándo cubre el último pago. fecha_fin = pagado_hasta (+ gracia si es mensual)
+    await conn.execute(text("ALTER TABLE aaces.suscripciones ADD COLUMN IF NOT EXISTS pagado_hasta DATE"))
+    await conn.execute(text("ALTER TABLE aaces.suscripciones ADD COLUMN IF NOT EXISTS periodo VARCHAR(10)"))
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.pagos_suscripcion (
+          mp_pago_id VARCHAR(60) PRIMARY KEY,
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          suscripcion_id UUID,
+          concepto VARCHAR(20) NOT NULL,
+          monto NUMERIC(10,2),
+          estatus VARCHAR(20) NOT NULL,
+          fecha TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_pagos_sus_org ON aaces.pagos_suscripcion (organizacion_id, fecha)"))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -864,6 +895,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_archivos_almacenados,
         create_cupo_constancias,
         create_marketplace_visibilidad,
+        create_cobros_mercadopago,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

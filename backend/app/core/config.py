@@ -94,6 +94,13 @@ class Settings(BaseSettings):
 
     # Payments & URLs
     MERCADOPAGO_ACCESS_TOKEN: str = os.getenv("MERCADOPAGO_ACCESS_TOKEN", "")
+    # Clave secreta de webhooks (Mercado Pago → Tus integraciones → Webhooks). Opcional.
+    MERCADOPAGO_WEBHOOK_SECRET: str = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")
+    # Suscripciones
+    TRIAL_DIAS: int = int(os.getenv("TRIAL_DIAS", "30"))
+    GRACIA_DIAS: int = int(os.getenv("GRACIA_DIAS", "3"))  # días extra si falla un cobro mensual
+    PAQUETE_CANTIDAD: int = int(os.getenv("PAQUETE_CANTIDAD", "500"))
+    PAQUETE_PRECIO: float = float(os.getenv("PAQUETE_PRECIO", "450"))  # IVA incluido
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "")
     FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:3000")

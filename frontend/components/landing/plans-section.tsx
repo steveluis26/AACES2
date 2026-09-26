@@ -8,45 +8,50 @@ const tiers = [
   {
     name: "Prueba",
     price: "$0",
+    periodo: "30 días",
+    anual: null,
     desc: "Para conocer la plataforma",
     popular: false,
     features: [
       "50 constancias",
-      "1 capacitador",
-      "Validación QR"
+      "Plantillas DC-3 con tu formato",
+      "QR verificable"
     ],
-    cta: "Comenzar",
+    cta: "Comenzar gratis",
     href: "/register?plan=trial"
   },
   {
     name: "Profesional",
-    price: "$399",
-    desc: "Para capacitadores activos",
+    price: "$499",
+    periodo: "/mes",
+    anual: "o $5,489 al año: 1 mes gratis",
+    desc: "Para agencias capacitadoras en crecimiento",
     popular: true,
     features: [
-      "500 constancias",
-      "Capacitadores ilimitados",
-      "Validación QR",
-      "Diplomas personalizados",
-      "Soporte prioritario"
+      "500 constancias al mes",
+      "Plantillas DC-3 con tu formato",
+      "QR verificable",
+      "Aparece en el Marketplace",
+      "Paquetes extra cuando los necesites"
     ],
     cta: "Elegir plan",
     href: "/register?plan=profesional"
   },
   {
     name: "Empresa",
-    price: "$799",
-    desc: "Para organizaciones grandes",
+    price: "$1,299",
+    periodo: "/mes",
+    anual: "o $14,289 al año: 1 mes gratis",
+    desc: "Para agencias con muchos grupos al mes",
     popular: false,
     features: [
-      "Constancias ilimitadas",
-      "Capacitadores ilimitados",
-      "API de validación",
-      "White label",
-      "Soporte dedicado"
+      "2,000 constancias al mes",
+      "Todo lo del plan Profesional",
+      "Soporte prioritario",
+      "API de validación"
     ],
-    cta: "Contactar",
-    href: "/contacto"
+    cta: "Elegir plan",
+    href: "/register?plan=empresa"
   }
 ]
 
@@ -58,7 +63,7 @@ export default function PlansSection() {
         <SectionHeading
           eyebrow="Precios"
           title="Planes"
-          description="Precios que tienen sentido. Sin límites absurdos de constancias. Paga por lo que usas."
+          description="Precios con IVA incluido. Paga con tarjeta, OXXO o transferencia con Mercado Pago. ¿Un mes con muchos grupos? Agrega 500 constancias por $450; no caducan."
         />
         <div className="mt-12 grid items-center gap-6 md:grid-cols-3">
           {tiers.map((tier, i) => (
@@ -91,8 +96,9 @@ export default function PlansSection() {
                 <h3 className="text-lg font-semibold">{tier.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className={`font-bold ${tier.popular ? "text-5xl text-orange-500 dark:text-orange-500" : "text-4xl"}`}>{tier.price}</span>
-                  <span className="text-sm text-muted-foreground">/mes</span>
+                  <span className="text-sm text-muted-foreground">{tier.periodo}</span>
                 </div>
+                {tier.anual && <p className="mt-1 text-xs font-medium text-orange-600 dark:text-orange-400">{tier.anual}</p>}
                 <p className="mt-1 text-sm text-muted-foreground">{tier.desc}</p>
               </div>
               <ul className="mb-8 flex-1 space-y-3">

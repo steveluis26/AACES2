@@ -22,8 +22,7 @@ ESCRITURA = {"POST", "PUT", "PATCH", "DELETE"}
 # Escrituras permitidas sin suscripción activa (sobre /api/v1)
 PERMITIDAS = [re.compile(p) for p in (
     r"^/auth/",                              # login, refresh, logout, perfil
-    r"^/stripe/",                            # pagar / renovar
-    r"mercadopago",                          # pagar con Mercado Pago
+    r"^/suscripciones/",                     # pagar / renovar / comprar paquete (Mercado Pago)
     r"^/clientes/me/password$",              # cambiar contraseña
     r"^/organizaciones/perfil$",             # datos de facturación
     r"^/notificaciones/",                    # marcar avisos como leídos

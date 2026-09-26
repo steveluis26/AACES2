@@ -192,11 +192,13 @@ async def suscripciones_por_vencer(db: AsyncSession, ref: date) -> list[dict]:
             text(
                 """
                 SELECT s.id AS sub_id, s.fecha_fin, s.organizacion_id AS org_id,
-                       pl.nombre AS plan_nombre
+                       pl.nombre AS plan_nombre, pl.codigo AS plan_codigo
                 FROM aaces.suscripciones s
                 JOIN aaces.planes pl ON pl.id = s.plan_id
                 WHERE s.fecha_fin = :fecha
                   AND s.estatus = 'activa'
+                  -- las mensuales se cobran solas en Mercado Pago: no hay que renovar
+                  AND COALESCE(s.periodo, '') <> 'mensual'
                 """
             ),
             {"fecha": objetivo},
@@ -206,9 +208,14 @@ async def suscripciones_por_vencer(db: AsyncSession, ref: date) -> list[dict]:
         {
             "organizacion_id": str(r["org_id"]),
             "tipo": "suscripcion_por_vencer",
-            "clave": f"suscripcion_por_vencer:{r['sub_id']}:{DIAS_SUSCRIPCION}",
-            "titulo": "Tu suscripción AACES vence en 7 días",
+            # La fecha en la clave permite volver a avisar en la siguiente renovación anual
+            "clave": f"suscripcion_por_vencer:{r['sub_id']}:{r['fecha_fin'].isoformat()}",
+            "titulo": ("Tu prueba de AACES termina en 7 días" if r["plan_codigo"] == "trial"
+                       else "Tu suscripción AACES vence en 7 días"),
             "mensaje": (
+                f"Tu prueba termina el {r['fecha_fin'].isoformat()}. Elige un plan para seguir "
+                f"emitiendo constancias; lo que ya emitiste sigue siendo válido."
+                if r["plan_codigo"] == "trial" else
                 f"Tu suscripción al plan {r['plan_nombre']} vence el "
                 f"{r['fecha_fin'].isoformat()}. Renuévala a tiempo para no "
                 f"interrumpir el servicio."
@@ -395,13 +402,14 @@ async def registrar_pago_fallido(
     organizacion_id: str,
     detalle: str,
     referencia_id: str | None = None,
+    evento: str | None = None,
 ) -> str | None:
-    """Hook inmediato para pagos/renovaciones fallidas.
+    """Hook inmediato para pagos/renovaciones fallidas (webhook de Mercado Pago).
 
-    Lo llamará el webhook de MercadoPago cuando exista. Cada llamada genera
-    un aviso nuevo (clave única por evento).
+    referencia_id es un UUID interno (p. ej. la suscripción); evento identifica
+    el intento (p. ej. el id del pago en Mercado Pago) para no repetir el aviso.
     """
-    evento = referencia_id or uuid.uuid4().hex[:12]
+    evento = evento or referencia_id or uuid.uuid4().hex[:12]
     aviso = {
         "organizacion_id": organizacion_id,
         "tipo": "pago_fallido",
@@ -409,7 +417,7 @@ async def registrar_pago_fallido(
         "titulo": "Pago o renovación automática fallida",
         "mensaje": (
             "Tu pago o renovación automática no pudo procesarse. "
-            f"Detalle: {detalle}. Revisa tu método de pago para evitar "
+            f"Detalle: {detalle.rstrip('.')}. Revisa tu método de pago para evitar "
             "la interrupción del servicio."
         ),
         "asunto": "AACES: tu pago no pudo procesarse",
