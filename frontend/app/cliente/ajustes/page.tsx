@@ -6,6 +6,7 @@ import { Field } from '@/components/ui/field'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { apiRequest } from '@/app/services/api'
+import { RegistroStps } from '@/components/stps/registro-stps'
 
 export default function AjustesPage() {
   return (
@@ -14,12 +15,17 @@ export default function AjustesPage() {
       <Tabs defaultValue="perfil">
         <TabsList>
           <TabsTrigger value="perfil">Perfil</TabsTrigger>
+          <TabsTrigger value="stps">Registro STPS</TabsTrigger>
           <TabsTrigger value="directorio">Directorio</TabsTrigger>
           <TabsTrigger value="seguridad">Seguridad</TabsTrigger>
         </TabsList>
 
         <TabsContent value="perfil" className="mt-4">
           <PerfilTab />
+        </TabsContent>
+
+        <TabsContent value="stps" className="mt-4">
+          <RegistroStps />
         </TabsContent>
 
         <TabsContent value="directorio" className="mt-4">
@@ -170,7 +176,7 @@ function DirectorioTab() {
           {stps.validado ? (
             <span className="inline-block rounded-full bg-green-100 text-green-800 px-3 py-1 text-xs font-semibold">✓ Agente Capacitador validado STPS{stps.registro ? ` · ${stps.registro}` : ''}</span>
           ) : (
-            <span className="inline-block rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-semibold">Validación STPS pendiente</span>
+            <span className="inline-block rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-semibold">Registro STPS sin verificar (ver pestaña Registro STPS)</span>
           )}
         </div>
         <div className="space-y-3">

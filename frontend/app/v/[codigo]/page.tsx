@@ -21,7 +21,10 @@ type Certificado = {
   fecha_expiracion: string | null
   calificacion: number | null
   constancias: { nombre: string; norma: string | null }[]
-  capacitador: { nombre: string | null; razon_social: string | null; logo_url: string | null; stps_registro: string | null }
+  capacitador: {
+    nombre: string | null; razon_social: string | null; logo_url: string | null; stps_registro: string | null
+    stps_verificado?: boolean; stps_rfc?: string | null; stps_origen?: string | null; stps_consultado_en?: string | null; stps_fuente?: string
+  }
   empresa: string | null
   verificaciones: number
 }
@@ -236,7 +239,22 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
   if (constancias) filas.push(["Constancias asociadas", constancias])
   if (c.curso.duracion_horas) filas.push(["Duración", `${c.curso.duracion_horas} horas`])
   if (cap) filas.push(["Capacitador", cap])
-  if (c.capacitador?.stps_registro) filas.push(["Registro STPS", <span key="stps" className="inline-flex items-center gap-1.5 font-mono"><BadgeCheck className="h-4 w-4 text-green-600" />{c.capacitador.stps_registro}</span>])
+  if (c.capacitador?.stps_verificado) {
+    const k = c.capacitador
+    filas.push(["Registro STPS", (
+      <span key="stps" className="inline-flex flex-col gap-0.5">
+        <span className="inline-flex items-center gap-1.5 font-medium">
+          <BadgeCheck className="h-4 w-4 shrink-0 text-green-600" />
+          Agente capacitador registrado
+          {(k.stps_registro || k.stps_rfc) && <span className="font-mono font-normal text-muted-foreground">· {k.stps_registro || k.stps_rfc}</span>}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {k.stps_origen === "automatica" && k.stps_consultado_en ? `Verificado en el registro de la STPS el ${corta(k.stps_consultado_en.slice(0, 10))}. ` : "Validado por AACES. "}
+          {k.stps_fuente && <a href={k.stps_fuente} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Consultar en la STPS</a>}
+        </span>
+      </span>
+    )])
+  }
   filas.push(["Estado", <span key="est" className={`font-bold ${e.estado}`}>{c.estado === "vigente" ? "ACTIVO" : c.estado === "vencido" ? "VENCIDO" : "NO ACREDITADO"}</span>])
 
   return (

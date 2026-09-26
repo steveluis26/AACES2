@@ -108,3 +108,36 @@ async def actualizar_perfil(
         {"org_id": org_id},
     )
     return _row_to_perfil(res.fetchone())
+
+
+# ---------------------------------------------------------------------------
+# Registro ante la STPS (verificado contra el buscador oficial)
+# ---------------------------------------------------------------------------
+
+@router.get("/stps")
+async def estado_stps(
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services import stps
+    return await stps.estado_organizacion(db, await require_org_id(db, identity))
+
+
+@router.post("/stps/verificar")
+async def verificar_stps(
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """Vuelve a consultar el registro de la STPS (máximo una vez cada 10 minutos)."""
+    from datetime import datetime, timedelta, timezone
+    from app.services import stps
+    org_id = await require_org_id(db, identity)
+    actual = await stps.estado_organizacion(db, org_id)
+    if actual.get("consultado_en"):
+        hace = datetime.now(timezone.utc) - datetime.fromisoformat(actual["consultado_en"])
+        if hace < timedelta(minutes=10):
+            return {**actual, "aviso": "Ya lo consultamos hace unos minutos."}
+    r = await stps.verificar_organizacion(db, org_id, forzar=True)
+    if r.get("estado") == "no_disponible":
+        raise HTTPException(status_code=503, detail="La página de la STPS no respondió. Intenta más tarde.")
+    return await stps.estado_organizacion(db, org_id)
