@@ -132,7 +132,7 @@ export function LoginForm({
             <motion.div {...aparecer(2)} className="grid gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Contraseña</Label>
-                <a href="/contacto" className="text-xs font-medium text-orange-500 hover:underline">¿La olvidaste?</a>
+                <a href="/olvide-password" className="text-xs font-medium text-orange-500 hover:underline">¿La olvidaste?</a>
               </div>
               <div className="group relative">
                 <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-orange-500" />
