@@ -973,6 +973,26 @@ async def create_firmas(conn: AsyncConnection) -> None:
     await conn.execute(text("ALTER TABLE aaces.instructores ADD COLUMN IF NOT EXISTS firma BYTEA"))
 
 
+async def create_restablecer_password(conn: AsyncConnection) -> None:
+    """Enlaces de "olvidé mi contraseña". Solo se guarda el hash del token: si
+    alguien lee la tabla no puede usar los enlaces."""
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.restablecer_password (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          usuario_id UUID NOT NULL REFERENCES aaces.usuarios(id) ON DELETE CASCADE,
+          token_hash CHAR(64) NOT NULL UNIQUE,
+          expira TIMESTAMP WITH TIME ZONE NOT NULL,
+          usado_en TIMESTAMP WITH TIME ZONE,
+          ip VARCHAR(64),
+          fecha_creacion TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    await conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_restablecer_password_usuario "
+        "ON aaces.restablecer_password(usuario_id, fecha_creacion)"
+    ))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -1029,6 +1049,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_congruencia,
         create_cifrado_datos,
         create_firmas,
+        create_restablecer_password,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text
@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models import Cliente, UsuarioPlataforma, Usuario
 from app.schemas import LoginRequest, Token, ClienteResponse, ClienteUpdate, PlataformaUserResponse
 from app.services.auth import auth_service, Role
+from app.services import recuperar_password
 from app.core.logging import audit_logger
 import logging
 
@@ -308,6 +309,50 @@ async def dev_reset_password(
         await db.rollback()
         logger.error(f"Error en dev-reset-password: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error interno")
+
+
+def _ip_cliente(request: Request) -> Optional[str]:
+    # Render pone la IP real al inicio de X-Forwarded-For.
+    reenviada = request.headers.get("x-forwarded-for")
+    if reenviada:
+        return reenviada.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+@router.post("/olvide-password")
+async def olvide_password(payload: Dict[str, Any], request: Request, background: BackgroundTasks):
+    """Manda un enlace para restablecer la contraseña.
+
+    Responde siempre lo mismo (y sin esperar al correo) para no revelar qué
+    correos tienen cuenta.
+    """
+    correo = str(payload.get("correo") or payload.get("email") or "")
+    background.add_task(recuperar_password.solicitar_y_enviar, correo, _ip_cliente(request))
+    return {"message": "Si el correo tiene una cuenta en AACES, te enviamos un enlace para restablecer tu contraseña."}
+
+
+@router.get("/restablecer-password")
+async def comprobar_enlace(token: str, db: AsyncSession = Depends(get_db)):
+    try:
+        return await recuperar_password.comprobar(db, token)
+    except recuperar_password.EnlaceInvalido:
+        raise HTTPException(status_code=400, detail="El enlace ya no es válido: venció o ya se usó. Pide uno nuevo.")
+
+
+@router.post("/restablecer-password")
+async def restablecer_password(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+    token = str(payload.get("token") or "")
+    password = str(payload.get("password") or "")
+    motivo = recuperar_password.validar_password(password)
+    if motivo:
+        raise HTTPException(status_code=400, detail=motivo)
+    try:
+        await recuperar_password.restablecer(db, token, password)
+    except recuperar_password.EnlaceInvalido:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="El enlace ya no es válido: venció o ya se usó. Pide uno nuevo.")
+    audit_logger.log_system_event("password_reset", "Contraseña restablecida por enlace", {})
+    return {"message": "Listo, ya puedes iniciar sesión con tu nueva contraseña."}
 
 
 def determine_user_role(user: Cliente) -> str:

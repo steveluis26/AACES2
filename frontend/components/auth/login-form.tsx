@@ -148,7 +148,7 @@ export default function LoginForm({ onSuccess, redirectUrl }: LoginFormProps) {
             </div>
 
             <div className="text-sm">
-              <Link href="/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
+              <Link href="/olvide-password" className="font-medium text-indigo-600 hover:text-indigo-500">
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
