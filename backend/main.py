@@ -126,6 +126,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Sin suscripción activa: solo lectura (ver app/core/solo_lectura.py).
+# Va antes de CORS para que CORS la envuelva y el 402 lleve sus encabezados
+from app.core.solo_lectura import middleware_solo_lectura
+app.middleware("http")(middleware_solo_lectura)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
