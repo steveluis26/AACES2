@@ -39,6 +39,17 @@ async def _job_recordatorios() -> None:
                 pass
 
 
+async def _job_verificacion_stps() -> None:
+    from app.core.database import AsyncSessionLocal
+    from app.services.stps import verificar_todas
+
+    async with AsyncSessionLocal() as db:
+        try:
+            logger.info("Verificación STPS semanal: %s", await verificar_todas(db))
+        except Exception:
+            logger.exception("Verificación STPS semanal falló")
+
+
 def _iniciar_scheduler_recordatorios():
     """Programa el job diario 7:00 AM (America/Mexico_City) + catch-up al arranque.
 
@@ -55,6 +66,15 @@ def _iniciar_scheduler_recordatorios():
         _job_recordatorios,
         CronTrigger(hour=7, minute=0, timezone=tz),
         id="recordatorios_diarios",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    # Verificación semanal de agentes contra el registro de la STPS (lunes 6:00)
+    sched.add_job(
+        _job_verificacion_stps,
+        CronTrigger(day_of_week="mon", hour=6, minute=0, timezone=tz),
+        id="verificacion_stps_semanal",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

@@ -1429,6 +1429,30 @@ async def suspender_organizacion(
     return {"success": True, "message": "Organización suspendida"}
 
 
+@router.get("/organizaciones/{org_id}/stps")
+async def estado_stps_organizacion(
+    org_id: str,
+    user_data: Dict[str, Any] = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.services import stps
+    return await stps.estado_organizacion(db, org_id)
+
+
+@router.post("/organizaciones/{org_id}/verificar-stps")
+async def verificar_stps_organizacion(
+    org_id: str,
+    user_data: Dict[str, Any] = Depends(require_superadmin),
+    db: AsyncSession = Depends(get_db)
+):
+    """Consulta ahora el registro público de la STPS para esta organización."""
+    from app.services import stps
+    r = await stps.verificar_organizacion(db, org_id, forzar=True)
+    if r.get("estado") == "no_disponible":
+        raise HTTPException(status_code=503, detail="La página de la STPS no respondió. Intenta más tarde.")
+    return {**(await stps.estado_organizacion(db, org_id)), "registros": r.get("registros", [])}
+
+
 @router.put("/organizaciones/{org_id}/validar-stps")
 async def validar_stps_organizacion(
     org_id: str,
@@ -1467,8 +1491,9 @@ async def validar_stps_organizacion(
         text("""
             UPDATE aaces.organizaciones
             SET stps_registro = COALESCE(:stps_registro, stps_registro),
-                stps_validado = :validado,
-                stps_validado_en = CASE WHEN :validado THEN CURRENT_TIMESTAMP ELSE NULL END,
+                stps_validado = CAST(:validado AS boolean),
+                stps_validado_en = CASE WHEN CAST(:validado AS boolean) THEN CURRENT_TIMESTAMP ELSE NULL END,
+                stps_origen = CASE WHEN CAST(:validado AS boolean) THEN 'manual' ELSE NULL END,
                 notas_admin = COALESCE(:notas, notas_admin)
             WHERE id = :id
         """),

@@ -844,6 +844,32 @@ async def create_cobros_mercadopago(conn: AsyncConnection) -> None:
     await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_pagos_sus_org ON aaces.pagos_suscripcion (organizacion_id, fecha)"))
 
 
+async def create_verificacion_stps(conn: AsyncConnection) -> None:
+    """Verificación automática del agente contra el registro público de la STPS."""
+    for col in (
+        "stps_origen VARCHAR(20)",            # automatica | manual
+        "stps_estatus VARCHAR(60)",           # lo que publica la STPS (p. ej. Activo) o no_encontrado
+        "stps_razon_social VARCHAR(300)",
+        "stps_cursos INTEGER",
+        "stps_instructores INTEGER",
+        "stps_consultado_en TIMESTAMPTZ",
+    ):
+        await conn.execute(text(f"ALTER TABLE aaces.organizaciones ADD COLUMN IF NOT EXISTS {col}"))
+    # Lo validado antes de existir la verificación automática fue a mano
+    await conn.execute(text("UPDATE aaces.organizaciones SET stps_origen = 'manual' WHERE stps_validado AND stps_origen IS NULL"))
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.stps_consultas (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          rfc VARCHAR(20),
+          resultado VARCHAR(20) NOT NULL,
+          detalle JSONB,
+          fecha TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_stps_consultas_org ON aaces.stps_consultas (organizacion_id, fecha DESC)"))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -896,6 +922,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_cupo_constancias,
         create_marketplace_visibilidad,
         create_cobros_mercadopago,
+        create_verificacion_stps,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

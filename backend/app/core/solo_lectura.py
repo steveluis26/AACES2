@@ -24,7 +24,7 @@ PERMITIDAS = [re.compile(p) for p in (
     r"^/auth/",                              # login, refresh, logout, perfil
     r"^/suscripciones/",                     # pagar / renovar / comprar paquete (Mercado Pago)
     r"^/clientes/me/password$",              # cambiar contraseña
-    r"^/organizaciones/perfil$",             # datos de facturación
+    r"^/organizaciones/(perfil|stps/verificar)$",  # datos de facturación, verificar registro STPS
     r"^/notificaciones/",                    # marcar avisos como leídos
     r"^/plantillas-pdf/[^/]+/(generar|vista-previa)$",  # reimprimir (el límite frena folios nuevos)
     r"^/templates/preview$",

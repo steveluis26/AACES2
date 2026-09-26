@@ -13,6 +13,7 @@ import {
   Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { AdminStps } from '@/components/stps/admin-stps'
 
 type Usuario = {
   id: string
@@ -237,6 +238,7 @@ export default function OrgDetailPage() {
               <div><Label className="text-xs text-muted-foreground">Fecha de activación</Label><p>{new Date(org.fecha_activacion).toLocaleDateString('es-MX')}</p></div>
             )}
           </div>
+          <div className="mt-4"><AdminStps orgId={org.id} headers={headers} /></div>
           {org.notas_admin && (
             <div className="mt-4 p-3 rounded-lg bg-muted">
               <Label className="text-xs text-muted-foreground">Notas del administrador</Label>

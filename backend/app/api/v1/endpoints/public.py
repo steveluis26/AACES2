@@ -200,7 +200,7 @@ async def certificado_publico(
                        c.nombre, c.codigo_curso, c.fecha_inicio, c.fecha_fin, c.duracion_horas,
                        c.modalidad, c.ciudad, c.empresa_contratante, c.id,
                        o.razon_social, o.nombre_comercial, o.logo_url, o.stps_registro, o.stps_validado,
-                       cl.nombre
+                       cl.nombre, o.rfc, o.stps_origen, o.stps_consultado_en
                 FROM aaces.curso_participante cp
                 JOIN aaces.participantes p ON p.id = cp.participante_id
                 JOIN aaces.cursos c ON c.id = cp.curso_id
@@ -223,7 +223,7 @@ async def certificado_publico(
     (id_cert, cod_val, acreditado, estado_pago, f_emision, f_exp, calificacion,
      p_nombre, p_apellido, p_pat, p_mat,
      c_nombre, c_codigo, c_ini, c_fin, c_horas, c_modalidad, c_ciudad, c_empresa, curso_id,
-     o_razon, o_comercial, o_logo, o_stps, o_stps_ok, cl_nombre) = row
+     o_razon, o_comercial, o_logo, o_stps, o_stps_ok, cl_nombre, o_rfc, o_stps_origen, o_stps_consulta) = row
 
     def _d(v):
         # datetime es subclase de date: hay que revisarlo primero
@@ -294,6 +294,12 @@ async def certificado_publico(
             "razon_social": o_razon,
             "logo_url": o_logo,
             "stps_registro": o_stps if o_stps_ok else None,
+            # Verificado en el buscador oficial de la STPS (automática) o por AACES (manual)
+            "stps_verificado": bool(o_stps_ok),
+            "stps_rfc": o_rfc if o_stps_ok else None,
+            "stps_origen": o_stps_origen if o_stps_ok else None,
+            "stps_consultado_en": o_stps_consulta.isoformat() if (o_stps_ok and o_stps_consulta) else None,
+            "stps_fuente": "https://agentes.stps.gob.mx/Buscador/BuscadorAgente.aspx",
         },
         "empresa": c_empresa or None,
         "verificaciones": verificaciones + (1 if estado == "vigente" else 0),

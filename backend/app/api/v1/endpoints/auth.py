@@ -575,6 +575,10 @@ async def register(
 
         await db.commit()
 
+        # Verifica su registro en la STPS sin hacerlo esperar (si la STPS no responde, lo reintenta el job semanal)
+        from app.services.stps import verificar_en_segundo_plano
+        verificar_en_segundo_plano(org_id)
+
         return {
             "organizacion_id": org_id,
             "admin_email": admin_correo,
