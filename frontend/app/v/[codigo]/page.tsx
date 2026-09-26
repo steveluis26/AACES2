@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import {
-  BadgeCheck, CalendarClock, Check, CheckCircle2, Clock, Copy, Loader2, Printer, QrCode,
+  AlertTriangle, BadgeCheck, CalendarClock, Check, CheckCircle2, Clock, Copy, Loader2, Printer, QrCode,
   Search, Share2, ShieldAlert, ShieldCheck, XCircle,
 } from "lucide-react"
 
@@ -251,6 +251,19 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
         <span className="text-xs text-muted-foreground">
           {k.stps_origen === "automatica" && k.stps_consultado_en ? `Verificado en el registro de la STPS el ${corta(k.stps_consultado_en.slice(0, 10))}. ` : "Validado por AACES. "}
           {k.stps_fuente && <a href={k.stps_fuente} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Consultar en la STPS</a>}
+        </span>
+      </span>
+    )])
+  } else if (c.capacitador) {
+    // Transparencia: quien verifica merece saber que el registro no está comprobado
+    filas.push(["Registro STPS", (
+      <span key="stps" className="inline-flex flex-col gap-0.5">
+        <span className="inline-flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> No verificado
+        </span>
+        <span className="text-xs text-muted-foreground">
+          AACES no ha comprobado el registro de este capacitador ante la STPS. La constancia sí es auténtica.{" "}
+          <a href={c.capacitador.stps_fuente || "https://agentes.stps.gob.mx/Buscador/BuscadorAgente.aspx"} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Consultar en la STPS</a>
         </span>
       </span>
     )])

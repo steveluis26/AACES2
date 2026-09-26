@@ -9,10 +9,16 @@ import { apiRequest } from '@/app/services/api'
 import { RegistroStps } from '@/components/stps/registro-stps'
 
 export default function AjustesPage() {
+  // ?tab=stps abre directo la pestaña (p. ej. desde el aviso antes de pagar)
+  const [tab, setTab] = useState('perfil')
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t && ['perfil', 'stps', 'directorio', 'seguridad'].includes(t)) setTab(t)
+  }, [])
   return (
     <div className="px-4 py-4 lg:px-6 lg:py-6">
       <h1 className="text-2xl font-semibold mb-6">Ajustes</h1>
-      <Tabs defaultValue="perfil">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="perfil">Perfil</TabsTrigger>
           <TabsTrigger value="stps">Registro STPS</TabsTrigger>

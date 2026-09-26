@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
-import { CheckIcon, Clock, CreditCard, Loader2, Package, ShieldCheck } from "lucide-react"
+import { AlertTriangle, CheckIcon, Clock, CreditCard, Loader2, Package, ShieldCheck } from "lucide-react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -64,6 +64,7 @@ function Pagos() {
   const [planes, setPlanes] = useState<Plan[]>([])
   const [mia, setMia] = useState<Mia | null>(null)
   const [cupo, setCupo] = useState<Cupo | null>(null)
+  const [stpsVerificado, setStpsVerificado] = useState<boolean | null>(null)
   const [cargando, setCargando] = useState(true)
   const [periodo, setPeriodo] = useState<Periodo>("mensual")
   const [destacado, setDestacado] = useState<string | null>(null)
@@ -75,11 +76,13 @@ function Pagos() {
   const inicial = useRef<{ plan?: string; extra?: number } | null>(null)
 
   const cargar = useCallback(async () => {
-    const [ps, m, cu] = await Promise.all([
+    const [ps, m, cu, st] = await Promise.all([
       apiRequest<Plan[]>("/suscripciones/planes"),
       apiRequest<Mia>("/suscripciones/mia").catch(() => null),
       apiRequest<Cupo>("/cupo").catch(() => null),
+      apiRequest<{ validado: boolean }>("/organizaciones/stps").catch(() => null),
     ])
+    setStpsVerificado(st ? st.validado : null)
     setPlanes(ps)
     setMia(m)
     setCupo(cu)
@@ -270,6 +273,8 @@ function Pagos() {
             </section>
           )}
 
+          {stpsVerificado === false && <AvisoStps />}
+
           <div id="planes" className="flex scroll-mt-24 flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-medium">Planes</h2>
@@ -370,6 +375,7 @@ function Pagos() {
                     Al confirmarse el pago, este plan reemplaza al actual{actual?.periodo === "mensual" ? " y dejamos de cobrarte el anterior" : ""}.
                   </p>
                 )}
+                {stpsVerificado === false && <AvisoStps compacto />}
                 <Field label={periodo === "mensual" ? "Correo de tu cuenta de Mercado Pago" : "Correo para el recibo"} htmlFor="mp_correo" hint={periodo === "mensual" ? "Debe ser el mismo con el que entrarás a Mercado Pago." : undefined}>
                   <Input id="mp_correo" type="email" inputMode="email" autoComplete="email" value={correo} onChange={(e) => setCorreo(e.target.value)} />
                 </Field>
@@ -404,6 +410,23 @@ function Pagos() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+    </div>
+  )
+}
+
+/** Antes de pagar: que nadie pague creyendo que tendrá el sello de agente verificado. */
+function AvisoStps({ compacto = false }: { compacto?: boolean }) {
+  return (
+    <div role="note" className={`flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-50 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200 ${compacto ? "p-3 text-xs" : "p-4 text-sm"}`}>
+      <AlertTriangle className={`mt-0.5 shrink-0 text-amber-600 ${compacto ? "h-4 w-4" : "h-5 w-5"}`} />
+      <div>
+        <p className="font-semibold">Tu registro ante la STPS no está verificado</p>
+        <p className="mt-0.5">
+          Puedes usar AACES y emitir tus DC-3, pero no llevarán el sello de agente verificado, la página de su QR dirá
+          “Registro STPS: no verificado” y tus cursos no aparecerán en el Marketplace.{" "}
+          <Link href="/cliente/ajustes?tab=stps" className="font-semibold underline">Revisar mi registro</Link>
+        </p>
+      </div>
     </div>
   )
 }
