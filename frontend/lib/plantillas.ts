@@ -58,11 +58,7 @@ export const EJEMPLOS: Record<string, string> = {
   capacitador: "CAS Capacitación y Adiestramiento",
   registro_stps: "CAS-150312-AB7",
   instructor: "Ing. Juan Pérez López",
-  nombre_patron: "Lic. Roberto Salinas Mejía",
-  nombre_trabajadores: "Juan García Torres",
   firma_instructor: "",
-  firma_patron: "",
-  firma_trabajadores: "",
   fecha_emision: "06/10/2026",
   folio: "CERT-A7AD98C5",
   codigo_validacion: "5D1627E0",
@@ -71,8 +67,8 @@ export const EJEMPLOS: Record<string, string> = {
   texto: "Texto fijo",
 }
 
-// Campos que se imprimen como imagen (firmas subidas por la agencia)
-export const FIRMAS = new Set(["firma_instructor", "firma_patron", "firma_trabajadores"])
+// Campos que se imprimen como imagen: la firma de quien imparte el curso
+export const FIRMAS = new Set(["firma_instructor"])
 
 // Casillas sugeridas al agregar el campo (formato DC-3 oficial)
 export const CASILLAS_SUGERIDAS: Record<string, number> = {

@@ -402,7 +402,7 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
               )}
               {FIRMAS.has(seleccionado.clave) && (
                 <p className="rounded-lg bg-orange-500/5 p-3 text-xs text-muted-foreground">
-                  Se imprime la firma que subas: {seleccionado.clave === "firma_instructor" ? "la de cada instructor, en Instructores" : "la de la empresa, en cada grupo de la agenda (Firmas del DC-3)"}. Se ajusta al recuadro sin deformarse y se apoya en la línea de abajo.
+                  Se imprime la firma de quien impartió el curso (se sube en Instructores). Se ajusta al recuadro sin deformarse y se apoya en la línea de abajo. Las demás firmas se hacen a mano sobre el documento impreso.
                 </p>
               )}
               {seleccionado.clave === "qr" && (

@@ -47,6 +47,13 @@ def _slug(s: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_")[:60] or "documento"
 
 
+def _archivo_participante(f: Dict[str, Any]) -> str:
+    """DC3_Apellidos_Nombre_FOLIO, para el ZIP o la descarga de una sola persona."""
+    apellidos = " ".join(x for x in (f.get("apellido_paterno"), f.get("apellido_materno")) if x) or (f.get("apellido") or "")
+    base = _slug(" ".join(x for x in (apellidos, f.get("nombre")) if x)) or "participante"
+    return f"DC3_{base}_{f.get('id_certificado') or f.get('codigo_validacion') or ''}".rstrip("_")
+
+
 def _uuid(v: str, nombre: str = "id") -> str:
     try:
         return str(uuid.UUID(str(v)))
@@ -191,8 +198,7 @@ _SQL_PARTICIPANTES = """
            COALESCE(o.nombre_comercial, o.razon_social, cl.nombre) AS capacitador,
            CASE WHEN o.stps_validado THEN o.stps_registro END AS registro_stps,
            COALESCE(cp.congruencia->>'instructor', ins.nombre) AS instructor,  -- el de cuando se dio el folio
-           fi.firma AS firma_instructor,
-           c.firma_patron, c.nombre_patron, c.firma_trabajadores, c.nombre_trabajadores
+           fi.firma AS firma_instructor
     FROM aaces.curso_participante cp
     JOIN aaces.participantes p ON p.id = cp.participante_id
     JOIN aaces.cursos c ON c.id = cp.curso_id
@@ -295,9 +301,7 @@ async def generar(plantilla_id: str, body: GenerarIn, identity: Identity = Depen
         buf, usados = io.BytesIO(), set()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
             for f, individual in individuales:
-                apellidos = " ".join(x for x in (f.get("apellido_paterno"), f.get("apellido_materno")) if x) or (f.get("apellido") or "")
-                base = _slug(" ".join(x for x in (apellidos, f.get("nombre")) if x)) or "participante"
-                nombre_pdf = f"DC3_{base}_{f.get('id_certificado') or f.get('codigo_validacion') or ''}".rstrip("_")
+                nombre_pdf = _archivo_participante(f)
                 while nombre_pdf in usados:
                     nombre_pdf += "_2"
                 usados.add(nombre_pdf)
@@ -309,7 +313,8 @@ async def generar(plantilla_id: str, body: GenerarIn, identity: Identity = Depen
         )
 
     pdf = P.generar(plantilla_pdf, p["campos"], valores)
-    nombre = f"DC3_{_slug(filas[0]['curso_nombre'])}.pdf"
+    # Un solo participante (p. ej. reimprimir el que faltó): se nombra por él, no por el curso
+    nombre = f"{_archivo_participante(filas[0])}.pdf" if len(filas) == 1 else f"DC3_{_slug(filas[0]['curso_nombre'])}.pdf"
     return Response(
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{nombre}"', "X-Generados": str(len(filas)),

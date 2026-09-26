@@ -27,8 +27,8 @@ MAX_PAGINAS = 4
 FUENTES = {False: "Helvetica", True: "Helvetica-Bold"}
 
 # Catálogo de campos disponibles en el editor: clave -> (etiqueta, grupo, ejemplo)
-# Campos que se dibujan como imagen (firmas)
-IMAGENES = {"firma_instructor", "firma_patron", "firma_trabajadores"}
+# Campos que se dibujan como imagen (la firma del instructor)
+IMAGENES = {"firma_instructor"}
 
 CAMPOS: Dict[str, Tuple[str, str, str]] = {
     "participante_nombre": ("Nombre completo", "Participante", "MARÍA FERNANDA LÓPEZ RUIZ"),
@@ -59,11 +59,7 @@ CAMPOS: Dict[str, Tuple[str, str, str]] = {
     "codigo_validacion": ("Código de validación", "Documento", "5D1627E0"),
     "url_verificacion": ("Liga de verificación", "Documento", "https://aaces.mx/v/5D1627E0"),
     "qr": ("Código QR", "Documento", ""),
-    "firma_instructor": ("Firma del instructor", "Firmas", ""),
-    "firma_patron": ("Firma del patrón o representante legal", "Firmas", ""),
-    "nombre_patron": ("Nombre del patrón o representante legal", "Firmas", "LIC. ROBERTO SALINAS MEJÍA"),
-    "firma_trabajadores": ("Firma del representante de los trabajadores", "Firmas", ""),
-    "nombre_trabajadores": ("Nombre del representante de los trabajadores", "Firmas", "JUAN GARCÍA TORRES"),
+    "firma_instructor": ("Firma del instructor", "Capacitador", ""),
     "texto": ("Texto fijo", "Otros", "TEXTO FIJO"),
 }
 
@@ -245,12 +241,8 @@ def valores_participante(r: Dict[str, Any], url_base: str) -> Dict[str, str]:
         "capacitador": (r.get("capacitador") or "").strip(),
         "registro_stps": (r.get("registro_stps") or "").strip(),
         "instructor": (r.get("instructor") or "").strip(),
-        "nombre_patron": (r.get("nombre_patron") or "").strip(),
-        "nombre_trabajadores": (r.get("nombre_trabajadores") or "").strip(),
-        # Imágenes (bytes PNG): se dibujan dentro de su recuadro
+        # Imagen (bytes PNG) de la firma de quien impartió el curso
         "firma_instructor": bytes(r["firma_instructor"]) if r.get("firma_instructor") else None,
-        "firma_patron": bytes(r["firma_patron"]) if r.get("firma_patron") else None,
-        "firma_trabajadores": bytes(r["firma_trabajadores"]) if r.get("firma_trabajadores") else None,
         "fecha_emision": f(emision),
         "folio": r.get("id_certificado") or "",
         "codigo_validacion": codigo,

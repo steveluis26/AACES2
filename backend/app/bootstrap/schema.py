@@ -966,12 +966,10 @@ async def create_cifrado_datos(conn: AsyncConnection) -> None:
 
 
 async def create_firmas(conn: AsyncConnection) -> None:
-    """Firmas del DC-3: la del instructor vive en su ficha; las del patrón y del
-    representante de los trabajadores son de la empresa cliente, por grupo."""
+    """Firma del DC-3: solo la de quien imparte el curso (vive en la ficha del
+    instructor). Las del patrón y del representante de los trabajadores se firman
+    a mano sobre el documento impreso."""
     await conn.execute(text("ALTER TABLE aaces.instructores ADD COLUMN IF NOT EXISTS firma BYTEA"))
-    for col in ("firma_patron BYTEA", "nombre_patron VARCHAR(200)",
-                "firma_trabajadores BYTEA", "nombre_trabajadores VARCHAR(200)"):
-        await conn.execute(text(f"ALTER TABLE aaces.cursos ADD COLUMN IF NOT EXISTS {col}"))
 
 
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:

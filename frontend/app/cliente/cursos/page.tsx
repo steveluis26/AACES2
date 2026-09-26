@@ -24,7 +24,6 @@ import { CalendarioMensual } from '@/components/cursos/calendario-mensual'
 import { AcreditarGrupo } from '@/components/cursos/acreditar-grupo'
 import { CongruenciaGrupo } from '@/components/congruencia/congruencia-grupo'
 import { ImportarParticipantes } from '@/components/cursos/importar-participantes'
-import { FirmasGrupo } from '@/components/firmas/firmas-grupo'
 
 const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).slice(0, 10) : null); return d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }
 
@@ -841,10 +840,7 @@ export default function CursosClientePage() {
             {detalleError && (
               <Alert className="alert-error mt-3">{detalleError}</Alert>
             )}
-            <div className="mt-8 space-y-6">
-              <CongruenciaGrupo key={`cg-${selected.id}`} cursoId={selected.id} />
-              <FirmasGrupo key={`fg-${selected.id}`} cursoId={selected.id} />
-            </div>
+            <div className="mt-8"><CongruenciaGrupo key={selected.id} cursoId={selected.id} /></div>
             <ImportarParticipantes
               abierto={importarAbierto}
               onCerrar={() => setImportarAbierto(false)}

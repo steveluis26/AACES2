@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { AlertTriangle, BadgeCheck, CheckCircle2, Loader2, ShieldCheck } from "lucide-react"
+import { AlertTriangle, BadgeCheck, CheckCircle2, Loader2, PenLine, ShieldCheck } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiRequest } from "@/app/services/api"
 import type { Congruencia } from "@/lib/congruencia"
 
-type Opcion = { id: string; nombre: string; stps_registrado?: boolean; activo?: boolean; cursos?: { id: string }[] }
+type Opcion = { id: string; nombre: string; stps_registrado?: boolean; activo?: boolean; tiene_firma?: boolean; cursos?: { id: string }[] }
 const NINGUNO = "__ninguno__"
 
 /** Curso del catálogo e instructor del grupo, con los avisos de congruencia del DC-3. */
@@ -76,6 +76,16 @@ export function CongruenciaGrupo({ cursoId }: { cursoId: string }) {
           </Select>
         </label>
       </div>
+      {c.instructor_id && (() => {
+        const ins = instructores.find((i) => i.id === c.instructor_id)
+        return ins ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {ins.tiene_firma
+              ? <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-400"><PenLine className="h-3.5 w-3.5" /> Su firma se imprime en el DC-3.</span>
+              : <>Sin firma registrada: se firmará a mano. <Link href="/cliente/instructores" className="font-medium text-orange-500 hover:underline">Subir su firma</Link></>}
+          </p>
+        ) : null
+      })()}
       {instructores.length === 0 && (
         <p className="mt-2 text-xs text-muted-foreground">Aún no tienes instructores. <Link href="/cliente/instructores" className="font-medium text-orange-500 hover:underline">Agrega tu plantilla</Link>.</p>
       )}
