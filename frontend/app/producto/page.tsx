@@ -1,6 +1,6 @@
 "use client"
 import Image from "next/image"
-import { Shield, BadgeCheck, UserCheck, QrCode, BarChart3, Users, Bell, LayoutDashboard, FileText, Scan } from "lucide-react"
+import { Shield, BadgeCheck, UserCheck, QrCode, BarChart3, Users, Bell, LayoutDashboard, FileText, Scan, GraduationCap } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { PageHero } from "@/components/landing/page-hero"
 import { SectionHeading } from "@/components/landing/section-heading"
@@ -10,20 +10,23 @@ import CtaSection from "@/components/landing/cta-section"
 import FooterSection from "src/components/footer"
 
 const steps = [
-  { icon: Shield, label: "La agencia emite la constancia" },
-  { icon: BadgeCheck, label: "AACES genera un identificador único" },
+  { icon: Shield, label: "La agencia acredita al grupo" },
+  { icon: BadgeCheck, label: "AACES asigna folio y QR y guarda quién lo impartió" },
   { icon: UserCheck, label: "El participante recibe su certificado" },
   { icon: Scan, label: "La empresa escanea el QR" },
-  { icon: BadgeCheck, label: "La autenticidad se verifica al instante" },
+  { icon: BadgeCheck, label: "Ve al agente, el curso y el instructor verificados" },
 ]
 
 const features = [
   { icon: LayoutDashboard, title: "Administración", desc: "Gestiona cursos, grupos, instructores y participantes desde un solo panel." },
-  { icon: FileText, title: "Constancias DC-3", desc: "Genera constancias con formato oficial STPS en segundos." },
-  { icon: QrCode, title: "Código QR único", desc: "Cada certificado incluye un QR para verificación inmediata." },
-  { icon: Users, title: "Participantes", desc: "Controla inscripciones, pagos y expedientes de cada trabajador." },
+  { icon: FileText, title: "DC-3 con tu formato", desc: "Sube tu DC-3 con tus logos y genera los de todo un grupo en un PDF listo para imprimir." },
+  { icon: BadgeCheck, title: "Registro STPS verificado", desc: "Comprobamos tu registro en el buscador oficial de la STPS y lo mostramos en cada constancia." },
+  { icon: GraduationCap, title: "Instructores y congruencia", desc: "El DC-3 lleva el curso registrado y al instructor que lo impartió; te avisamos si algo no coincide." },
+  { icon: QrCode, title: "Código QR único", desc: "Cada certificado incluye un QR para verificación inmediata y pública." },
+  { icon: Users, title: "Participantes", desc: "Inscripciones, pagos, CURP y ocupación de cada trabajador, listos para el DC-3." },
   { icon: Bell, title: "Alertas de vigencia", desc: "Notificaciones automáticas cuando una constancia está por vencer." },
-  { icon: BarChart3, title: "Dashboard", desc: "Métricas de cursos, ingresos y participantes en tiempo real." },
+  { icon: BarChart3, title: "Dashboard", desc: "Tus cursos, participantes y el uso de constancias de tu plan en tiempo real." },
+  { icon: Shield, title: "Tus constancias, siempre", desc: "Lo que ya emitiste se puede consultar, reimprimir y verificar aunque dejes de pagar, hasta que termine su vigencia." },
 ]
 
 const EASE = [0.22, 1, 0.36, 1] as const
@@ -96,7 +99,7 @@ export default function ProductoPage() {
           <SectionHeading
             eyebrow="Así se ve"
             title="Un certificado que cualquiera puede verificar"
-            description="Datos del participante, del curso y su vigencia, con un QR que lleva a la validación pública."
+            description="Datos del participante, del curso, del instructor y su vigencia, con el registro STPS del agente verificado y un QR que lleva a la validación pública."
           />
           <Reveal y={40} scale={0.97} className="mx-auto mt-12 max-w-2xl">
             <div className="overflow-hidden rounded-2xl border border-border/50 bg-white shadow-2xl shadow-black/10">

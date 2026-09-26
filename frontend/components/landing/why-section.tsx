@@ -13,7 +13,7 @@ const benefits = [
   {
     icon: FileText,
     title: "Emite constancias verificables",
-    desc: "Genera constancias DC-3 con formato oficial STPS y QR único de validación."
+    desc: "DC-3 con tu formato, QR único y la congruencia que pide la STPS: agente registrado, curso registrado e instructor que lo impartió."
   },
   {
     icon: ShieldCheck,
