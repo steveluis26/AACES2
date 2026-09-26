@@ -23,6 +23,13 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 const redondear = (n: number) => Math.round(n * 100) / 100
 const acotar = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n))
 
+// Textos habituales cuando el participante no tiene empleador (p. ej. estudiantes)
+const SUGERENCIAS_VACIO: Record<string, string[]> = {
+  empresa: ["PARTICULAR", "INDEPENDIENTE", "NO APLICA"],
+  puesto: ["ESTUDIANTE", "NO APLICA"],
+  ocupacion: ["ESTUDIANTE", "NO APLICA"],
+}
+
 function nuevoCampo(clave: string, pagina: number, x: number, y: number, pw: number): CampoPlantilla {
   const esQr = clave === "qr"
   const esFirma = FIRMAS.has(clave)
@@ -367,6 +374,22 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
                 <label className="grid gap-1.5 text-sm font-medium">Texto
                   <Input value={seleccionado.texto} onChange={(e) => actualizar(seleccionado.id!, { texto: e.target.value })} />
                 </label>
+              )}
+              {seleccionado.clave !== "texto" && seleccionado.clave !== "qr" && !FIRMAS.has(seleccionado.clave) && (
+                <div className="grid gap-1.5">
+                  <label htmlFor="si_vacio" className="text-sm font-medium">Si viene vacío, escribir</label>
+                  <Input id="si_vacio" value={seleccionado.texto} placeholder="Dejar en blanco"
+                    onChange={(e) => actualizar(seleccionado.id!, { texto: e.target.value })} />
+                  {SUGERENCIAS_VACIO[seleccionado.clave] && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {SUGERENCIAS_VACIO[seleccionado.clave].map((t) => (
+                        <button key={t} type="button" onClick={() => actualizar(seleccionado.id!, { texto: t })}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${seleccionado.texto === t ? "border-orange-500 bg-orange-500 text-white" : "hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-500/10"}`}>{t}</button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">Útil para participantes sin empleador, como estudiantes. Si lo dejas vacío, el campo sale en blanco.</p>
+                </div>
               )}
 
               {seleccionado.clave !== "qr" && !FIRMAS.has(seleccionado.clave) && (

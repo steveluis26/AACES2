@@ -365,7 +365,9 @@ def _capa(campos: List[Campo], valores: Dict[str, str], pw: float, ph: float) ->
         elif campo.clave in IMAGENES:
             _dibujar_imagen(c, campo, valores.get(campo.clave), pw, ph)
         else:
-            texto = campo.texto if campo.clave == "texto" else valores.get(campo.clave, "")
+            # En campos de datos, "texto" es lo que la agencia quiere cuando el dato viene vacío
+            # (p. ej. empresa "PARTICULAR" u ocupación "ESTUDIANTE" para quien no tiene empleador)
+            texto = campo.texto if campo.clave == "texto" else (valores.get(campo.clave) or campo.texto)
             _dibujar_texto(c, campo, texto, pw, ph)
     c.showPage()
     c.save()
