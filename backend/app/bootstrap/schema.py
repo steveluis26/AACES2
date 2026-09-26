@@ -781,6 +781,38 @@ async def create_cupo_constancias(conn: AsyncConnection) -> None:
     """))
 
 
+async def create_marketplace_visibilidad(conn: AsyncConnection) -> None:
+    """Regla del marketplace: solo aparecen los cursos y paquetes publicados de
+    agencias que están pagando (suscripción activa en un plan de pago que incluye
+    marketplace). Si dejan de pagar desaparecen solos; al renovar vuelven.
+    El marketplace debe leer SIEMPRE de estas vistas, no de las tablas."""
+    await conn.execute(text("""
+        CREATE OR REPLACE FUNCTION aaces.org_en_marketplace(p_org UUID) RETURNS BOOLEAN
+        LANGUAGE sql STABLE AS $$
+          SELECT EXISTS (
+            SELECT 1
+            FROM aaces.cupo_constancias(p_org) c
+            JOIN aaces.planes p ON p.codigo = c.plan_codigo
+            JOIN aaces.organizaciones o ON o.id = p_org
+            WHERE c.activa AND NOT c.es_prueba
+              AND COALESCE(p.precio_mensual, 0) > 0
+              AND COALESCE(p.incluye_marketplace, false)
+              AND o.estatus = 'activa'
+          )
+        $$;
+    """))
+    await conn.execute(text("""
+        CREATE OR REPLACE VIEW aaces.marketplace_cursos AS
+        SELECT cc.* FROM aaces.catalogo_cursos cc
+        WHERE cc.publicado AND cc.activo AND aaces.org_en_marketplace(cc.organizacion_id)
+    """))
+    await conn.execute(text("""
+        CREATE OR REPLACE VIEW aaces.marketplace_paquetes AS
+        SELECT pq.* FROM aaces.paquetes pq
+        WHERE pq.publicado AND pq.activo AND aaces.org_en_marketplace(pq.organizacion_id)
+    """))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -831,6 +863,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_plantillas_pdf,
         create_archivos_almacenados,
         create_cupo_constancias,
+        create_marketplace_visibilidad,
         create_metadata_tables,
         create_legacy_fixes,
     ]:
