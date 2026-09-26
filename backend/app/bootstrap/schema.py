@@ -915,6 +915,7 @@ async def create_congruencia(conn: AsyncConnection) -> None:
                    'curso_registrado', COALESCE(cc.stps_registrado, false),
                    'curso_stps_nombre', cc.stps_nombre,
                    'instructor', i.nombre,
+                   'instructor_id', c.instructor_id,
                    'instructor_en_plantilla', EXISTS (
                       SELECT 1 FROM aaces.instructor_cursos ic
                       WHERE ic.instructor_id = c.instructor_id AND ic.catalogo_curso_id = c.catalogo_curso_id),
@@ -962,6 +963,15 @@ async def create_cifrado_datos(conn: AsyncConnection) -> None:
     await conn.execute(text("DROP INDEX IF EXISTS aaces.idx_organizaciones_rfc"))
     await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_organizaciones_rfc_hash ON aaces.organizaciones (rfc_hash)"))
     await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_participantes_curp_hash ON aaces.participantes (curp_hash)"))
+
+
+async def create_firmas(conn: AsyncConnection) -> None:
+    """Firmas del DC-3: la del instructor vive en su ficha; las del patrón y del
+    representante de los trabajadores son de la empresa cliente, por grupo."""
+    await conn.execute(text("ALTER TABLE aaces.instructores ADD COLUMN IF NOT EXISTS firma BYTEA"))
+    for col in ("firma_patron BYTEA", "nombre_patron VARCHAR(200)",
+                "firma_trabajadores BYTEA", "nombre_trabajadores VARCHAR(200)"):
+        await conn.execute(text(f"ALTER TABLE aaces.cursos ADD COLUMN IF NOT EXISTS {col}"))
 
 
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
@@ -1019,6 +1029,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_verificacion_stps,
         create_congruencia,
         create_cifrado_datos,
+        create_firmas,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

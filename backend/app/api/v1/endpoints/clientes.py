@@ -2025,6 +2025,79 @@ async def update_participante_curso(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando participante: {str(e)}")
 
+# ---------------------------------------------------------------------------
+# Firmas del DC-3 de la empresa cliente (por grupo): patrón o representante legal
+# y representante de los trabajadores. La del instructor vive en su ficha.
+# ---------------------------------------------------------------------------
+_FIRMAS = {"patron": ("firma_patron", "nombre_patron"), "trabajadores": ("firma_trabajadores", "nombre_trabajadores")}
+
+
+async def _curso_propio(db: AsyncSession, curso_id: str, identity: Identity) -> None:
+    cid = await get_current_cliente_id(db, identity)
+    if not (await db.execute(text("SELECT 1 FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})).scalar():
+        raise HTTPException(status_code=404, detail="Curso no encontrado")
+
+
+@router.get("/cursos/{curso_id}/firmas")
+async def firmas_curso(curso_id: str, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
+    await _curso_propio(db, curso_id, identity)
+    r = (await db.execute(text("""
+        SELECT c.nombre_patron, c.firma_patron IS NOT NULL, c.nombre_trabajadores, c.firma_trabajadores IS NOT NULL,
+               i.nombre, i.firma IS NOT NULL
+        FROM aaces.cursos c LEFT JOIN aaces.instructores i ON i.id = c.instructor_id WHERE c.id = :id
+    """), {"id": curso_id})).fetchone()
+    return {
+        "patron": {"nombre": r[0], "tiene_firma": bool(r[1])},
+        "trabajadores": {"nombre": r[2], "tiene_firma": bool(r[3])},
+        "instructor": {"nombre": r[4], "tiene_firma": bool(r[5])} if r[4] else None,
+    }
+
+
+@router.put("/cursos/{curso_id}/firmas/{tipo}")
+async def guardar_firma_curso(
+    curso_id: str, tipo: str,
+    nombre: Optional[str] = Form(None),
+    archivo: Optional[UploadFile] = File(None),
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    if tipo not in _FIRMAS:
+        raise HTTPException(status_code=404, detail="Tipo de firma no válido")
+    await _curso_propio(db, curso_id, identity)
+    col_firma, col_nombre = _FIRMAS[tipo]
+    sets, params = [], {"id": curso_id}
+    if nombre is not None:
+        sets.append(f"{col_nombre} = :nombre"); params["nombre"] = nombre.strip()[:200] or None
+    if archivo is not None:
+        from app.services.firmas import procesar
+        sets.append(f"{col_firma} = :firma"); params["firma"] = procesar(await archivo.read())
+    if sets:
+        await db.execute(text(f"UPDATE aaces.cursos SET {', '.join(sets)} WHERE id = :id"), params)
+        await db.commit()
+    return await firmas_curso(curso_id, identity, db)
+
+
+@router.get("/cursos/{curso_id}/firmas/{tipo}/imagen")
+async def ver_firma_curso(curso_id: str, tipo: str, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
+    if tipo not in _FIRMAS:
+        raise HTTPException(status_code=404, detail="Tipo de firma no válido")
+    await _curso_propio(db, curso_id, identity)
+    f = (await db.execute(text(f"SELECT {_FIRMAS[tipo][0]} FROM aaces.cursos WHERE id = :id"), {"id": curso_id})).scalar()
+    if not f:
+        raise HTTPException(status_code=404, detail="Sin firma")
+    return Response(content=bytes(f), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/cursos/{curso_id}/firmas/{tipo}")
+async def quitar_firma_curso(curso_id: str, tipo: str, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
+    if tipo not in _FIRMAS:
+        raise HTTPException(status_code=404, detail="Tipo de firma no válido")
+    await _curso_propio(db, curso_id, identity)
+    await db.execute(text(f"UPDATE aaces.cursos SET {_FIRMAS[tipo][0]} = NULL WHERE id = :id"), {"id": curso_id})
+    await db.commit()
+    return await firmas_curso(curso_id, identity, db)
+
+
 @router.get("/importar/plantilla")
 async def plantilla_importar(identity: Identity = Depends(get_current_identity)):
     """Plantilla de Excel para importar participantes."""

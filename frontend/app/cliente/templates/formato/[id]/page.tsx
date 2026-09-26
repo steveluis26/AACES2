@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { motion, useReducedMotion } from "motion/react"
 import {
   AlignCenter, AlignLeft, AlignRight, ArrowLeft, Bold, Check, Copy, Eye, FileDown, GripVertical,
-  Loader2, MousePointerClick, Plus, QrCode, Save, Trash2, Type,
+  Loader2, MousePointerClick, PenLine, Plus, QrCode, Save, Trash2, Type,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,7 @@ import { Segmented, SwitchCard } from "@/components/forms/form-bits"
 import { PaginaPdf, abrirPdf } from "@/components/plantillas/pagina-pdf"
 import { GenerarDc3 } from "@/components/plantillas/generar-dc3"
 import {
-  CASILLAS_SUGERIDAS, EJEMPLOS, abrirBlob, plantillasApi,
+  CASILLAS_SUGERIDAS, EJEMPLOS, FIRMAS, abrirBlob, plantillasApi,
   type CampoCatalogo, type CampoPlantilla, type Plantilla,
 } from "@/lib/plantillas"
 
@@ -25,8 +25,9 @@ const acotar = (n: number, min: number, max: number) => Math.min(max, Math.max(m
 
 function nuevoCampo(clave: string, pagina: number, x: number, y: number, pw: number): CampoPlantilla {
   const esQr = clave === "qr"
-  const w = esQr ? 14 : CASILLAS_SUGERIDAS[clave] ? Math.min(60, CASILLAS_SUGERIDAS[clave] * 2.6) : 36
-  const h = esQr ? redondear(14 * (pw ? 1 : 1)) : 3
+  const esFirma = FIRMAS.has(clave)
+  const w = esQr ? 14 : esFirma ? 22 : CASILLAS_SUGERIDAS[clave] ? Math.min(60, CASILLAS_SUGERIDAS[clave] * 2.6) : 36
+  const h = esQr ? redondear(14 * (pw ? 1 : 1)) : esFirma ? 6 : 3
   return {
     id: uid(), clave, pagina,
     x: redondear(acotar(x - w / 2, 0, 100 - w)), y: redondear(acotar(y - h / 2, 0, 100 - h)),
@@ -251,7 +252,7 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
                         className="group flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border bg-background px-3 py-2 text-left text-xs transition-all hover:border-orange-500/50 hover:bg-orange-500/5 active:scale-[0.98] lg:w-full lg:text-sm"
                       >
                         <GripVertical className="hidden h-3.5 w-3.5 text-muted-foreground/60 lg:block" />
-                        {c.clave === "qr" ? <QrCode className="h-3.5 w-3.5 text-orange-500" /> : c.clave === "texto" ? <Type className="h-3.5 w-3.5 text-orange-500" /> : null}
+                        {c.clave === "qr" ? <QrCode className="h-3.5 w-3.5 text-orange-500" /> : c.clave === "texto" ? <Type className="h-3.5 w-3.5 text-orange-500" /> : FIRMAS.has(c.clave) ? <PenLine className="h-3.5 w-3.5 text-orange-500" /> : null}
                         <span className="flex-1 truncate">{c.etiqueta}</span>
                         {usado ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Plus className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />}
                       </button>
@@ -300,6 +301,10 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
                   >
                     {c.clave === "qr" ? (
                       <div className="flex h-full w-full items-center justify-center bg-white/80"><QrCode className="h-3/4 w-3/4 text-gray-800" /></div>
+                    ) : FIRMAS.has(c.clave) ? (
+                      <svg viewBox="0 0 120 40" preserveAspectRatio="xMidYMax meet" className="h-full w-full text-blue-900/70" aria-hidden="true">
+                        <path d="M6 28 C 18 6, 26 38, 38 20 S 58 4, 66 24 S 88 36, 96 14 S 110 22, 114 18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+                      </svg>
                     ) : c.casillas ? (
                       <div className="grid h-full w-full" style={{ gridTemplateColumns: `repeat(${c.casillas}, 1fr)` }}>
                         {Array.from({ length: c.casillas }).map((_, i) => (
@@ -364,7 +369,7 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
                 </label>
               )}
 
-              {seleccionado.clave !== "qr" && (
+              {seleccionado.clave !== "qr" && !FIRMAS.has(seleccionado.clave) && (
                 <>
                   <label className="grid gap-1.5 text-sm font-medium">
                     <span className="flex justify-between">Tamaño de letra <span className="font-normal text-muted-foreground">{seleccionado.tam} pt</span></span>
@@ -394,6 +399,11 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
 
                   <SwitchCard id="mayus" checked={seleccionado.mayusculas} onChange={(v) => actualizar(seleccionado.id!, { mayusculas: v })} title="Mayúsculas" desc="Como se llenan normalmente los DC-3." />
                 </>
+              )}
+              {FIRMAS.has(seleccionado.clave) && (
+                <p className="rounded-lg bg-orange-500/5 p-3 text-xs text-muted-foreground">
+                  Se imprime la firma que subas: {seleccionado.clave === "firma_instructor" ? "la de cada instructor, en Instructores" : "la de la empresa, en cada grupo de la agenda (Firmas del DC-3)"}. Se ajusta al recuadro sin deformarse y se apoya en la línea de abajo.
+                </p>
               )}
               {seleccionado.clave === "qr" && (
                 <p className="rounded-lg bg-orange-500/5 p-3 text-xs text-muted-foreground">El QR lleva a la página de verificación de cada participante. Arrastra la esquina para cambiar su tamaño; mínimo recomendado: 2 cm.</p>

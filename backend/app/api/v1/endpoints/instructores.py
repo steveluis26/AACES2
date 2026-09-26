@@ -3,7 +3,8 @@
 import re
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +34,7 @@ def _curp(v: Optional[str]) -> Optional[str]:
 async def _listar(db: AsyncSession, org_id: str, instructor_id: Optional[str] = None) -> list:
     filtro = "AND i.id = CAST(:iid AS uuid)" if instructor_id else ""
     rows = (await db.execute(text(f"""
-        SELECT i.id, i.nombre, i.curp, i.correo, i.activo,
+        SELECT i.id, i.nombre, i.curp, i.correo, i.activo, (i.firma IS NOT NULL),
                COALESCE(json_agg(json_build_object('id', cc.id, 'nombre', cc.nombre, 'stps_registrado', cc.stps_registrado)
                                  ORDER BY cc.nombre) FILTER (WHERE cc.id IS NOT NULL), '[]'),
                (SELECT count(*) FROM aaces.cursos c WHERE c.instructor_id = i.id)
@@ -44,7 +45,7 @@ async def _listar(db: AsyncSession, org_id: str, instructor_id: Optional[str] = 
         GROUP BY i.id ORDER BY i.activo DESC, i.nombre
     """), {"o": org_id, "iid": instructor_id})).fetchall()
     return [{"id": str(r[0]), "nombre": r[1], "curp": descifrar(r[2]), "correo": r[3], "activo": r[4],
-             "cursos": r[5], "grupos": int(r[6] or 0)} for r in rows]
+             "tiene_firma": bool(r[5]), "cursos": r[6], "grupos": int(r[7] or 0)} for r in rows]
 
 
 async def _guardar_cursos(db: AsyncSession, org_id: str, instructor_id: str, cursos: List[str]) -> None:
@@ -98,4 +99,44 @@ async def eliminar(instructor_id: str, identity: Identity = Depends(get_current_
     r = await db.execute(text(f"{q} WHERE id = CAST(:i AS uuid) AND organizacion_id = CAST(:o AS uuid)"), {"i": instructor_id, "o": org_id})
     if not r.rowcount:
         raise HTTPException(404, "Instructor no encontrado")
+    await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Firma del instructor (se imprime en el DC-3 en "Instructor o tutor")
+# ---------------------------------------------------------------------------
+
+async def _propio(db: AsyncSession, instructor_id: str, org_id: str) -> None:
+    ok = (await db.execute(text("SELECT 1 FROM aaces.instructores WHERE id = CAST(:i AS uuid) AND organizacion_id = CAST(:o AS uuid)"),
+                           {"i": instructor_id, "o": org_id})).scalar()
+    if not ok:
+        raise HTTPException(404, "Instructor no encontrado")
+
+
+@router.put("/{instructor_id}/firma")
+async def subir_firma(instructor_id: str, archivo: UploadFile = File(...), identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
+    from app.services.firmas import procesar
+    org_id = await require_org_id(db, identity)
+    await _propio(db, instructor_id, org_id)
+    png = procesar(await archivo.read())
+    await db.execute(text("UPDATE aaces.instructores SET firma = :f, fecha_actualizacion = now() WHERE id = CAST(:i AS uuid)"), {"f": png, "i": instructor_id})
+    await db.commit()
+    return {"tiene_firma": True}
+
+
+@router.get("/{instructor_id}/firma")
+async def ver_firma(instructor_id: str, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
+    org_id = await require_org_id(db, identity)
+    f = (await db.execute(text("SELECT firma FROM aaces.instructores WHERE id = CAST(:i AS uuid) AND organizacion_id = CAST(:o AS uuid)"),
+                          {"i": instructor_id, "o": org_id})).scalar()
+    if not f:
+        raise HTTPException(404, "Sin firma")
+    return Response(content=bytes(f), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@router.delete("/{instructor_id}/firma", status_code=204)
+async def quitar_firma(instructor_id: str, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
+    org_id = await require_org_id(db, identity)
+    await _propio(db, instructor_id, org_id)
+    await db.execute(text("UPDATE aaces.instructores SET firma = NULL WHERE id = CAST(:i AS uuid)"), {"i": instructor_id})
     await db.commit()

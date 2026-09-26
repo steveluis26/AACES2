@@ -39,6 +39,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const [listo, setListo] = useState<number | null>(null)
   const [cupo, setCupo] = useState<Cupo | null>(null)
   const [avisos, setAvisos] = useState<Aviso[]>([])
+  const [formato, setFormato] = useState<"pdf" | "zip">("pdf")
   const [confirmado, setConfirmado] = useState(false)
 
   useEffect(() => {
@@ -83,11 +84,11 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const generar = async () => {
     setGenerando(true)
     try {
-      const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados), confirmado)
+      const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados), confirmado, formato)
       descargarBlob(r.blob, r.nombre)
       setListo(r.generados)
       apiRequest<Cupo>("/cupo").then(setCupo).catch(() => {})
-      toast.success(`${r.generados} ${r.generados === 1 ? "DC-3 generado" : "DC-3 generados"}`, { description: "Se descargó un PDF listo para imprimir." })
+      toast.success(`${r.generados} ${r.generados === 1 ? "DC-3 generado" : "DC-3 generados"}`, { description: formato === "zip" ? "Se descargó un ZIP con un PDF por participante." : "Se descargó un PDF listo para imprimir." })
     } catch (e) {
       const av = avisosDeError(e)
       if (av) { setAvisos(av); setConfirmado(false) }
@@ -112,7 +113,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
                 <motion.span initial={reduce ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 15 }} className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg shadow-green-600/30">
                   <CheckCircle2 className="h-8 w-8" />
                 </motion.span>
-                <h3 className="mt-5 text-lg font-semibold">¡Listo! {listo} {listo === 1 ? "DC-3" : "DC-3"} en un PDF</h3>
+                <h3 className="mt-5 text-lg font-semibold">¡Listo! {listo} DC-3 {formato === "zip" ? "en un ZIP" : "en un PDF"}</h3>
                 <p className="mt-1 max-w-sm text-sm text-muted-foreground">Revisa tu carpeta de descargas. Cada constancia ya es verificable con su QR y aparece en tu Centro de Constancias.</p>
                 <div className="mt-6 flex gap-2">
                   <Button variant="outline" onClick={() => setListo(null)}>Generar otro grupo</Button>
@@ -202,6 +203,24 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
                         </ul>
                       </>
                     )}
+                  </section>
+                )}
+
+                {curso && (
+                  <section className="space-y-3">
+                    <p className="flex items-center gap-2 text-sm font-semibold"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">3</span>¿Cómo los quieres?</p>
+                    <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Formato de descarga">
+                      {([
+                        { v: "pdf", t: "Un PDF para imprimir", d: "Todos los DC-3 juntos, uno tras otro." },
+                        { v: "zip", t: "Un PDF por participante", d: "En un ZIP, nombrados por apellido y folio, para enviarlos." },
+                      ] as const).map((o) => (
+                        <button key={o.v} type="button" role="radio" aria-checked={formato === o.v} onClick={() => setFormato(o.v)}
+                          className={`rounded-xl border p-3 text-left transition-all ${formato === o.v ? "border-orange-500/60 bg-orange-50/70 shadow-sm dark:bg-orange-500/5" : "hover:bg-muted/50"}`}>
+                          <span className="block text-sm font-medium">{o.t}</span>
+                          <span className="block text-xs text-muted-foreground">{o.d}</span>
+                        </button>
+                      ))}
+                    </div>
                   </section>
                 )}
               </motion.div>
