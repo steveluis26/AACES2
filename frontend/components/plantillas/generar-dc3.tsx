@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { apiRequest } from "@/app/services/api"
 import { descargarBlob, plantillasApi } from "@/lib/plantillas"
 import type { Cupo } from "@/lib/cupo"
+import { avisosDeError, type Aviso } from "@/lib/congruencia"
+import { AvisosCongruencia } from "@/components/congruencia/avisos-congruencia"
 import { parseFecha } from "@/lib/utils"
 
 type Curso = { id: string; nombre: string; fecha_inicio: string | null; fecha_fin: string | null; ciudad?: string | null }
@@ -36,6 +38,8 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const [generando, setGenerando] = useState(false)
   const [listo, setListo] = useState<number | null>(null)
   const [cupo, setCupo] = useState<Cupo | null>(null)
+  const [avisos, setAvisos] = useState<Aviso[]>([])
+  const [confirmado, setConfirmado] = useState(false)
 
   useEffect(() => {
     if (!abierto) return
@@ -47,6 +51,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   }, [abierto])
 
   useEffect(() => {
+    setAvisos([]); setConfirmado(false)
     if (!curso) { setInscritos(null); return }
     setInscritos(null)
     apiRequest<Inscrito[]>(`/clientes/cursos/${curso}/participantes`)
@@ -78,13 +83,15 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const generar = async () => {
     setGenerando(true)
     try {
-      const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados))
+      const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados), confirmado)
       descargarBlob(r.blob, r.nombre)
       setListo(r.generados)
       apiRequest<Cupo>("/cupo").then(setCupo).catch(() => {})
       toast.success(`${r.generados} ${r.generados === 1 ? "DC-3 generado" : "DC-3 generados"}`, { description: "Se descargó un PDF listo para imprimir." })
     } catch (e) {
-      toast.error((e as Error).message)
+      const av = avisosDeError(e)
+      if (av) { setAvisos(av); setConfirmado(false) }
+      else toast.error((e as Error).message)
     } finally {
       setGenerando(false)
     }
@@ -161,6 +168,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
                             {inscritos.length - acreditados.length} {inscritos.length - acreditados.length === 1 ? "participante no está acreditado" : "participantes no están acreditados"}. Solo se generan DC-3 de acreditados; acredítalos en la <Link href={`/cliente/cursos?curso=${curso}`} className="font-semibold underline">agenda del curso</Link>.
                           </p>
                         )}
+                        <AvisosCongruencia avisos={avisos} confirmado={confirmado} onConfirmar={setConfirmado} />
                         {sinCupo && (
                           <div role="alert" className="rounded-xl border border-red-500/30 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
                             <p className="flex items-start gap-2 font-medium">
@@ -207,7 +215,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
               {curso ? `${marcados.size} seleccionados${cursoSel ? ` · ${cursoSel.nombre}` : ""}` : "Elige un curso"}
               {cupo && disponibles !== null && cupo.activa && <span className="block text-xs">{nuevos} {nuevos === 1 ? "nueva usa" : "nuevas usan"} tu plan · te {disponibles === 1 ? "queda" : "quedan"} {disponibles}</span>}
             </span>
-            <Button onClick={generar} disabled={!curso || marcados.size === 0 || generando || sinCupo} className="flex-1 sm:flex-none">
+            <Button onClick={generar} disabled={!curso || marcados.size === 0 || generando || sinCupo || (avisos.length > 0 && !confirmado)} className="flex-1 sm:flex-none">
               {generando ? <><Loader2 className="h-4 w-4 animate-spin" /> Generando…</> : <><FileDown className="h-4 w-4" /> Generar {marcados.size || ""} DC-3</>}
             </Button>
           </SheetFooter>

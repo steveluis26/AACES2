@@ -22,7 +22,7 @@ from app.schemas import (
     PagoResponse, PagoCreate, PagoUpdate,
     PaginatedResponse, ValidacionResponse
 )
-from app.core.identity import get_current_identity, get_current_cliente_id, require_platform_identity, Identity
+from app.core.identity import get_current_identity, get_current_cliente_id, require_platform_identity, require_org_id, Identity
 from sqlalchemy import text
 from app.services.security import security_service
 from app.services.email import email_service
@@ -2022,6 +2022,54 @@ async def update_participante_curso(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando participante: {str(e)}")
 
+@router.get("/cursos/{curso_id}/congruencia")
+async def congruencia_curso(
+    curso_id: str,
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db)
+):
+    """Curso del catálogo, instructor y avisos de congruencia del DC-3 de este grupo."""
+    from app.services.congruencia import revisar_curso
+    cid = await get_current_cliente_id(db, identity)
+    row = (await db.execute(text("SELECT catalogo_curso_id, instructor_id FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"),
+                            {"id": curso_id, "cid": cid})).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Curso no encontrado")
+    rev = await revisar_curso(db, curso_id)
+    rev.pop("organizacion_id", None)
+    return {**rev, "catalogo_curso_id": str(row[0]) if row[0] else None, "instructor_id": str(row[1]) if row[1] else None}
+
+
+@router.put("/cursos/{curso_id}/congruencia")
+async def actualizar_congruencia_curso(
+    curso_id: str,
+    payload: dict,
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db)
+):
+    """Liga el grupo a un curso del catálogo y le asigna instructor (ambos de la propia organización)."""
+    cid = await get_current_cliente_id(db, identity)
+    org_id = await require_org_id(db, identity)
+    own = (await db.execute(text("SELECT 1 FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})).scalar()
+    if not own:
+        raise HTTPException(status_code=404, detail="Curso no encontrado")
+    sets, params = [], {"id": curso_id}
+    if "catalogo_curso_id" in payload:
+        cat = payload.get("catalogo_curso_id") or None
+        if cat and not (await db.execute(text("SELECT 1 FROM aaces.catalogo_cursos WHERE id = CAST(:c AS uuid) AND organizacion_id = CAST(:o AS uuid)"), {"c": cat, "o": org_id})).scalar():
+            raise HTTPException(status_code=400, detail="Ese curso no está en tu catálogo")
+        sets.append("catalogo_curso_id = CAST(:cat AS uuid)"); params["cat"] = cat
+    if "instructor_id" in payload:
+        ins = payload.get("instructor_id") or None
+        if ins and not (await db.execute(text("SELECT 1 FROM aaces.instructores WHERE id = CAST(:i AS uuid) AND organizacion_id = CAST(:o AS uuid)"), {"i": ins, "o": org_id})).scalar():
+            raise HTTPException(status_code=400, detail="Ese instructor no está en tu plantilla")
+        sets.append("instructor_id = CAST(:ins AS uuid)"); params["ins"] = ins
+    if sets:
+        await db.execute(text(f"UPDATE aaces.cursos SET {', '.join(sets)}, fecha_actualizacion = now() WHERE id = :id"), params)
+        await db.commit()
+    return await congruencia_curso(curso_id, identity, db)
+
+
 @router.post("/cursos/{curso_id}/acreditar")
 async def acreditar_grupo(
     curso_id: str,
@@ -2054,6 +2102,12 @@ async def acreditar_grupo(
     )).fetchall()
     if len(filas) != len(set(ids)):
         raise HTTPException(status_code=400, detail="Algún participante no pertenece a este curso")
+
+    # Congruencia agente–curso–instructor: avisa (409) y registra quién decidió continuar
+    if any(not f[1] for f in filas):
+        from app.services.congruencia import exigir_confirmacion
+        await exigir_confirmacion(db, curso_id, "acreditar", bool(payload.get("confirmar_avisos")),
+                                  identity.user_id if identity.source == "usuario" else None)
 
     org_cupo = await cupo_service.verificar_participantes(db, ids)
 

@@ -48,9 +48,15 @@ export const apiRequest = async <T = unknown>(endpoint: string, options: Request
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Error ${response.status}`);
+      // detail puede ser texto o un objeto (p. ej. avisos de congruencia con código 409)
+      const d = errorData.detail
+      const err = new Error(typeof d === 'string' ? d : d?.mensaje || `Error ${response.status}`) as Error & { status?: number; detalle?: unknown }
+      err.status = response.status
+      err.detalle = d
+      throw err;
     }
 
+    if (response.status === 204) return undefined as T;
     return await response.json();
   } catch (error) {
     console.error('Error en la petición:', error);

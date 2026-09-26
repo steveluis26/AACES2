@@ -38,6 +38,8 @@ class CatalogoCursoCreate(BaseModel):
     estado: Optional[str] = Field(None, max_length=100)
     modalidad: str = Field("presencial", pattern="^(presencial|virtual|mixta)$")
     publicado: bool = False
+    stps_registrado: bool = False
+    stps_nombre: Optional[str] = Field(None, max_length=300)
 
 
 class CatalogoCursoUpdate(BaseModel):
@@ -52,6 +54,8 @@ class CatalogoCursoUpdate(BaseModel):
     modalidad: Optional[str] = Field(None, pattern="^(presencial|virtual|mixta)$")
     publicado: Optional[bool] = None
     activo: Optional[bool] = None
+    stps_registrado: Optional[bool] = None
+    stps_nombre: Optional[str] = Field(None, max_length=300)
 
 
 class PublicarBody(BaseModel):
@@ -102,6 +106,9 @@ def _row_to_curso(r) -> dict:
         "publicado": bool(r[10]),
         "activo": bool(r[11]),
         "fecha_creacion": r[12].isoformat() if isinstance(r[12], datetime) else r[12],
+        # Declarado por la agencia: el curso está en su registro ante la STPS
+        "stps_registrado": bool(r[13]) if len(r) > 13 else False,
+        "stps_nombre": r[14] if len(r) > 14 else None,
     }
 
 
@@ -110,7 +117,7 @@ async def _get_curso_or_404(db: AsyncSession, curso_id: str, org_id: str):
         text("""
             SELECT id, nombre, descripcion, duracion_horas, vigencia_meses,
                    precio, moneda, ciudad, estado, modalidad, publicado, activo,
-                   fecha_creacion
+                   fecha_creacion, stps_registrado, stps_nombre
             FROM catalogo_cursos
             WHERE id = :id AND organizacion_id = :org_id
             LIMIT 1
@@ -225,7 +232,7 @@ async def listar_catalogo(
         text(f"""
             SELECT id, nombre, descripcion, duracion_horas, vigencia_meses,
                    precio, moneda, ciudad, estado, modalidad, publicado, activo,
-                   fecha_creacion
+                   fecha_creacion, stps_registrado, stps_nombre
             FROM catalogo_cursos
             WHERE {' AND '.join(conds)}
             ORDER BY nombre
@@ -246,13 +253,15 @@ async def crear_curso_catalogo(
         text("""
             INSERT INTO catalogo_cursos
                 (organizacion_id, nombre, descripcion, duracion_horas,
-                 vigencia_meses, precio, moneda, ciudad, estado, modalidad, publicado)
+                 vigencia_meses, precio, moneda, ciudad, estado, modalidad, publicado,
+                 stps_registrado, stps_nombre)
             VALUES
                 (:org_id, :nombre, :descripcion, :duracion_horas,
-                 :vigencia_meses, :precio, :moneda, :ciudad, :estado, :modalidad, :publicado)
+                 :vigencia_meses, :precio, :moneda, :ciudad, :estado, :modalidad, :publicado,
+                 :stps_registrado, :stps_nombre)
             RETURNING id, nombre, descripcion, duracion_horas, vigencia_meses,
                       precio, moneda, ciudad, estado, modalidad, publicado, activo,
-                      fecha_creacion
+                      fecha_creacion, stps_registrado, stps_nombre
         """),
         {
             "org_id": org_id,
@@ -266,6 +275,8 @@ async def crear_curso_catalogo(
             "estado": payload.estado.strip() if payload.estado else None,
             "modalidad": payload.modalidad,
             "publicado": payload.publicado,
+            "stps_registrado": payload.stps_registrado,
+            "stps_nombre": (payload.stps_nombre or "").strip() or None,
         },
     )
     await db.commit()
@@ -287,7 +298,7 @@ async def actualizar_curso_catalogo(
     sets = []
     params: dict = {"id": curso_id, "org_id": org_id}
     for k, v in campos.items():
-        if k in ("nombre", "ciudad", "estado") and isinstance(v, str):
+        if k in ("nombre", "ciudad", "estado", "stps_nombre") and isinstance(v, str):
             v = v.strip() or None
         sets.append(f"{k} = :{k}")
         params[k] = v

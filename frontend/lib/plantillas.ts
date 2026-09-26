@@ -57,6 +57,7 @@ export const EJEMPLOS: Record<string, string> = {
   ciudad: "Querétaro",
   capacitador: "CAS Capacitación y Adiestramiento",
   registro_stps: "CAS-150312-AB7",
+  instructor: "Ing. Juan Pérez López",
   fecha_emision: "06/10/2026",
   folio: "CERT-A7AD98C5",
   codigo_validacion: "5D1627E0",
@@ -91,7 +92,11 @@ async function pedir(url: string, init: RequestInit = {}): Promise<Response> {
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(typeof data.detail === "string" ? data.detail : `Error ${res.status}`)
+    const d = data.detail
+    const err = new Error(typeof d === "string" ? d : d?.mensaje || `Error ${res.status}`) as Error & { status?: number; detalle?: unknown }
+    err.status = res.status
+    err.detalle = d
+    throw err
   }
   return res
 }
@@ -122,11 +127,11 @@ export const plantillasApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ campos: campos.map(({ id: _id, ...c }) => c) }),
     })).blob(),
-  generar: async (id: string, cursoId: string, cpIds?: string[]) => {
+  generar: async (id: string, cursoId: string, cpIds?: string[], confirmarAvisos = false) => {
     const res = await pedir(`${API}/${id}/generar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ curso_id: cursoId, curso_participante_ids: cpIds }),
+      body: JSON.stringify({ curso_id: cursoId, curso_participante_ids: cpIds, confirmar_avisos: confirmarAvisos }),
     })
     const cd = res.headers.get("Content-Disposition") || ""
     const nombre = /filename="([^"]+)"/.exec(cd)?.[1] || "DC3.pdf"

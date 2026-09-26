@@ -8,7 +8,7 @@ import { Field } from '@/components/ui/field'
 import { Affix, FormStep, QuickChips, Segmented, SwitchCard, textareaCls } from '@/components/forms/form-bits'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { toast } from 'sonner'
-import { Check, Clock, Eye, EyeOff, Library, Loader2, MapPin, Package, Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react'
+import { BadgeCheck, Check, Clock, Eye, EyeOff, Library, Loader2, MapPin, Package, Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react'
 import { apiRequest } from '@/app/services/api'
 
 type CursoCatalogo = {
@@ -24,6 +24,8 @@ type CursoCatalogo = {
   modalidad: string
   publicado: boolean
   activo: boolean
+  stps_registrado?: boolean
+  stps_nombre?: string | null
 }
 
 type PaqueteCurso = { id: string; nombre: string; duracion_horas: number; vigencia_meses: number; precio: number }
@@ -38,7 +40,7 @@ type Paquete = {
   cursos: PaqueteCurso[]
 }
 
-const emptyCurso = { nombre: '', descripcion: '', duracion_horas: '8', vigencia_meses: '24', precio: '0', moneda: 'MXN', ciudad: '', estado: '', modalidad: 'presencial', publicado: false }
+const emptyCurso = { nombre: '', descripcion: '', duracion_horas: '8', vigencia_meses: '24', precio: '0', moneda: 'MXN', ciudad: '', estado: '', modalidad: 'presencial', publicado: false, stps_registrado: false, stps_nombre: '' }
 const emptyPaquete = { nombre: '', descripcion: '', precio: '0', moneda: 'MXN', publicado: false, curso_ids: [] as string[] }
 
 export default function CatalogoPage() {
@@ -116,6 +118,8 @@ export default function CatalogoPage() {
       estado: c.estado || '',
       modalidad: c.modalidad,
       publicado: c.publicado,
+      stps_registrado: !!c.stps_registrado,
+      stps_nombre: c.stps_nombre || '',
     })
     setFormCursoError('')
     setShowFormCurso(true)
@@ -140,6 +144,8 @@ export default function CatalogoPage() {
         estado: formCurso.estado.trim() || null,
         modalidad: formCurso.modalidad,
         publicado: formCurso.publicado,
+        stps_registrado: formCurso.stps_registrado,
+        stps_nombre: formCurso.stps_nombre.trim() || null,
       }
       if (editCursoId) {
         await apiRequest(`/catalogo/cursos/${editCursoId}`, { method: 'PUT', body: JSON.stringify(body) })
@@ -354,7 +360,10 @@ export default function CatalogoPage() {
                     <CardHeader className="space-y-3 pb-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${modalidadColor[c.modalidad] || 'bg-muted'}`}>{c.modalidad}</span>
-                        <EstadoPill publicado={c.publicado} />
+                        <span className="flex items-center gap-1.5">
+                          {c.stps_registrado && <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-400" title="Registrado ante la STPS"><BadgeCheck className="h-3 w-3" /> STPS</span>}
+                          <EstadoPill publicado={c.publicado} />
+                        </span>
                       </div>
                       <CardTitle className="line-clamp-2 text-base leading-snug">{c.nombre}</CardTitle>
                       {c.descripcion && <p className="line-clamp-2 text-sm text-muted-foreground">{c.descripcion}</p>}
@@ -490,6 +499,13 @@ export default function CatalogoPage() {
                   </Field>
                 </div>
               </FormStep>
+
+              <SwitchCard id="cc_stps" checked={formCurso.stps_registrado} onChange={v => setFC('stps_registrado', v)} title="Registrado ante la STPS" desc="Este curso está en tu registro de agente capacitador. Aparece en el QR de tus DC-3 y AACES lo usa para revisar la congruencia." />
+              {formCurso.stps_registrado && (
+                <Field label="Nombre con el que está registrado" htmlFor="cc_stps_nombre" hint="Opcional: si en la STPS se llama distinto (p. ej. “PRIMEROS AUXILIOS NIVEL 1”).">
+                  <Input id="cc_stps_nombre" value={formCurso.stps_nombre} onChange={e => setFC('stps_nombre', e.target.value)} />
+                </Field>
+              )}
 
               <SwitchCard id="cc_pub" checked={formCurso.publicado} onChange={v => setFC('publicado', v)} title="Publicar en el directorio" desc="Visible para empresas que buscan capacitación en el Marketplace." />
 

@@ -75,7 +75,7 @@ class DashboardService:
                 text(f"""
                     SELECT count(*) FROM aaces.cursos
                     WHERE cliente_id IN ({cid_list}) AND estado IN ('activo', 'en_espera')
-                      AND (capacitador_id IS NULL OR capacitador_id = '00000000-0000-0000-0000-000000000000')
+                      AND instructor_id IS NULL
                 """)
             )
             if int(sin_instructor.scalar() or 0) > 0:
@@ -205,7 +205,7 @@ class DashboardService:
             text(f"""
                 SELECT count(*) FROM aaces.cursos
                 WHERE cliente_id IN ({cid_list}) AND estado IN ('activo', 'en_espera')
-                  AND (capacitador_id IS NULL OR capacitador_id = '00000000-0000-0000-0000-000000000000')
+                  AND instructor_id IS NULL
             """)
         )
         cant = int(sin_inst.scalar() or 0)

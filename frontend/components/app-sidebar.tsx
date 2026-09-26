@@ -17,6 +17,7 @@ import {
   MailIcon,
   StampIcon,
   UsersIcon,
+  GraduationCapIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -47,6 +48,7 @@ const MENU_CLIENTE = [
   { title: "Catálogo",   url: "/cliente/catalogo",    icon: FolderIcon },
   { title: "Cursos",        url: "/cliente/cursos",          icon: ListIcon },
   { title: "Participantes", url: "/cliente/participantes",    icon: UsersIcon },
+  { title: "Instructores", url: "/cliente/instructores",      icon: GraduationCapIcon },
   { title: "Renovaciones", url: "/cliente/renovaciones",      icon: RefreshCwIcon },
   { title: "Plantillas", url: "/cliente/templates",    icon: StampIcon },
   { title: "Constancias",url: "/cliente/constancias",  icon: ScrollTextIcon },
