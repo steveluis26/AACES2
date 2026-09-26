@@ -4,9 +4,9 @@ import { motion, useReducedMotion } from "motion/react"
 import { SectionHeading } from "@/components/landing/section-heading"
 
 const pasos = [
-  { icon: FilePlus2, title: "Registra tu curso", desc: "Define fechas, sede, precio y las constancias que emitirá." },
-  { icon: UserPlus, title: "Inscribe participantes", desc: "Da de alta a los trabajadores y lleva su expediente y pagos." },
-  { icon: QrCode, title: "Emite y verifica", desc: "Genera constancias DC-3 con QR único, verificables al instante." },
+  { icon: FilePlus2, title: "Programa tu grupo", desc: "Elige el curso registrado ante la STPS, el instructor, las fechas y la sede." },
+  { icon: UserPlus, title: "Inscribe y acredita", desc: "Da de alta a los trabajadores y sus pagos. Al terminar, acredita solo a quienes tomaron el curso." },
+  { icon: QrCode, title: "Imprime y verifica", desc: "Genera los DC-3 del grupo con tu formato, con QR único verificable al instante." },
 ]
 
 const EASE = [0.22, 1, 0.36, 1] as const

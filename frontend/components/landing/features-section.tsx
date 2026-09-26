@@ -1,24 +1,39 @@
 "use client"
-import { ScrollText, QrCode, Users, Clock, BarChart3, Compass } from "lucide-react"
+import { ScrollText, QrCode, Users, Clock, BarChart3, Compass, BadgeCheck, GraduationCap, Printer } from "lucide-react"
 import { Stagger, StaggerItem } from "@/components/motion/reveal"
 import { FeatureCard } from "@/components/landing/feature-card"
 import { SectionHeading } from "@/components/landing/section-heading"
 
 const features = [
   {
-    icon: ScrollText,
-    title: "Constancias DC-3 oficiales",
-    description: "Genera constancias con formato oficial STPS en segundos, con QR y folio único."
+    icon: Printer,
+    title: "DC-3 con tu propio formato",
+    description: "Sube tu DC-3 con tus logos, coloca los campos una vez y genera los de todo un grupo en un solo PDF listo para imprimir."
+  },
+  {
+    icon: BadgeCheck,
+    title: "Registro STPS verificado",
+    description: "Comprobamos tu registro en el buscador oficial de la STPS y cada constancia lo muestra como verificado."
+  },
+  {
+    icon: GraduationCap,
+    title: "Plantilla de instructores",
+    description: "Registra a tus instructores y los cursos que imparten. El DC-3 lleva el nombre de quien realmente dio el curso."
   },
   {
     icon: QrCode,
     title: "QR de verificación",
-    description: "Cada constancia incluye código QR para que empresas verifiquen su autenticidad."
+    description: "La empresa escanea y ve al agente, el curso registrado, el instructor y la vigencia. Sin llamadas."
   },
   {
     icon: Users,
-    title: "Gestión de participantes",
-    description: "Administra grupos, inscripciones, pagos y expedientes de cada trabajador."
+    title: "Grupos y acreditación",
+    description: "Inscribe con o sin anticipo. Solo quienes acreditas reciben folio y QR: quien no se presentó no gasta constancias."
+  },
+  {
+    icon: ScrollText,
+    title: "Datos listos para el DC-3",
+    description: "Nombre, CURP, ocupación, puesto y empresa de cada trabajador se llenan solos en cada constancia."
   },
   {
     icon: Clock,
@@ -27,13 +42,13 @@ const features = [
   },
   {
     icon: BarChart3,
-    title: "Dashboard y reportes",
-    description: "Métricas de tus cursos, ingresos y participantes en tiempo real."
+    title: "Dashboard y uso de tu plan",
+    description: "Tus cursos, participantes y cuántas constancias llevas en el mes, con la recomendación del plan que te conviene."
   },
   {
     icon: Compass,
     title: "Trazabilidad completa",
-    description: "Cada certificado conserva el historial desde su emisión hasta su validación."
+    description: "Cada constancia guarda quién la emitió, quién impartió el curso y cada vez que alguien la verificó."
   }
 ]
 
@@ -44,7 +59,7 @@ export default function FeaturesSection() {
         <SectionHeading
           eyebrow="Funcionalidades"
           title="Todo lo que necesitas para capacitar"
-          description="Herramientas diseñadas para capacitadores que buscan profesionalizar su servicio."
+          description="Herramientas diseñadas para agentes capacitadores que quieren emitir DC-3 que resistan cualquier revisión."
         />
         <Stagger className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3" stagger={0.07}>
           {features.map((f, i) => (

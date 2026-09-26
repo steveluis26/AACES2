@@ -1,6 +1,7 @@
 import HeroSection from '@/components/landing/hero-section'
 import WhySection from '@/components/landing/why-section'
 import FeaturesSection from '@/components/landing/features-section'
+import CongruenciaSection from '@/components/landing/congruencia-section'
 import PlansSection from '@/components/landing/plans-section'
 import HowSection from '@/components/landing/how-section'
 import CtaSection from '@/components/landing/cta-section'
@@ -13,6 +14,7 @@ export default function Home() {
       <WhySection />
       <HowSection />
       <FeaturesSection />
+      <CongruenciaSection />
       <PlansSection />
       <CtaSection />
       <FooterSection />
