@@ -270,7 +270,23 @@ async def certificado_publico(
 
     await _log_validation_attempt(db, str(cod_val or id_cert or code), ip, ua, estado == "vigente")
 
+    # Congruencia agente–curso–instructor (Fase 1: declarado por la agencia).
+    # Se usa la foto guardada al dar el folio; los DC-3 anteriores a la Fase 1 no la tienen.
+    try:
+        foto = (await db.execute(text("""
+            SELECT congruencia FROM aaces.curso_participante
+            WHERE UPPER(codigo_validacion) = :c OR UPPER(id_certificado) = :c LIMIT 1
+        """), {"c": str(cod_val or id_cert or code).upper()})).scalar()
+        if foto:
+            congruencia = {"fuente": "declarado_por_agencia", **{k: foto.get(k) for k in (
+                "curso_registrado", "curso_stps_nombre", "instructor", "instructor_en_plantilla")}}
+        else:
+            congruencia = None
+    except Exception:
+        congruencia = None
+
     return {
+        "congruencia": congruencia,
         "valido": estado == "vigente",
         "estado": estado,
         "id_certificado": id_cert,

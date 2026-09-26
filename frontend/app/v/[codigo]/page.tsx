@@ -25,6 +25,7 @@ type Certificado = {
     nombre: string | null; razon_social: string | null; logo_url: string | null; stps_registro: string | null
     stps_verificado?: boolean; stps_rfc?: string | null; stps_origen?: string | null; stps_consultado_en?: string | null; stps_fuente?: string
   }
+  congruencia?: { fuente: string; curso_registrado: boolean; curso_stps_nombre: string | null; instructor: string | null; instructor_en_plantilla: boolean } | null
   empresa: string | null
   verificaciones: number
 }
@@ -265,6 +266,31 @@ export default function VerificarCodigoPage({ params }: { params: { codigo: stri
           AACES no ha comprobado el registro de este capacitador ante la STPS. La constancia sí es auténtica.{" "}
           <a href={c.capacitador.stps_fuente || "https://agentes.stps.gob.mx/Buscador/BuscadorAgente.aspx"} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Consultar en la STPS</a>
         </span>
+      </span>
+    )])
+  }
+  // Congruencia agente–curso–instructor (Fase 1: declarado por el agente capacitador)
+  const cg = c.congruencia
+  if (cg) {
+    const declarado = <span className="block text-xs text-muted-foreground">Declarado por el agente capacitador</span>
+    filas.push(["Curso registrado", (
+      <span key="cur" className="inline-flex flex-col gap-0.5">
+        {cg.curso_registrado
+          ? <span className="inline-flex items-center gap-1.5 font-medium"><BadgeCheck className="h-4 w-4 shrink-0 text-green-600" />Registrado ante la STPS{cg.curso_stps_nombre ? ` como “${cg.curso_stps_nombre}”` : ""}</span>
+          : <span className="inline-flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400"><AlertTriangle className="h-4 w-4 shrink-0" />No declarado como registrado</span>}
+        {declarado}
+      </span>
+    )])
+    filas.push(["Instructor", (
+      <span key="ins" className="inline-flex flex-col gap-0.5">
+        {cg.instructor
+          ? <span className="inline-flex items-center gap-1.5 font-medium">
+              {cg.instructor_en_plantilla ? <BadgeCheck className="h-4 w-4 shrink-0 text-green-600" /> : <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />}
+              {cg.instructor}
+            </span>
+          : <span className="font-medium text-amber-700 dark:text-amber-400">No indicado</span>}
+        {cg.instructor && <span className="block text-xs text-muted-foreground">{cg.instructor_en_plantilla ? "Forma parte de la plantilla de instructores del agente para este curso" : "No aparece en la plantilla declarada para este curso"}</span>}
+        {declarado}
       </span>
     )])
   }

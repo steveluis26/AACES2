@@ -38,6 +38,7 @@ class VistaPreviaIn(BaseModel):
 class GenerarIn(BaseModel):
     curso_id: str
     curso_participante_ids: Optional[List[str]] = None
+    confirmar_avisos: bool = False  # continuar pese a avisos de congruencia (queda registrado)
 
 
 def _slug(s: str) -> str:
@@ -187,10 +188,12 @@ _SQL_PARTICIPANTES = """
            c.id AS curso_id, c.nombre AS curso_nombre, c.duracion_horas, c.fecha_inicio, c.fecha_fin, c.ciudad,
            c.empresa_contratante,
            COALESCE(o.nombre_comercial, o.razon_social, cl.nombre) AS capacitador,
-           CASE WHEN o.stps_validado THEN o.stps_registro END AS registro_stps
+           CASE WHEN o.stps_validado THEN o.stps_registro END AS registro_stps,
+           COALESCE(cp.congruencia->>'instructor', ins.nombre) AS instructor  -- el de cuando se dio el folio
     FROM aaces.curso_participante cp
     JOIN aaces.participantes p ON p.id = cp.participante_id
     JOIN aaces.cursos c ON c.id = cp.curso_id
+    LEFT JOIN aaces.instructores ins ON ins.id = c.instructor_id
     JOIN aaces.clientes cl ON cl.id = c.cliente_id
     JOIN aaces.organizaciones o ON o.id = cl.organizacion_id
     WHERE cl.organizacion_id = :org
@@ -262,7 +265,13 @@ async def generar(plantilla_id: str, body: GenerarIn, identity: Identity = Depen
 
     # Límite del plan: solo cuentan quienes reciben su constancia por primera vez
     from app.services import cupo
-    await cupo.verificar(db, identity.org_id, await cupo.nuevos_de(db, [f["cp_id"] for f in filas]))
+    nuevos = await cupo.nuevos_de(db, [f["cp_id"] for f in filas])
+    if nuevos:
+        # Folios nuevos: revisar congruencia agente–curso–instructor (avisa, no bloquea)
+        from app.services.congruencia import exigir_confirmacion
+        await exigir_confirmacion(db, curso_id, "generar_dc3", body.confirmar_avisos,
+                                  identity.user_id if identity.source == "usuario" else None)
+    await cupo.verificar(db, identity.org_id, nuevos)
     await _asegurar_folios(db, filas)
     plantilla_pdf = bytes(p["archivo"])
     url = settings.PUBLIC_VERIFICATION_URL

@@ -873,6 +873,81 @@ async def create_verificacion_stps(conn: AsyncConnection) -> None:
     await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_stps_consultas_org ON aaces.stps_consultas (organizacion_id, fecha DESC)"))
 
 
+async def create_congruencia(conn: AsyncConnection) -> None:
+    """Congruencia del DC-3 (Fase 1): agente – curso registrado – instructor.
+
+    Lo declara la agencia; AACES avisa (no bloquea) cuando algo no cuadra y guarda
+    quién decidió continuar. La verificación automática contra la STPS es la Fase 2."""
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.instructores (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          nombre VARCHAR(200) NOT NULL,
+          curp VARCHAR(18),
+          correo VARCHAR(255),
+          activo BOOLEAN NOT NULL DEFAULT true,
+          fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT now(),
+          fecha_actualizacion TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_instructores_org ON aaces.instructores (organizacion_id)"))
+    # Cursos del catálogo que cada instructor puede impartir (su plantilla ante la STPS)
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.instructor_cursos (
+          instructor_id UUID NOT NULL REFERENCES aaces.instructores(id) ON DELETE CASCADE,
+          catalogo_curso_id UUID NOT NULL REFERENCES aaces.catalogo_cursos(id) ON DELETE CASCADE,
+          PRIMARY KEY (instructor_id, catalogo_curso_id)
+        )
+    """))
+    await conn.execute(text("ALTER TABLE aaces.catalogo_cursos ADD COLUMN IF NOT EXISTS stps_registrado BOOLEAN NOT NULL DEFAULT false"))
+    await conn.execute(text("ALTER TABLE aaces.catalogo_cursos ADD COLUMN IF NOT EXISTS stps_nombre VARCHAR(300)"))
+    await conn.execute(text("ALTER TABLE aaces.cursos ADD COLUMN IF NOT EXISTS instructor_id UUID REFERENCES aaces.instructores(id) ON DELETE SET NULL"))
+    # Foto de la congruencia al darle folio a cada participante: el QR y el DC-3 deben
+    # mostrar quién impartió el curso CUANDO se emitió, aunque luego cambie el grupo.
+    await conn.execute(text("ALTER TABLE aaces.curso_participante ADD COLUMN IF NOT EXISTS congruencia JSONB"))
+    await conn.execute(text("""
+        CREATE OR REPLACE FUNCTION aaces.tg_congruencia_folio() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF COALESCE(NEW.codigo_validacion, '') = '' THEN RETURN NEW; END IF;
+          IF TG_OP = 'UPDATE' AND COALESCE(OLD.codigo_validacion, '') <> '' THEN RETURN NEW; END IF;
+          SELECT jsonb_build_object(
+                   'curso_registrado', COALESCE(cc.stps_registrado, false),
+                   'curso_stps_nombre', cc.stps_nombre,
+                   'instructor', i.nombre,
+                   'instructor_en_plantilla', EXISTS (
+                      SELECT 1 FROM aaces.instructor_cursos ic
+                      WHERE ic.instructor_id = c.instructor_id AND ic.catalogo_curso_id = c.catalogo_curso_id),
+                   'fecha', now())
+            INTO NEW.congruencia
+            FROM aaces.cursos c
+            LEFT JOIN aaces.instructores i ON i.id = c.instructor_id
+            LEFT JOIN aaces.catalogo_cursos cc ON cc.id = c.catalogo_curso_id
+           WHERE c.id = NEW.curso_id;
+          RETURN NEW;
+        END $$;
+    """))
+    await conn.execute(text("DROP TRIGGER IF EXISTS trg_congruencia_folio ON aaces.curso_participante"))
+    await conn.execute(text("""
+        CREATE TRIGGER trg_congruencia_folio
+        BEFORE INSERT OR UPDATE OF codigo_validacion ON aaces.curso_participante
+        FOR EACH ROW EXECUTE FUNCTION aaces.tg_congruencia_folio()
+    """))
+
+    # Quién decidió continuar pese a un aviso de congruencia
+    await conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS aaces.avisos_congruencia (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organizacion_id UUID NOT NULL REFERENCES aaces.organizaciones(id) ON DELETE CASCADE,
+          curso_id UUID,
+          accion VARCHAR(40) NOT NULL,
+          avisos JSONB NOT NULL,
+          usuario_id UUID,
+          fecha TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -926,6 +1001,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_marketplace_visibilidad,
         create_cobros_mercadopago,
         create_verificacion_stps,
+        create_congruencia,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { apiRequest } from "@/app/services/api"
 import type { Cupo } from "@/lib/cupo"
+import { avisosDeError, type Aviso } from "@/lib/congruencia"
+import { AvisosCongruencia } from "@/components/congruencia/avisos-congruencia"
 
 export type ParticipanteGrupo = {
   id: string
@@ -45,6 +47,8 @@ export function AcreditarGrupo({ abierto, onCerrar, cursoId, cursoNombre, partic
   const [cupo, setCupo] = useState<Cupo | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [listo, setListo] = useState<number | null>(null)
+  const [avisos, setAvisos] = useState<Aviso[]>([])
+  const [confirmado, setConfirmado] = useState(false)
 
   const pendientes = useMemo(() => participantes.filter((p) => !p.codigo_validacion), [participantes])
   const conFolio = participantes.length - pendientes.length
@@ -55,6 +59,8 @@ export function AcreditarGrupo({ abierto, onCerrar, cursoId, cursoNombre, partic
     if (!abierto) return
     setMarcados(new Set())
     setListo(null)
+    setAvisos([])
+    setConfirmado(false)
     apiRequest<Cupo>("/cupo").then(setCupo).catch(() => setCupo(null))
   }, [abierto])
 
@@ -73,13 +79,15 @@ export function AcreditarGrupo({ abierto, onCerrar, cursoId, cursoNombre, partic
     try {
       const r = await apiRequest<{ acreditados: number; folios_nuevos: number }>(`/clientes/cursos/${cursoId}/acreditar`, {
         method: "POST",
-        body: JSON.stringify({ curso_participante_ids: Array.from(marcados) }),
+        body: JSON.stringify({ curso_participante_ids: Array.from(marcados), confirmar_avisos: confirmado }),
       })
       setListo(r.folios_nuevos)
       toast.success(`${r.folios_nuevos} ${r.folios_nuevos === 1 ? "participante acreditado" : "participantes acreditados"}`, { description: "Ya tienen folio y QR verificable." })
       onListo()
     } catch (e) {
-      toast.error((e as Error).message)
+      const av = avisosDeError(e)
+      if (av) { setAvisos(av); setConfirmado(false) } // se muestran abajo para confirmar
+      else toast.error((e as Error).message)
     } finally {
       setEnviando(false)
     }
@@ -133,6 +141,8 @@ export function AcreditarGrupo({ abierto, onCerrar, cursoId, cursoNombre, partic
                       )}
                     </div>
 
+                    <AvisosCongruencia avisos={avisos} confirmado={confirmado} onConfirmar={setConfirmado} />
+
                     {sinCupo && (
                       <div role="alert" className="rounded-xl border border-red-500/30 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-300">
                         <p className="flex items-start gap-2 font-medium">
@@ -183,7 +193,7 @@ export function AcreditarGrupo({ abierto, onCerrar, cursoId, cursoNombre, partic
               {marcados.size} {marcados.size === 1 ? "marcado" : "marcados"}
               {cupo && disponibles !== null && cupo.activa && <span className="block text-xs">Te {disponibles === 1 ? "queda" : "quedan"} {disponibles} en tu plan</span>}
             </span>
-            <Button onClick={acreditar} disabled={marcados.size === 0 || enviando || sinCupo} className="flex-1 sm:flex-none">
+            <Button onClick={acreditar} disabled={marcados.size === 0 || enviando || sinCupo || (avisos.length > 0 && !confirmado)} className="flex-1 sm:flex-none">
               {enviando ? <><Loader2 className="h-4 w-4 animate-spin" /> Acreditando…</> : <><BadgeCheck className="h-4 w-4" /> Acreditar {marcados.size || ""} y generar folios</>}
             </Button>
           </SheetFooter>
