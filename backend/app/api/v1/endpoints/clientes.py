@@ -77,8 +77,6 @@ async def _exigir_cp_propio(db: AsyncSession, identity: Identity, cp_id: str) ->
 from app.core.config import settings
 import io
 import csv
-import urllib.request
-import urllib.error
 import json
 
 router = APIRouter()
@@ -1330,114 +1328,6 @@ async def add_pago_participante(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error creando pago: {str(e)}")
-
-@router.post("/clientes/servicio/mercadopago/preference")
-async def crear_preferencia_servicio(
-    payload_in: dict,
-    identity: Identity = Depends(get_current_identity),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        cid = await get_current_cliente_id(db, identity)
-        await db.execute(text("SET LOCAL search_path TO aaces"))
-        prow = await db.execute(text("SELECT nombre, correo FROM clientes WHERE id = :id"), {"id": cid})
-        pr = prow.fetchone()
-        if not pr:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
-        nombre = (pr[0] or "").strip()
-        correo = pr[1] or ""
-        plan = str(payload_in.get("plan") or "mes").strip().lower()
-        months = 1 if plan == "mes" else 6 if plan in ("seis_meses", "6m", "6meses") else 12
-        price = settings.AACES_PRICE_MONTH if months == 1 else settings.AACES_PRICE_6M if months == 6 else settings.AACES_PRICE_YEAR
-        base_api = getattr(settings, 'PUBLIC_API_BASE_URL', f"http://127.0.0.1:{settings.PORT}/api/v1")
-        frontend_base = getattr(settings, 'FRONTEND_BASE_URL', "http://127.0.0.1:3000")
-        mp_payload = {
-            "items": [{"title": f"AACES {plan}", "quantity": 1, "unit_price": float(price), "currency_id": "MXN"}],
-            "payer": {"email": correo or "sin-correo@example.com"},
-            "external_reference": f"CLIENTE:{cid}:PLAN:{plan}:MONTHS:{months}",
-            "back_urls": {
-                "success": f"{frontend_base}/cliente/pagos?status=success",
-                "pending": f"{frontend_base}/cliente/pagos?status=pending",
-                "failure": f"{frontend_base}/cliente/pagos?status=failure"
-            },
-            "auto_return": "approved",
-            "notification_url": f"{base_api}/clientes/mercadopago/webhook",
-            "statement_descriptor": "AACES"
-        }
-        token = settings.MERCADOPAGO_ACCESS_TOKEN
-        if not token:
-            raise HTTPException(status_code=500, detail="MercadoPago no configurado")
-        req = urllib.request.Request(
-            "https://api.mercadopago.com/checkout/preferences",
-            data=json.dumps(mp_payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        )
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return {"id": data.get("id"), "init_point": data.get("init_point"), "sandbox_init_point": data.get("sandbox_init_point"), "months": months}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creando preferencia: {str(e)}")
-
-@router.post("/clientes/mercadopago/webhook")
-async def mercadopago_webhook(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        body = {}
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        q = dict(request.query_params)
-        typ = q.get("type") or body.get("type")
-        if typ == "payment":
-            pid = body.get("data", {}).get("id") or q.get("id")
-            if not pid:
-                return {"ok": True}
-            token = settings.MERCADOPAGO_ACCESS_TOKEN
-            req = urllib.request.Request(
-                f"https://api.mercadopago.com/v1/payments/{pid}",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                pay = json.loads(resp.read().decode("utf-8"))
-            status = str(pay.get("status") or "").lower()
-            external_reference = pay.get("external_reference") or ""
-            amount = float(pay.get("transaction_details", {}).get("total_paid_amount") or pay.get("transaction_amount") or 0)
-            if not external_reference:
-                return {"ok": True}
-            await db.execute(text("SET LOCAL search_path TO aaces"))
-            try:
-                parts = external_reference.split(":")
-                cid = parts[1]
-                months_str = parts[5] if len(parts) > 5 else "1"
-                months = int(months_str)
-            except Exception:
-                return {"ok": True}
-            estado_pago = 'completado' if status == 'approved' else 'pendiente'
-            try:
-                await db.execute(text("ALTER TABLE IF EXISTS aaces.pagos DROP CONSTRAINT IF EXISTS check_tipo_pago"))
-                await db.execute(text("ALTER TABLE IF EXISTS aaces.pagos ADD CONSTRAINT check_tipo_pago CHECK (tipo_pago IN ('participante','capacitador','curso_completo','servicio'))"))
-            except Exception:
-                pass
-            # Idempotencia: MP reintenta notificaciones; no acreditar dos veces el mismo pago.
-            dup = await db.execute(
-                text("SELECT 1 FROM aaces.pagos WHERE referencia_pago = :ref AND metodo_pago = 'mercadopago' LIMIT 1"),
-                {"ref": str(pid)},
-            )
-            if dup.scalar() is not None:
-                return {"ok": True}
-            await db.execute(text("INSERT INTO aaces.pagos (cliente_id, curso_participante_id, tipo_pago, monto, moneda, metodo_pago, referencia_pago, comprobante_url, fecha_pago, estado_pago, notas, creado_por) VALUES (:cid, NULL, 'servicio', :monto, 'MXN', 'mercadopago', :ref, NULL, now(), :st, NULL, 'sistema')"), {"cid": cid, "monto": amount, "ref": str(pid), "st": estado_pago})
-            if estado_pago == 'completado':
-                await db.execute(text("UPDATE clientes SET vigencia_desde = CURRENT_DATE, vigencia_hasta = CASE WHEN vigencia_hasta IS NOT NULL AND vigencia_hasta > CURRENT_DATE THEN (vigencia_hasta + make_interval(months => CAST(:months AS integer)))::date ELSE (CURRENT_DATE + make_interval(months => CAST(:months AS integer)))::date END WHERE id = :cid"), {"cid": cid, "months": months})
-            await db.commit()
-        return {"ok": True}
-    except Exception:
-        await db.rollback()
-        return {"ok": False}
 
 @router.get("/cursos/{curso_id}/participantes")
 async def list_participantes_curso(

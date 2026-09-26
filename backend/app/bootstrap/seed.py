@@ -33,21 +33,23 @@ async def _ensure_plans(conn: AsyncConnection) -> None:
     await conn.execute(
         text("""
             INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_soporte_prioritario, activo)
-            VALUES (gen_random_uuid(), 'trial', 'Prueba', 'Plan gratuito para probar la plataforma', 0, 10, 1, 50, false, true)
+            VALUES (gen_random_uuid(), 'trial', 'Prueba', 'Prueba AACES gratis con 50 constancias', 0, 10, NULL, 50, false, true)
         """)
     )
     await conn.execute(
         text("""
             INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario, activo)
-            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Plan ideal para capacitadoras en crecimiento', 399, 999999, 3, 500, true, true, true, true, true)
+            VALUES (gen_random_uuid(), 'profesional', 'Profesional', 'Para agencias capacitadoras en crecimiento', 499, 999999, NULL, 500, true, true, true, true, true)
         """)
     )
     await conn.execute(
         text("""
             INSERT INTO aaces.planes (id, codigo, nombre, descripcion, precio_mensual, cursos_max, usuarios_max, constancias_max, incluye_marketplace, incluye_api, incluye_white_label, incluye_soporte_prioritario, activo)
-            VALUES (gen_random_uuid(), 'empresa', 'Empresa', 'Solución completa para grandes organizaciones', 799, 999999, 999999, 999999, true, true, true, true, true)
+            VALUES (gen_random_uuid(), 'empresa', 'Empresa', 'Para agencias con muchos grupos al mes', 1299, 999999, NULL, 2000, true, true, true, true, true)
         """)
     )
+    # Precio anual = 11 meses (un mes gratis)
+    await conn.execute(text("UPDATE aaces.planes SET precio_anual = precio_mensual * 11 WHERE precio_anual IS NULL"))
     logger.info("Default plans seeded successfully")
 
 

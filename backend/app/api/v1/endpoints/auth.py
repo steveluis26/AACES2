@@ -513,8 +513,10 @@ async def register(
 
         plan_id = plan_row[0]
 
-        # Create organization - activar automáticamente para trial
-        org_estatus = 'activa' if plan_codigo == 'trial' else 'pendiente'
+        # Toda cuenta nueva entra activa en plan Prueba. Antes, elegir "profesional"
+        # activaba ese plan gratis; ahora el plan de pago se activa al pagarlo
+        # (Suscripción → Mercado Pago). plan_codigo solo indica a dónde llevarlo.
+        org_estatus = 'activa'
         org_id_res = await db.execute(
             text("""
                 INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, stps_registro, fecha_activacion)
@@ -555,7 +557,7 @@ async def register(
                 INSERT INTO aaces.clientes
                     (id, nombre, correo, password_hash, plan, categoria, estado, organizacion_id)
                 VALUES
-                    (:id, :nombre, :correo, :ph, :plan, 'basico', 'activo', :org_id)
+                    (:id, :nombre, :correo, :ph, 'trial', 'basico', 'activo', :org_id)
             """),
             {
                 "id": admin_id,
@@ -567,14 +569,9 @@ async def register(
             }
         )
 
-        # Create subscription
-        await db.execute(
-            text("""
-                INSERT INTO aaces.suscripciones (organizacion_id, plan_id, estatus, fecha_inicio, activada_por)
-                VALUES (:org_id, :plan_id, 'activa', CURRENT_DATE, (SELECT id FROM aaces.usuarios WHERE correo = :correo))
-            """),
-            {"org_id": org_id, "plan_id": plan_id, "correo": admin_correo}
-        )
+        # Suscripción: siempre Prueba (con fecha de fin); el plan de pago se paga después
+        from app.services.suscripciones import crear_prueba
+        await crear_prueba(db, org_id, admin_id)
 
         await db.commit()
 
@@ -582,7 +579,7 @@ async def register(
             "organizacion_id": org_id,
             "admin_email": admin_correo,
             "plan": plan_codigo,
-            "message": "Organización registrada. La suscripción está activa."
+            "message": "Organización registrada con el plan de Prueba."
         }
 
     except HTTPException:

@@ -86,7 +86,10 @@ export function LoginForm({
         router.push("/cliente/cambiar-password")
         return
       }
-      router.push(isSuperAdmin ? "/admin/dashboard" : "/cliente/dashboard")
+      // ?next=/cliente/... (p. ej. al registrarse con un plan de pago → Suscripción)
+      const next = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null
+      const destino = !isSuperAdmin && next && next.startsWith("/cliente/") ? next : null
+      router.push(isSuperAdmin ? "/admin/dashboard" : destino || "/cliente/dashboard")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error de conexión")
       setIntento((n) => n + 1)
