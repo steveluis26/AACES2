@@ -164,6 +164,9 @@ export default function MarketplacePage() {
                       </button>
                     </div>
                     <p className="text-center text-xs text-muted-foreground">
+                      Usaremos tu correo solo para avisarte cuando el Marketplace esté listo. <Link href="/privacidad" className="underline hover:text-orange-500">Aviso de privacidad</Link>.
+                    </p>
+                    <p className="text-center text-xs text-muted-foreground">
                       ¿Tienes una agencia capacitadora? <Link href="/cliente/catalogo" className="underline hover:text-orange-500">Publica tus cursos desde tu panel</Link>
                     </p>
                   </motion.form>

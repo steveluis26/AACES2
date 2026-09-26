@@ -172,7 +172,7 @@ export default function ContactoPage() {
                       <div className="flex items-start gap-3">
                         <Checkbox id="acepta" className="mt-0.5" checked={form.acepta} onCheckedChange={(v) => setForm((s) => ({ ...s, acepta: !!v }))} />
                         <Label htmlFor="acepta" className="text-sm font-normal leading-snug text-muted-foreground">
-                          Acepto la política de privacidad y el tratamiento de datos
+                          He leído el <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="font-medium text-orange-600 underline-offset-2 hover:underline">aviso de privacidad</a> y acepto el tratamiento de mis datos para atender mi mensaje
                         </Label>
                       </div>
                       <Button type="submit" disabled={loading || !form.acepta} className="w-full rounded-full transition-transform active:scale-[0.98] sm:w-auto sm:px-8">

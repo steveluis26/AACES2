@@ -496,6 +496,8 @@ function Acciones({ compartir, copiado }: { compartir: () => void; copiado: bool
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <ShieldCheck className="h-3.5 w-3.5 text-orange-500" />
         Verificación protegida por <Link href="/" className="font-semibold text-foreground hover:text-orange-500">AACES</Link>
+        <span aria-hidden="true">·</span>
+        <Link href="/privacidad" className="hover:text-orange-500 hover:underline">Aviso de privacidad</Link>
       </p>
     </motion.div>
   )
