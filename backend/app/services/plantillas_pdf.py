@@ -18,6 +18,7 @@ from pypdf import PdfReader, PdfWriter, Transformation
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
+from app.core.cifrado import descifrar
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ def valores_participante(r: Dict[str, Any], url_base: str) -> Dict[str, str]:
         "participante_nombre": " ".join(x for x in [nombres, apellidos] if x).strip(),
         "participante_nombres": nombres,
         "participante_apellidos": apellidos.strip(),
-        "curp": (r.get("curp") or "").strip(),
+        "curp": (descifrar(r.get("curp")) or "").strip(),
         "ocupacion": (r.get("ocupacion") or "").strip(),
         "puesto": (r.get("cargo") or "").strip(),
         "empresa": (r.get("empresa") or r.get("empresa_contratante") or "").strip(),

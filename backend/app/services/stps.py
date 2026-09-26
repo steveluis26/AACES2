@@ -22,6 +22,8 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cifrado import cifrar, descifrar
+
 logger = logging.getLogger(__name__)
 
 BUSCADOR = "https://agentes.stps.gob.mx/Buscador/BuscadorAgente.aspx"
@@ -142,7 +144,7 @@ async def verificar_organizacion(db: AsyncSession, org_id: str, forzar: bool = F
     """), {"o": org_id})).fetchone()
     if not org:
         return {"estado": "sin_organizacion"}
-    rfc, consultado, origen, validado = normalizar_rfc(org[0]), org[1], org[2], bool(org[3])
+    rfc, consultado, origen, validado = normalizar_rfc(descifrar(org[0])), org[1], org[2], bool(org[3])
     nombres_org = [n for n in (org[4], org[5]) if n]
     ahora = datetime.now(timezone.utc)
     if not forzar and consultado and ahora - consultado < timedelta(hours=12):
@@ -155,7 +157,7 @@ async def verificar_organizacion(db: AsyncSession, org_id: str, forzar: bool = F
         await db.execute(text("""
             INSERT INTO aaces.stps_consultas (organizacion_id, rfc, resultado, detalle)
             VALUES (CAST(:o AS uuid), :r, 'error', to_jsonb(CAST(:d AS text)))
-        """), {"o": org_id, "r": rfc, "d": str(e)[:500]})
+        """), {"o": org_id, "r": cifrar(rfc), "d": str(e)[:500]})
         await db.commit()
         logger.warning("Verificación STPS de %s no disponible: %s", org_id, e)
         return {"estado": "no_disponible", "detalle": str(e)}
@@ -177,7 +179,7 @@ async def verificar_organizacion(db: AsyncSession, org_id: str, forzar: bool = F
     await db.execute(text("""
         INSERT INTO aaces.stps_consultas (organizacion_id, rfc, resultado, detalle)
         VALUES (CAST(:o AS uuid), :r, :res, CAST(:d AS jsonb))
-    """), {"o": org_id, "r": rfc, "res": resultado, "d": json.dumps(res["registros"], ensure_ascii=False)})
+    """), {"o": org_id, "r": cifrar(rfc), "res": resultado, "d": json.dumps([{k: v for k, v in x.items() if k != "rfc"} for x in res["registros"]], ensure_ascii=False)})
 
     cambios: Dict[str, Any] = {
         "stps_consultado_en": ahora,
@@ -209,7 +211,7 @@ async def estado_organizacion(db: AsyncSession, org_id: str) -> Dict[str, Any]:
     if not r:
         return {}
     return {
-        "rfc": r[0], "validado": bool(r[1]),
+        "rfc": descifrar(r[0]), "validado": bool(r[1]),
         "validado_en": r[2].isoformat() if r[2] else None,
         "origen": r[3], "estatus": r[4], "razon_social": r[5],
         "cursos": r[6], "instructores": r[7],

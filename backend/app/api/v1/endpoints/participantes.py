@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from pydantic import BaseModel, Field
 
+from app.core.cifrado import cifrar, descifrar, indice
 from app.core.database import get_db
 from app.core.identity import get_current_identity, get_current_cliente_id, Identity
 
@@ -362,7 +363,7 @@ async def get_participante(
         "nivel_educacion": p[9],
         "direccion": p[10],
         "fecha_creacion": p[11].isoformat() if p[11] else None,
-        "curp": p[12],
+        "curp": descifrar(p[12]),
         "ocupacion": p[13],
         "cursos": cursos,
         "total_cursos": len(cursos),
@@ -397,8 +398,8 @@ async def create_participante(
     pid = (
         await db.execute(
             text("""
-                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, pais, curp, ocupacion)
-                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, 'Mexico', :curp, :ocupacion)
+                INSERT INTO aaces.participantes (id, pax_id, nombre, correo, telefono, empresa, cargo, ciudad_origen, cliente_id, pais, curp, curp_hash, ocupacion)
+                VALUES (gen_random_uuid(), :pax_id, :nombre, :correo, :telefono, :empresa, :cargo, :ciudad, :cliente_id, 'Mexico', :curp, :curp_hash, :ocupacion)
                 RETURNING id
             """),
             {
@@ -410,7 +411,7 @@ async def create_participante(
                 "cargo": cargo or None,
                 "ciudad": ciudad_origen or None,
                 "cliente_id": cid,
-                "curp": curp or None,
+                "curp": cifrar(curp), "curp_hash": indice(curp),
                 "ocupacion": ocupacion or None,
             },
         )
@@ -445,8 +446,9 @@ async def update_participante(
             sets.append(f"{col} = :{col}")
             params[col] = str(val).strip()
     if payload.get("curp") is not None:
-        sets.append("curp = :curp")
-        params["curp"] = _curp(payload.get("curp")) or None
+        _c = _curp(payload.get("curp"))
+        sets.append("curp = :curp"); sets.append("curp_hash = :curp_hash")
+        params["curp"] = cifrar(_c); params["curp_hash"] = indice(_c)
     if not sets:
         raise HTTPException(status_code=400, detail="No hay campos para actualizar")
 

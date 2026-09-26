@@ -948,6 +948,22 @@ async def create_congruencia(conn: AsyncConnection) -> None:
     """))
 
 
+async def create_cifrado_datos(conn: AsyncConnection) -> None:
+    """RFC y CURP cifrados (ver app/core/cifrado.py): columnas TEXT para el valor
+    cifrado e índices ciegos *_hash para buscar y evitar duplicados."""
+    for tabla, col in (("organizaciones", "rfc"), ("participantes", "curp"), ("instructores", "curp"),
+                       ("stps_consultas", "rfc"), ("registro_intentos", "rfc")):
+        await conn.execute(text(f"ALTER TABLE aaces.{tabla} ALTER COLUMN {col} TYPE TEXT"))
+    await conn.execute(text("ALTER TABLE aaces.organizaciones ADD COLUMN IF NOT EXISTS rfc_hash VARCHAR(64)"))
+    await conn.execute(text("ALTER TABLE aaces.participantes ADD COLUMN IF NOT EXISTS curp_hash VARCHAR(64)"))
+    await conn.execute(text("ALTER TABLE aaces.instructores ADD COLUMN IF NOT EXISTS curp_hash VARCHAR(64)"))
+    # El valor cifrado cambia en cada escritura: la unicidad del RFC la garantiza su índice
+    await conn.execute(text("ALTER TABLE aaces.organizaciones DROP CONSTRAINT IF EXISTS organizaciones_rfc_key"))
+    await conn.execute(text("DROP INDEX IF EXISTS aaces.idx_organizaciones_rfc"))
+    await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_organizaciones_rfc_hash ON aaces.organizaciones (rfc_hash)"))
+    await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_participantes_curp_hash ON aaces.participantes (curp_hash)"))
+
+
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
     # Plantillas de DC-3/constancias hechas con el formato propio del cliente (PDF).
     # El archivo se guarda en la base de datos: el disco de Render no es persistente.
@@ -1002,6 +1018,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_cobros_mercadopago,
         create_verificacion_stps,
         create_congruencia,
+        create_cifrado_datos,
         create_metadata_tables,
         create_legacy_fixes,
     ]:

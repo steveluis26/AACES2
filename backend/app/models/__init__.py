@@ -302,7 +302,7 @@ class Organizacion(Base):
     __tablename__ = "organizaciones"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    rfc = Column(String(13), unique=True, nullable=False)
+    rfc = Column(Text, nullable=False)  # cifrado (app/core/cifrado.py); único por rfc_hash
     razon_social = Column(String(200), nullable=False)
     nombre_comercial = Column(String(200))
     email_contacto = Column(String(255))
@@ -330,7 +330,6 @@ class Organizacion(Base):
 
     __table_args__ = (
         CheckConstraint("estatus IN ('pendiente', 'activa', 'suspendida', 'cancelada')", name="check_estatus_org"),
-        Index('idx_organizaciones_rfc', 'rfc'),
         Index('idx_organizaciones_estatus', 'estatus'),
         Index('idx_organizaciones_fecha_creacion', 'fecha_creacion'),
     )
