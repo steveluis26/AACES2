@@ -7,6 +7,7 @@ from uuid import UUID
 import secrets
 import string
 
+from app.core.cifrado import descifrar, indice
 from app.core.database import get_db
 from app.models import Cliente, Curso, CursoParticipante, Participante, Pago, AuditoriaCambio
 # Evitar uso de ORM en este módulo para prevenir conflictos de mapeo
@@ -174,7 +175,7 @@ async def get_admin_dashboard_metrics(
                     {
                         "id": str(r[0]),
                         "razon_social": r[1],
-                        "rfc": r[2],
+                        "rfc": descifrar(r[2]),
                         "fecha_creacion": r[3].isoformat() if r[3] else None,
                     }
                     for r in pendientes
@@ -1122,10 +1123,12 @@ async def listar_organizaciones(
         params["estatus"] = estatus
     if search:
         where.append(
-            "(o.razon_social ILIKE :s OR o.rfc ILIKE :s OR o.nombre_comercial ILIKE :s OR "
+            # El RFC está cifrado: se busca por RFC completo usando su índice
+            "(o.razon_social ILIKE :s OR o.rfc_hash = :s_rfc OR o.nombre_comercial ILIKE :s OR "
             "o.email_contacto ILIKE :s)"
         )
         params["s"] = f"%{search}%"
+        params["s_rfc"] = indice(search) or ""
 
     where_sql = " WHERE " + " AND ".join(where) if where else ""
 
@@ -1160,7 +1163,7 @@ async def listar_organizaciones(
         "total_pages": (total + per_page - 1) // per_page if total > 0 else 1,
         "data": [
             {
-                "id": str(r[0]), "rfc": r[1], "razon_social": r[2],
+                "id": str(r[0]), "rfc": descifrar(r[1]), "razon_social": r[2],
                 "nombre_comercial": r[3], "email_contacto": r[4],
                 "estado": r[5], "ciudad": r[6], "estatus": r[7],
                 "fecha_creacion": r[8].isoformat() if r[8] else None,
@@ -1243,7 +1246,7 @@ async def detalle_organizacion(
     ]
 
     return {
-        "id": str(row[0]), "rfc": row[1], "razon_social": row[2],
+        "id": str(row[0]), "rfc": descifrar(row[1]), "razon_social": row[2],
         "nombre_comercial": row[3], "email_contacto": row[4],
         "telefono": row[5], "estado": row[6], "ciudad": row[7],
         "direccion": row[8], "estatus": row[9],
@@ -1608,7 +1611,7 @@ async def listar_registro_intentos(
         "per_page": per_page,
         "data": [
             {
-                "id": str(r[0]), "rfc": r[1], "correo": r[2],
+                "id": str(r[0]), "rfc": descifrar(r[1]), "correo": r[2],
                 "ip_origen": r[3], "user_agent": r[4],
                 "resultado": r[5], "detalle": r[6],
                 "fecha": r[7].isoformat() if r[7] else None,

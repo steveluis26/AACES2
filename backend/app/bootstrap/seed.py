@@ -126,28 +126,29 @@ async def _ensure_demo_org_and_admin(conn: AsyncConnection, hash_password_fn, pl
 
     ph = hash_password_fn(admin_password)
 
-    # 1. Upsert organization by RFC (idempotent)
-    org_res = await conn.execute(
-        text("""
-            INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, fecha_activacion)
-            VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, 'CDMX', 'Ciudad de México', 'activa', now())
-            ON CONFLICT (rfc) DO UPDATE SET
-                razon_social = EXCLUDED.razon_social,
-                nombre_comercial = EXCLUDED.nombre_comercial,
-                email_contacto = EXCLUDED.email_contacto,
-                estatus = 'activa',
-                fecha_activacion = COALESCE(aaces.organizaciones.fecha_activacion, now())
+    # 1. Upsert organization by RFC (idempotent). El RFC se guarda cifrado: se busca por
+    # su índice ciego (o en claro, si aún no se migró) — ver app/core/cifrado.py
+    from app.core.cifrado import cifrar, indice
+    existente = (await conn.execute(
+        text("SELECT id FROM aaces.organizaciones WHERE rfc_hash = :h OR rfc = :rfc LIMIT 1"),
+        {"h": indice(rfc), "rfc": rfc},
+    )).scalar()
+    datos = {"razon_social": org_name, "nombre_comercial": org_name, "email_contacto": admin_email}
+    if existente:
+        org_res = await conn.execute(text("""
+            UPDATE aaces.organizaciones SET razon_social = :razon_social, nombre_comercial = :nombre_comercial,
+                   email_contacto = :email_contacto, estatus = 'activa',
+                   fecha_activacion = COALESCE(fecha_activacion, now())
+            WHERE id = :id RETURNING id
+        """), {**datos, "id": existente})
+    else:
+        org_res = await conn.execute(text("""
+            INSERT INTO aaces.organizaciones (rfc, rfc_hash, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, fecha_activacion)
+            VALUES (:rfc, :h, :razon_social, :nombre_comercial, :email_contacto, 'CDMX', 'Ciudad de México', 'activa', now())
             RETURNING id
-        """),
-        {
-            "rfc": rfc,
-            "razon_social": org_name,
-            "nombre_comercial": org_name,
-            "email_contacto": admin_email,
-        }
-    )
+        """), {**datos, "rfc": cifrar(rfc), "h": indice(rfc)})
     org_id = org_res.scalar()
-    logger.info(f"Demo organization upserted: {org_id} (RFC: {rfc})")
+    logger.info(f"Demo organization upserted: {org_id}")
 
     # 2. Upsert admin user in usuarios (idempotent by UNIQUE(organizacion_id, correo)).
     # El password solo se fija al crear el usuario; en reinicios posteriores no

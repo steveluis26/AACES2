@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel
 
+from app.core.cifrado import cifrar, descifrar, indice
 from app.services import cupo as cupo_service
 from app.core.database import get_db
 from app.models import Cliente, Capacitador, Curso, Participante, CursoParticipante, Pago
@@ -1434,7 +1435,7 @@ async def list_participantes_curso(
                 "valor_pagado": float(r[20] or 0),
                 "costo_asignado": float(r[21] or 0),
                 "descuento": float(r[22] or 0),
-                "curp": r[23],
+                "curp": descifrar(r[23]),
                 "ocupacion": r[24],
             }
             for r in rows
@@ -1618,7 +1619,8 @@ async def add_participante_curso(
         if _curp_v or _ocup_v:
             _s, _p = [], {"pid": pid}
             if _curp_v:
-                _s.append("curp = :curp"); _p["curp"] = _curp_v
+                _s.append("curp = :curp"); _p["curp"] = cifrar(_curp_v)
+                _s.append("curp_hash = :curp_hash"); _p["curp_hash"] = indice(_curp_v)
             if _ocup_v:
                 _s.append("ocupacion = :ocupacion"); _p["ocupacion"] = _ocup_v
             await db.execute(text(f"UPDATE aaces.participantes SET {', '.join(_s)} WHERE id = :pid"), _p)
@@ -1918,7 +1920,8 @@ async def update_participante_curso(
             _c = "".join(str(payload.get("curp") or "").split()).upper()
             if _c and (len(_c) != 18 or not _c.isalnum()):
                 raise HTTPException(status_code=400, detail="La CURP debe tener 18 caracteres (letras y números)")
-            sets_p.append("curp = :curp"); params_p["curp"] = _c or None
+            sets_p.append("curp = :curp"); params_p["curp"] = cifrar(_c)
+            sets_p.append("curp_hash = :curp_hash"); params_p["curp_hash"] = indice(_c)
         if "profesion" in payload:
             sets_p.append("nivel_educacion = :profesion"); params_p["profesion"] = (payload.get("profesion") or "").strip()
         # Mantener compatibilidad en campo combinado 'apellido'

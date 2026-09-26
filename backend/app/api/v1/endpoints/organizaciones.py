@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cifrado import descifrar
 from app.core.database import get_db
 from app.core.identity import get_current_identity, require_org_id, Identity
 
@@ -40,7 +41,7 @@ class PerfilUpdate(BaseModel):
 def _row_to_perfil(r) -> dict:
     return {
         "id": str(r[0]),
-        "rfc": r[1],
+        "rfc": descifrar(r[1]),
         "razon_social": r[2],
         "nombre_comercial": r[3],
         "email_contacto": r[4],

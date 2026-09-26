@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cifrado import cifrar, descifrar, indice
 from app.core.database import get_db
 from app.core.identity import Identity, get_current_identity, require_org_id
 
@@ -42,7 +43,7 @@ async def _listar(db: AsyncSession, org_id: str, instructor_id: Optional[str] = 
         WHERE i.organizacion_id = CAST(:o AS uuid) {filtro}
         GROUP BY i.id ORDER BY i.activo DESC, i.nombre
     """), {"o": org_id, "iid": instructor_id})).fetchall()
-    return [{"id": str(r[0]), "nombre": r[1], "curp": r[2], "correo": r[3], "activo": r[4],
+    return [{"id": str(r[0]), "nombre": r[1], "curp": descifrar(r[2]), "correo": r[3], "activo": r[4],
              "cursos": r[5], "grupos": int(r[6] or 0)} for r in rows]
 
 
@@ -66,9 +67,9 @@ async def listar(identity: Identity = Depends(get_current_identity), db: AsyncSe
 async def crear(body: InstructorIn, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
     org_id = await require_org_id(db, identity)
     iid = (await db.execute(text("""
-        INSERT INTO aaces.instructores (organizacion_id, nombre, curp, correo, activo)
-        VALUES (CAST(:o AS uuid), :n, :c, :e, :a) RETURNING id
-    """), {"o": org_id, "n": body.nombre.strip(), "c": _curp(body.curp), "e": (body.correo or "").strip() or None, "a": body.activo})).scalar()
+        INSERT INTO aaces.instructores (organizacion_id, nombre, curp, curp_hash, correo, activo)
+        VALUES (CAST(:o AS uuid), :n, :c, :ch, :e, :a) RETURNING id
+    """), {"o": org_id, "n": body.nombre.strip(), "c": cifrar(_curp(body.curp)), "ch": indice(_curp(body.curp)), "e": (body.correo or "").strip() or None, "a": body.activo})).scalar()
     await _guardar_cursos(db, org_id, str(iid), body.cursos)
     await db.commit()
     return (await _listar(db, org_id, str(iid)))[0]
@@ -78,9 +79,9 @@ async def crear(body: InstructorIn, identity: Identity = Depends(get_current_ide
 async def actualizar(instructor_id: str, body: InstructorIn, identity: Identity = Depends(get_current_identity), db: AsyncSession = Depends(get_db)):
     org_id = await require_org_id(db, identity)
     r = await db.execute(text("""
-        UPDATE aaces.instructores SET nombre = :n, curp = :c, correo = :e, activo = :a, fecha_actualizacion = now()
+        UPDATE aaces.instructores SET nombre = :n, curp = :c, curp_hash = :ch, correo = :e, activo = :a, fecha_actualizacion = now()
         WHERE id = CAST(:i AS uuid) AND organizacion_id = CAST(:o AS uuid)
-    """), {"i": instructor_id, "o": org_id, "n": body.nombre.strip(), "c": _curp(body.curp), "e": (body.correo or "").strip() or None, "a": body.activo})
+    """), {"i": instructor_id, "o": org_id, "n": body.nombre.strip(), "c": cifrar(_curp(body.curp)), "ch": indice(_curp(body.curp)), "e": (body.correo or "").strip() or None, "a": body.activo})
     if not r.rowcount:
         raise HTTPException(404, "Instructor no encontrado")
     await _guardar_cursos(db, org_id, instructor_id, body.cursos)

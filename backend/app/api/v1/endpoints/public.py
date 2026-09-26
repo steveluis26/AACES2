@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
+from app.core.cifrado import descifrar
 from app.core.database import get_db
 from fastapi import Depends
 from app.api.v1.endpoints.validaciones import _log_validation_attempt
@@ -312,7 +313,7 @@ async def certificado_publico(
             "stps_registro": o_stps if o_stps_ok else None,
             # Verificado en el buscador oficial de la STPS (automática) o por AACES (manual)
             "stps_verificado": bool(o_stps_ok),
-            "stps_rfc": o_rfc if o_stps_ok else None,
+            "stps_rfc": descifrar(o_rfc) if o_stps_ok else None,
             "stps_origen": o_stps_origen if o_stps_ok else None,
             "stps_consultado_en": o_stps_consulta.isoformat() if (o_stps_ok and o_stps_consulta) else None,
             "stps_fuente": "https://agentes.stps.gob.mx/Buscador/BuscadorAgente.aspx",

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from uuid import UUID
 
+from app.core.cifrado import cifrar, indice
 from app.core.database import get_db
 from app.core.config import settings
 from app.models import Cliente, UsuarioPlataforma, Usuario
@@ -488,8 +489,8 @@ async def register(
 
         # Check RFC duplicado
         rfc_check = await db.execute(
-            text("SELECT id FROM aaces.organizaciones WHERE rfc = :rfc LIMIT 1"),
-            {"rfc": rfc}
+            text("SELECT id FROM aaces.organizaciones WHERE rfc_hash = :h OR rfc = :rfc LIMIT 1"),
+            {"h": indice(rfc), "rfc": rfc}
         )
         if rfc_check.fetchone():
             raise HTTPException(status_code=409, detail="Ya existe una organización registrada con este RFC")
@@ -519,13 +520,13 @@ async def register(
         org_estatus = 'activa'
         org_id_res = await db.execute(
             text("""
-                INSERT INTO aaces.organizaciones (rfc, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, stps_registro, fecha_activacion)
-                VALUES (:rfc, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, :estatus, :stps_registro,
+                INSERT INTO aaces.organizaciones (rfc, rfc_hash, razon_social, nombre_comercial, email_contacto, estado, ciudad, estatus, stps_registro, fecha_activacion)
+                VALUES (:rfc, :rfc_hash, :razon_social, :nombre_comercial, :email_contacto, :estado, :ciudad, :estatus, :stps_registro,
                     CASE WHEN :estatus_val = 'activa' THEN CURRENT_TIMESTAMP ELSE NULL END)
                 RETURNING id
             """),
             {
-                "rfc": rfc, "razon_social": razon_social,
+                "rfc": cifrar(rfc), "rfc_hash": indice(rfc), "razon_social": razon_social,
                 "nombre_comercial": nombre_comercial or razon_social,
                 "email_contacto": admin_correo,
                 "estado": estado, "ciudad": ciudad,

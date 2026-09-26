@@ -109,6 +109,11 @@ async def lifespan(app: FastAPI):
         await ensure_seed_data(conn, security_service.hash_password)
         await conn.commit()
         logger.info("Seed data completed successfully")
+    # Cifrado de RFC/CURP: cifra lo que siga en claro (idempotente)
+    async with engine.connect() as conn:
+        from app.core.cifrado import migrar_datos
+        logger.info("Cifrado de datos personales: %s", await migrar_datos(conn))
+        await conn.commit()
     # Schema version/health (errors are fatal)
     async with engine.connect() as conn:
         await conn.execute(text("SET search_path TO aaces"))
