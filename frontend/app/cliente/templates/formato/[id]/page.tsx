@@ -402,7 +402,7 @@ export default function EditorPlantillaPage({ params }: { params: { id: string }
               )}
               {FIRMAS.has(seleccionado.clave) && (
                 <p className="rounded-lg bg-orange-500/5 p-3 text-xs text-muted-foreground">
-                  Se imprime la firma de quien impartió el curso (se sube en Instructores). Se ajusta al recuadro sin deformarse y se apoya en la línea de abajo. Las demás firmas se hacen a mano sobre el documento impreso.
+                  Se imprime la firma de quien impartió el curso (se sube en Instructores). Se ajusta al recuadro sin deformarse y se apoya en la línea de abajo. AACES no imprime las firmas del patrón ni del representante de los trabajadores: muchos participantes no tienen empleador (por ejemplo, estudiantes); cuando sí aplican, se firman sobre el impreso.
                 </p>
               )}
               {seleccionado.clave === "qr" && (

@@ -967,8 +967,9 @@ async def create_cifrado_datos(conn: AsyncConnection) -> None:
 
 async def create_firmas(conn: AsyncConnection) -> None:
     """Firma del DC-3: solo la de quien imparte el curso (vive en la ficha del
-    instructor). Las del patrón y del representante de los trabajadores se firman
-    a mano sobre el documento impreso."""
+    instructor). Muchos participantes no tienen empleador (p. ej. estudiantes que
+    se capacitan para conseguir trabajo), así que AACES no maneja las firmas del
+    patrón ni del representante de los trabajadores."""
     await conn.execute(text("ALTER TABLE aaces.instructores ADD COLUMN IF NOT EXISTS firma BYTEA"))
 
 
