@@ -784,7 +784,8 @@ async def create_cupo_constancias(conn: AsyncConnection) -> None:
 async def create_marketplace_visibilidad(conn: AsyncConnection) -> None:
     """Regla del marketplace: solo aparecen los cursos y paquetes publicados de
     agencias que están pagando (suscripción activa en un plan de pago que incluye
-    marketplace). Si dejan de pagar desaparecen solos; al renovar vuelven.
+    marketplace) y cuyo registro STPS está verificado. Si dejan de pagar o pierden
+    la verificación desaparecen solos; al corregirlo vuelven.
     El marketplace debe leer SIEMPRE de estas vistas, no de las tablas."""
     await conn.execute(text("""
         CREATE OR REPLACE FUNCTION aaces.org_en_marketplace(p_org UUID) RETURNS BOOLEAN
@@ -798,6 +799,8 @@ async def create_marketplace_visibilidad(conn: AsyncConnection) -> None:
               AND COALESCE(p.precio_mensual, 0) > 0
               AND COALESCE(p.incluye_marketplace, false)
               AND o.estatus = 'activa'
+              -- El marketplace le promete a las empresas agentes registrados: solo verificados
+              AND COALESCE(o.stps_validado, false)
           )
         $$;
     """))
