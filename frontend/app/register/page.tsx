@@ -230,7 +230,7 @@ function RegisterForm() {
                 <div className="flex items-center gap-3">
                   <Checkbox id="acepta" checked={acepta} onCheckedChange={(v) => setAcepta(!!v)} />
                   <Label htmlFor="acepta" className="text-sm text-muted-foreground">
-                    Acepto los términos y condiciones y el aviso de privacidad
+                    Acepto los <a href="/terminos" target="_blank" rel="noopener noreferrer" className="font-medium text-orange-600 underline-offset-2 hover:underline">términos y condiciones</a> y el <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="font-medium text-orange-600 underline-offset-2 hover:underline">aviso de privacidad</a>
                   </Label>
                 </div>
                 <div className="flex justify-between pt-2">

@@ -26,13 +26,20 @@ const columns = [
             { title: 'Crear cuenta', href: '/register?plan=trial' },
         ],
     },
+    {
+        title: 'Legal',
+        links: [
+            { title: 'Aviso de privacidad', href: '/privacidad' },
+            { title: 'Términos y condiciones', href: '/terminos' },
+        ],
+    },
 ]
 
 export default function FooterSection() {
     return (
         <footer className="border-t border-border/60">
             <div className="mx-auto max-w-6xl px-6 py-12 md:py-16">
-                <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
+                <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 md:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
                     <div className="col-span-2 space-y-4 sm:col-span-3 md:col-span-1">
                         <Link href="/" className="inline-flex items-center gap-2">
                             <Image src="/logo.png" alt="" width={24} height={24} className="h-6 w-auto" />
