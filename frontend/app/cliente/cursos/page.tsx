@@ -19,10 +19,11 @@ import { toast } from 'sonner'
 import { parseFecha } from '@/lib/utils'
 import { Field } from '@/components/ui/field'
 import { FormStep, Segmented } from '@/components/forms/form-bits'
-import { BadgeCheck as BadgeCheckIcon, UserPlus as UserPlusIcon, CalendarDays, List as ListIcon, MapPin as MapPinIcon, Pencil as PencilIcon, Users as UsersIcon, X as XIcon } from 'lucide-react'
+import { BadgeCheck as BadgeCheckIcon, FileSpreadsheet as FileSpreadsheetIcon, UserPlus as UserPlusIcon, CalendarDays, List as ListIcon, MapPin as MapPinIcon, Pencil as PencilIcon, Users as UsersIcon, X as XIcon } from 'lucide-react'
 import { CalendarioMensual } from '@/components/cursos/calendario-mensual'
 import { AcreditarGrupo } from '@/components/cursos/acreditar-grupo'
 import { CongruenciaGrupo } from '@/components/congruencia/congruencia-grupo'
+import { ImportarParticipantes } from '@/components/cursos/importar-participantes'
 
 const fechaCorta = (v?: string | null) => { const d = parseFecha(v ? String(v).slice(0, 10) : null); return d ? d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '-' }
 
@@ -71,6 +72,7 @@ export default function CursosClientePage() {
   const [detalleError, setDetalleError] = useState<string>('')
   const [csvError, setCsvError] = useState<string>('')
   const [acreditarAbierto, setAcreditarAbierto] = useState(false)
+  const [importarAbierto, setImportarAbierto] = useState(false)
   const [participanteError, setParticipanteError] = useState<string>('')
   const [agregando, setAgregando] = useState(false)
   const [precioGrupoError, setPrecioGrupoError] = useState<string>('')
@@ -839,6 +841,13 @@ export default function CursosClientePage() {
               <Alert className="alert-error mt-3">{detalleError}</Alert>
             )}
             <div className="mt-8"><CongruenciaGrupo key={selected.id} cursoId={selected.id} /></div>
+            <ImportarParticipantes
+              abierto={importarAbierto}
+              onCerrar={() => setImportarAbierto(false)}
+              cursoId={selected.id}
+              cursoNombre={selected.nombre}
+              onListo={loadParticipantes}
+            />
             <AcreditarGrupo
               abierto={acreditarAbierto}
               onCerrar={() => setAcreditarAbierto(false)}
@@ -852,6 +861,7 @@ export default function CursosClientePage() {
                 <div className="text-lg font-semibold">Participantes</div>
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => setAcreditarAbierto(true)} disabled={participantes.length === 0}><BadgeCheckIcon className="h-4 w-4" /> Acreditar y generar folios</Button>
+                  <Button variant="outline" onClick={() => setImportarAbierto(true)}><FileSpreadsheetIcon className="h-4 w-4" /> Importar Excel</Button>
                   <Button variant="outline" onClick={() => aplicarPrecioGrupo('solo_vacios')}>Aplicar precio grupo (vacíos)</Button>
                   <Button variant="outline" onClick={() => aplicarPrecioGrupo('todos')}>Aplicar precio grupo (todos)</Button>
                   <Button variant="secondary" onClick={exportarCSV}>Exportar CSV</Button>

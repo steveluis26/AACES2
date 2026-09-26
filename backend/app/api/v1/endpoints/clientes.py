@@ -1,6 +1,6 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, UploadFile, File, Form
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, text
 from typing import List, Optional
@@ -2024,6 +2024,41 @@ async def update_participante_curso(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando participante: {str(e)}")
+
+@router.get("/importar/plantilla")
+async def plantilla_importar(identity: Identity = Depends(get_current_identity)):
+    """Plantilla de Excel para importar participantes."""
+    from app.services.importar import plantilla_xlsx
+    return Response(
+        content=plantilla_xlsx(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="plantilla_participantes_AACES.xlsx"'},
+    )
+
+
+@router.post("/cursos/{curso_id}/importar")
+async def importar_participantes(
+    curso_id: str,
+    archivo: UploadFile = File(...),
+    confirmar: bool = Form(False),
+    identity: Identity = Depends(get_current_identity),
+    db: AsyncSession = Depends(get_db)
+):
+    """Con confirmar=false devuelve la vista previa sin guardar nada; con true inscribe
+    a las filas válidas (mismo archivo). Inscribir no gasta constancias."""
+    from app.services import importar as imp
+    cid = await get_current_cliente_id(db, identity)
+    own = (await db.execute(text("SELECT 1 FROM aaces.cursos WHERE id = :id AND cliente_id = :cid"), {"id": curso_id, "cid": cid})).scalar()
+    if not own:
+        raise HTTPException(status_code=404, detail="Curso no encontrado")
+    contenido = await archivo.read()
+    analisis = await imp.analizar(db, curso_id, str(cid), contenido, archivo.filename or "")
+    if not confirmar:
+        return analisis
+    if not analisis["resumen"]["a_importar"]:
+        raise HTTPException(status_code=400, detail="No hay filas válidas para importar")
+    return {**(await imp.importar(db, curso_id, str(cid), analisis)), "omitidos": analisis["resumen"]["inscrito"], "con_error": analisis["resumen"]["error"]}
+
 
 @router.get("/cursos/{curso_id}/congruencia")
 async def congruencia_curso(
