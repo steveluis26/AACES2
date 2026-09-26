@@ -11,9 +11,10 @@ import { Field } from "@/components/ui/field"
 import { FormStep } from "@/components/forms/form-bits"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { apiRequest } from "@/app/services/api"
+import { SubirFirma } from "@/components/firmas/subir-firma"
 
 type CursoCat = { id: string; nombre: string; stps_registrado: boolean }
-type Instructor = { id: string; nombre: string; curp: string | null; correo: string | null; activo: boolean; cursos: CursoCat[]; grupos: number }
+type Instructor = { id: string; nombre: string; curp: string | null; correo: string | null; activo: boolean; tiene_firma?: boolean; cursos: CursoCat[]; grupos: number }
 type Form = { id?: string; nombre: string; curp: string; correo: string; activo: boolean; cursos: Set<string> }
 
 const vacio = (): Form => ({ nombre: "", curp: "", correo: "", activo: true, cursos: new Set() })
@@ -144,7 +145,9 @@ export default function InstructoresPage() {
                   ) : <p className="text-xs text-amber-700 dark:text-amber-400">Sin cursos asignados</p>}
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t pt-3">
-                  <span className="text-xs text-muted-foreground">{i.grupos} {i.grupos === 1 ? "grupo" : "grupos"}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {i.grupos} {i.grupos === 1 ? "grupo" : "grupos"} · {i.tiene_firma ? <span className="text-green-700 dark:text-green-400">con firma</span> : "sin firma"}
+                  </span>
                   <div className="flex gap-1">
                     <Button size="sm" variant="outline" onClick={() => abrir(i)}><Pencil className="h-4 w-4" /> Editar</Button>
                     <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:bg-red-50 hover:text-red-600" onClick={() => eliminar(i)} aria-label={`Quitar a ${i.nombre}`}><Trash2 className="h-4 w-4" /></Button>
@@ -205,6 +208,18 @@ export default function InstructoresPage() {
                   )}
                 </FormStep>
 
+                {form.id && (
+                  <FormStep n={3} title="Firma" desc="Se imprime en el DC-3 en “Instructor o tutor”.">
+                    <SubirFirma
+                      etiqueta="Firma del instructor"
+                      urlImagen={`/api/v1/instructores/${form.id}/firma`}
+                      urlSubir={`/api/v1/instructores/${form.id}/firma`}
+                      urlQuitar={`/api/v1/instructores/${form.id}/firma`}
+                      tieneFirma={!!lista?.find((x) => x.id === form.id)?.tiene_firma}
+                      onCambio={cargar}
+                    />
+                  </FormStep>
+                )}
                 {form.id && (
                   <label className="flex cursor-pointer items-center gap-2 text-sm">
                     <input type="checkbox" className="h-4 w-4 accent-orange-500" checked={form.activo} onChange={(e) => setForm({ ...form, activo: e.target.checked })} />

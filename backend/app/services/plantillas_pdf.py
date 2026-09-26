@@ -27,6 +27,9 @@ MAX_PAGINAS = 4
 FUENTES = {False: "Helvetica", True: "Helvetica-Bold"}
 
 # Catálogo de campos disponibles en el editor: clave -> (etiqueta, grupo, ejemplo)
+# Campos que se dibujan como imagen (la firma del instructor)
+IMAGENES = {"firma_instructor"}
+
 CAMPOS: Dict[str, Tuple[str, str, str]] = {
     "participante_nombre": ("Nombre completo", "Participante", "MARÍA FERNANDA LÓPEZ RUIZ"),
     "participante_nombres": ("Nombre(s)", "Participante", "MARÍA FERNANDA"),
@@ -56,6 +59,7 @@ CAMPOS: Dict[str, Tuple[str, str, str]] = {
     "codigo_validacion": ("Código de validación", "Documento", "5D1627E0"),
     "url_verificacion": ("Liga de verificación", "Documento", "https://aaces.mx/v/5D1627E0"),
     "qr": ("Código QR", "Documento", ""),
+    "firma_instructor": ("Firma del instructor", "Capacitador", ""),
     "texto": ("Texto fijo", "Otros", "TEXTO FIJO"),
 }
 
@@ -237,6 +241,8 @@ def valores_participante(r: Dict[str, Any], url_base: str) -> Dict[str, str]:
         "capacitador": (r.get("capacitador") or "").strip(),
         "registro_stps": (r.get("registro_stps") or "").strip(),
         "instructor": (r.get("instructor") or "").strip(),
+        # Imagen (bytes PNG) de la firma de quien impartió el curso
+        "firma_instructor": bytes(r["firma_instructor"]) if r.get("firma_instructor") else None,
         "fecha_emision": f(emision),
         "folio": r.get("id_certificado") or "",
         "codigo_validacion": codigo,
@@ -249,6 +255,10 @@ def valores_ejemplo(url_base: str) -> Dict[str, str]:
     v = {k: ej for k, (_, _, ej) in CAMPOS.items()}
     v["url_verificacion"] = f"{url_base.rstrip('/')}/5D1627E0"
     v["qr"] = v["url_verificacion"]
+    from app.services.firmas import ejemplo
+    muestra = ejemplo()
+    for clave in IMAGENES:
+        v[clave] = muestra
     return v
 
 
@@ -330,6 +340,20 @@ def _dibujar_qr(c: canvas.Canvas, campo: Campo, url: str, pw: float, ph: float) 
     c.drawImage(ImageReader(img), x, top - lado, lado, lado)
 
 
+def _dibujar_imagen(c: canvas.Canvas, campo: Campo, datos: Optional[bytes], pw: float, ph: float) -> None:
+    """Firma dentro de su recuadro, sin deformarla: centrada y apoyada en la línea de abajo."""
+    if not datos:
+        return
+    img = ImageReader(io.BytesIO(datos))
+    iw, ih = img.getSize()
+    bw, bh = campo.w / 100 * pw, campo.h / 100 * ph
+    esc = min(bw / iw, bh / ih)
+    w, h = iw * esc, ih * esc
+    x = campo.x / 100 * pw + (bw - w) / 2
+    y = ph - (campo.y + campo.h) / 100 * ph
+    c.drawImage(img, x, y, w, h, mask="auto")
+
+
 def _capa(campos: List[Campo], valores: Dict[str, str], pw: float, ph: float) -> Optional[bytes]:
     if not campos:
         return None
@@ -338,8 +362,12 @@ def _capa(campos: List[Campo], valores: Dict[str, str], pw: float, ph: float) ->
     for campo in campos:
         if campo.clave == "qr":
             _dibujar_qr(c, campo, valores.get("qr", ""), pw, ph)
+        elif campo.clave in IMAGENES:
+            _dibujar_imagen(c, campo, valores.get(campo.clave), pw, ph)
         else:
-            texto = campo.texto if campo.clave == "texto" else valores.get(campo.clave, "")
+            # En campos de datos, "texto" es lo que la agencia quiere cuando el dato viene vacío
+            # (p. ej. empresa "PARTICULAR" u ocupación "ESTUDIANTE" para quien no tiene empleador)
+            texto = campo.texto if campo.clave == "texto" else (valores.get(campo.clave) or campo.texto)
             _dibujar_texto(c, campo, texto, pw, ph)
     c.showPage()
     c.save()

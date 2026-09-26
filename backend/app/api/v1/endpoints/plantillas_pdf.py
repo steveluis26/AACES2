@@ -39,11 +39,19 @@ class GenerarIn(BaseModel):
     curso_id: str
     curso_participante_ids: Optional[List[str]] = None
     confirmar_avisos: bool = False  # continuar pese a avisos de congruencia (queda registrado)
+    formato: str = "pdf"  # pdf: un solo archivo para imprimir · zip: un PDF por participante
 
 
 def _slug(s: str) -> str:
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
     return re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_")[:60] or "documento"
+
+
+def _archivo_participante(f: Dict[str, Any]) -> str:
+    """DC3_Apellidos_Nombre_FOLIO, para el ZIP o la descarga de una sola persona."""
+    apellidos = " ".join(x for x in (f.get("apellido_paterno"), f.get("apellido_materno")) if x) or (f.get("apellido") or "")
+    base = _slug(" ".join(x for x in (apellidos, f.get("nombre")) if x)) or "participante"
+    return f"DC3_{base}_{f.get('id_certificado') or f.get('codigo_validacion') or ''}".rstrip("_")
 
 
 def _uuid(v: str, nombre: str = "id") -> str:
@@ -189,11 +197,14 @@ _SQL_PARTICIPANTES = """
            c.empresa_contratante,
            COALESCE(o.nombre_comercial, o.razon_social, cl.nombre) AS capacitador,
            CASE WHEN o.stps_validado THEN o.stps_registro END AS registro_stps,
-           COALESCE(cp.congruencia->>'instructor', ins.nombre) AS instructor  -- el de cuando se dio el folio
+           COALESCE(cp.congruencia->>'instructor', ins.nombre) AS instructor,  -- el de cuando se dio el folio
+           fi.firma AS firma_instructor
     FROM aaces.curso_participante cp
     JOIN aaces.participantes p ON p.id = cp.participante_id
     JOIN aaces.cursos c ON c.id = cp.curso_id
     LEFT JOIN aaces.instructores ins ON ins.id = c.instructor_id
+    -- Firma de quien impartió el curso cuando se dio el folio (o el instructor actual del grupo)
+    LEFT JOIN aaces.instructores fi ON fi.id = COALESCE(CAST(cp.congruencia->>'instructor_id' AS uuid), c.instructor_id)
     JOIN aaces.clientes cl ON cl.id = c.cliente_id
     JOIN aaces.organizaciones o ON o.id = cl.organizacion_id
     WHERE cl.organizacion_id = :org
@@ -276,14 +287,34 @@ async def generar(plantilla_id: str, body: GenerarIn, identity: Identity = Depen
     plantilla_pdf = bytes(p["archivo"])
     url = settings.PUBLIC_VERIFICATION_URL
     valores = [P.valores_participante(f, url) for f in filas]
+    individuales = []
     for f, v in zip(filas, valores):
         individual = P.generar(plantilla_pdf, p["campos"], [v])
+        individuales.append((f, individual))
         await _registrar_emision(db, identity.org_id, str(p["id"]), f, individual, identity.user_id if identity.source == "usuario" else None)
-    pdf = P.generar(plantilla_pdf, p["campos"], valores)
     await db.commit()
     cupo.avisar_en_segundo_plano(identity.org_id)
 
-    nombre = f"DC3_{_slug(filas[0]['curso_nombre'])}.pdf"
+    if body.formato == "zip":
+        # Un PDF por participante, nombrado por apellido y folio para enviarlo a cada empresa
+        import io, zipfile
+        buf, usados = io.BytesIO(), set()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+            for f, individual in individuales:
+                nombre_pdf = _archivo_participante(f)
+                while nombre_pdf in usados:
+                    nombre_pdf += "_2"
+                usados.add(nombre_pdf)
+                z.writestr(f"{nombre_pdf}.pdf", individual)
+        return Response(
+            content=buf.getvalue(), media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="DC3_{_slug(filas[0]["curso_nombre"])}.zip"', "X-Generados": str(len(filas)),
+                     "Access-Control-Expose-Headers": "X-Generados, Content-Disposition"},
+        )
+
+    pdf = P.generar(plantilla_pdf, p["campos"], valores)
+    # Un solo participante (p. ej. reimprimir el que faltó): se nombra por él, no por el curso
+    nombre = f"{_archivo_participante(filas[0])}.pdf" if len(filas) == 1 else f"DC3_{_slug(filas[0]['curso_nombre'])}.pdf"
     return Response(
         content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{nombre}"', "X-Generados": str(len(filas)),

@@ -58,6 +58,7 @@ export const EJEMPLOS: Record<string, string> = {
   capacitador: "CAS Capacitación y Adiestramiento",
   registro_stps: "CAS-150312-AB7",
   instructor: "Ing. Juan Pérez López",
+  firma_instructor: "",
   fecha_emision: "06/10/2026",
   folio: "CERT-A7AD98C5",
   codigo_validacion: "5D1627E0",
@@ -65,6 +66,9 @@ export const EJEMPLOS: Record<string, string> = {
   qr: "",
   texto: "Texto fijo",
 }
+
+// Campos que se imprimen como imagen: la firma de quien imparte el curso
+export const FIRMAS = new Set(["firma_instructor"])
 
 // Casillas sugeridas al agregar el campo (formato DC-3 oficial)
 export const CASILLAS_SUGERIDAS: Record<string, number> = {
@@ -127,14 +131,14 @@ export const plantillasApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ campos: campos.map(({ id: _id, ...c }) => c) }),
     })).blob(),
-  generar: async (id: string, cursoId: string, cpIds?: string[], confirmarAvisos = false) => {
+  generar: async (id: string, cursoId: string, cpIds?: string[], confirmarAvisos = false, formato: "pdf" | "zip" = "pdf") => {
     const res = await pedir(`${API}/${id}/generar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ curso_id: cursoId, curso_participante_ids: cpIds, confirmar_avisos: confirmarAvisos }),
+      body: JSON.stringify({ curso_id: cursoId, curso_participante_ids: cpIds, confirmar_avisos: confirmarAvisos, formato }),
     })
     const cd = res.headers.get("Content-Disposition") || ""
-    const nombre = /filename="([^"]+)"/.exec(cd)?.[1] || "DC3.pdf"
+    const nombre = /filename="([^"]+)"/.exec(cd)?.[1] || (formato === "zip" ? "DC3.zip" : "DC3.pdf")
     return { blob: await res.blob(), nombre, generados: Number(res.headers.get("X-Generados") || 0) }
   },
 }

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { AlertCircle, CalendarDays, Check, CheckCircle2, FileDown, Loader2, Search, Users } from "lucide-react"
+import { AlertCircle, CalendarDays, Check, CheckCircle2, Download, FileDown, Loader2, Search, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -39,6 +39,8 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const [listo, setListo] = useState<number | null>(null)
   const [cupo, setCupo] = useState<Cupo | null>(null)
   const [avisos, setAvisos] = useState<Aviso[]>([])
+  const [formato, setFormato] = useState<"pdf" | "zip">("pdf")
+  const [individual, setIndividual] = useState<string | null>(null)
   const [confirmado, setConfirmado] = useState(false)
 
   useEffect(() => {
@@ -80,14 +82,30 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
   const disponibles = cupo ? cupo.disponibles : null
   const sinCupo = !!cupo && (!cupo.activa || (disponibles !== null && nuevos > disponibles))
 
+  // Reimprimir a una sola persona (p. ej. la impresora se quedó sin tinta) sin cerrar el panel
+  const generarUno = async (p: Inscrito) => {
+    setIndividual(p.id)
+    try {
+      const r = await plantillasApi.generar(plantillaId, curso, [p.id], confirmado, "pdf")
+      descargarBlob(r.blob, r.nombre)
+      toast.success(`DC-3 de ${nombreDe(p)} descargado`)
+    } catch (e) {
+      const av = avisosDeError(e)
+      if (av) { setAvisos(av); setConfirmado(false) }
+      else toast.error((e as Error).message)
+    } finally {
+      setIndividual(null)
+    }
+  }
+
   const generar = async () => {
     setGenerando(true)
     try {
-      const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados), confirmado)
+      const r = await plantillasApi.generar(plantillaId, curso, Array.from(marcados), confirmado, formato)
       descargarBlob(r.blob, r.nombre)
       setListo(r.generados)
       apiRequest<Cupo>("/cupo").then(setCupo).catch(() => {})
-      toast.success(`${r.generados} ${r.generados === 1 ? "DC-3 generado" : "DC-3 generados"}`, { description: "Se descargó un PDF listo para imprimir." })
+      toast.success(`${r.generados} ${r.generados === 1 ? "DC-3 generado" : "DC-3 generados"}`, { description: formato === "zip" ? "Se descargó un ZIP con un PDF por participante." : "Se descargó un PDF listo para imprimir." })
     } catch (e) {
       const av = avisosDeError(e)
       if (av) { setAvisos(av); setConfirmado(false) }
@@ -112,7 +130,7 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
                 <motion.span initial={reduce ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 260, damping: 15 }} className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600 text-white shadow-lg shadow-green-600/30">
                   <CheckCircle2 className="h-8 w-8" />
                 </motion.span>
-                <h3 className="mt-5 text-lg font-semibold">¡Listo! {listo} {listo === 1 ? "DC-3" : "DC-3"} en un PDF</h3>
+                <h3 className="mt-5 text-lg font-semibold">¡Listo! {listo} DC-3 {formato === "zip" ? "en un ZIP" : "en un PDF"}</h3>
                 <p className="mt-1 max-w-sm text-sm text-muted-foreground">Revisa tu carpeta de descargas. Cada constancia ya es verificable con su QR y aparece en tu Centro de Constancias.</p>
                 <div className="mt-6 flex gap-2">
                   <Button variant="outline" onClick={() => setListo(null)}>Generar otro grupo</Button>
@@ -187,21 +205,47 @@ export function GenerarDc3({ abierto, onCerrar, plantillaId, plantillaNombre, cu
                             const ok = !!p.estado_acreditacion
                             const on = marcados.has(p.id)
                             return (
-                              <li key={p.id}>
+                              <li key={p.id} className="flex items-stretch gap-1.5">
                                 <button type="button" disabled={!ok} role="checkbox" aria-checked={on} onClick={() => toggle(p.id)}
-                                  className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${on ? "border-orange-500/50 bg-orange-50/70 dark:bg-orange-500/5" : "hover:bg-muted/50"}`}>
+                                  className={`flex min-w-0 flex-1 items-center gap-3 rounded-xl border p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-50 ${on ? "border-orange-500/50 bg-orange-50/70 dark:bg-orange-500/5" : "hover:bg-muted/50"}`}>
                                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${on ? "border-orange-500 bg-orange-500 text-white" : "border-input"}`}>{on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}</span>
                                   <span className="min-w-0 flex-1 truncate text-sm font-medium">{nombreDe(p)}</span>
                                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ok ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
-                                    {ok ? (p.codigo_validacion ? "Acreditado · con folio" : "Acreditado") : "Sin acreditar"}
+                                    {ok ? (p.codigo_validacion ? <><span className="hidden sm:inline">Acreditado · c</span><span className="sm:hidden">C</span>on folio</> : "Acreditado") : "Sin acreditar"}
                                   </span>
                                 </button>
+                                {ok && (
+                                  <button type="button" onClick={() => generarUno(p)} disabled={!!individual || generando}
+                                    title={`Descargar solo el DC-3 de ${nombreDe(p)}`} aria-label={`Descargar solo el DC-3 de ${nombreDe(p)}`}
+                                    className="flex w-11 shrink-0 items-center justify-center rounded-xl border text-muted-foreground transition-colors hover:border-orange-500/50 hover:bg-orange-50 hover:text-orange-600 disabled:opacity-50 dark:hover:bg-orange-500/10">
+                                    {individual === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                  </button>
+                                )}
                               </li>
                             )
                           })}
                         </ul>
                       </>
                     )}
+                  </section>
+                )}
+
+                {curso && (
+                  <section className="space-y-3">
+                    <p className="flex items-center gap-2 text-sm font-semibold"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">3</span>¿Cómo los quieres?</p>
+                    <p className="-mt-1 text-xs text-muted-foreground">¿Solo necesitas uno? Usa el botón <Download className="inline h-3.5 w-3.5" /> junto a la persona.</p>
+                    <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Formato de descarga">
+                      {([
+                        { v: "pdf", t: "Todo el grupo en un PDF", d: "Los DC-3 uno tras otro, listos para imprimir." },
+                        { v: "zip", t: "Un PDF por participante", d: "En un ZIP, nombrados por apellido y folio, para enviarlos." },
+                      ] as const).map((o) => (
+                        <button key={o.v} type="button" role="radio" aria-checked={formato === o.v} onClick={() => setFormato(o.v)}
+                          className={`rounded-xl border p-3 text-left transition-all ${formato === o.v ? "border-orange-500/60 bg-orange-50/70 shadow-sm dark:bg-orange-500/5" : "hover:bg-muted/50"}`}>
+                          <span className="block text-sm font-medium">{o.t}</span>
+                          <span className="block text-xs text-muted-foreground">{o.d}</span>
+                        </button>
+                      ))}
+                    </div>
                   </section>
                 )}
               </motion.div>

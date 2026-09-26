@@ -915,6 +915,7 @@ async def create_congruencia(conn: AsyncConnection) -> None:
                    'curso_registrado', COALESCE(cc.stps_registrado, false),
                    'curso_stps_nombre', cc.stps_nombre,
                    'instructor', i.nombre,
+                   'instructor_id', c.instructor_id,
                    'instructor_en_plantilla', EXISTS (
                       SELECT 1 FROM aaces.instructor_cursos ic
                       WHERE ic.instructor_id = c.instructor_id AND ic.catalogo_curso_id = c.catalogo_curso_id),
@@ -962,6 +963,14 @@ async def create_cifrado_datos(conn: AsyncConnection) -> None:
     await conn.execute(text("DROP INDEX IF EXISTS aaces.idx_organizaciones_rfc"))
     await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_organizaciones_rfc_hash ON aaces.organizaciones (rfc_hash)"))
     await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_participantes_curp_hash ON aaces.participantes (curp_hash)"))
+
+
+async def create_firmas(conn: AsyncConnection) -> None:
+    """Firma del DC-3: solo la de quien imparte el curso (vive en la ficha del
+    instructor). Muchos participantes no tienen empleador (p. ej. estudiantes que
+    se capacitan para conseguir trabajo), así que AACES no maneja las firmas del
+    patrón ni del representante de los trabajadores."""
+    await conn.execute(text("ALTER TABLE aaces.instructores ADD COLUMN IF NOT EXISTS firma BYTEA"))
 
 
 async def create_plantillas_pdf(conn: AsyncConnection) -> None:
@@ -1019,6 +1028,7 @@ async def ensure_schema(conn: AsyncConnection) -> None:
         create_verificacion_stps,
         create_congruencia,
         create_cifrado_datos,
+        create_firmas,
         create_metadata_tables,
         create_legacy_fixes,
     ]:
